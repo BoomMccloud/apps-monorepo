@@ -5,6 +5,29 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 46 — 2026-10-11 · renewing with no USDC (B12)
+
+**Result:** PASS B12, in both modes (profile spec).
+
+**Behaviour:** with the payer's USDC at 0, the coin picker shows USDC "$0.00 in
+your wallet" and "Need $8.02", and "Select USDC" is disabled. Nothing is
+renewed.
+
+**Harness trap (memory `manager-dev-auto-mints-usdc`):**
+- The dev build (`VITE_TIME_TRAVEL=1`) mints 10,000 USDC to the owner on
+  every load (`anvilSetupOwner` via `/rpc`), and may call `/wallet/fund`.
+  The test blocks `/rpc` calls carrying `mint` (`40c10f19`) and stubs
+  `/wallet/fund`.
+- The balance read is the smart account's owner EOA, which was account 0 in
+  one run and the Para EOA in another. The test drains both into `user2` and
+  restores them in `finally`.
+
+**In flight:** nothing.
+
+**Next:** B18 (four entry points), B9 (bulk partial failure), then A22–A25.
+
+---
+
 ## Iteration 45 — 2026-10-11 · bulk renew (B8, B10); past grace (B4) → E2E-029
 
 **Result:** PASS B8 and B10 (real mode, time project) · DEFECT B4 (new

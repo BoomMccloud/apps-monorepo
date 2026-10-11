@@ -2,13 +2,21 @@ import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
 import { permissionedRegistryGetExpirySnippet } from '@ensdomains/ensjs-abi/v2'
 import type { Web3ProviderBackend } from '@ensdomains/headless-web3-provider'
 import { expect, type Page } from '@playwright/test'
-import { keccak256, toHex } from 'viem'
+import {
+  type Address,
+  encodeFunctionData,
+  keccak256,
+  parseAbi,
+  toHex,
+} from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import type { V2NameConfig } from '../../../fixtures/makeV2Name.js'
 import {
   authorizeTransaction,
   test,
 } from '../../../fixtures/playwright.manager.fixture.js'
-import { publicClient } from '../../../helpers/anvil-client.js'
+import { publicClient, walletClient } from '../../../helpers/anvil-client.js'
+import { clickThroughEnableSessions } from '../../../helpers/manager-auth.js'
 import {
   goToEditProfile,
   goToProfile,
@@ -21,6 +29,11 @@ const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
 
 const ETH_REGISTRY =
   ensL1Contracts[supportedL1Chains.sepolia].ensRegistry.address
+const USDC = ensL1Contracts[supportedL1Chains.sepolia].usdc.address as Address
+const ERC20_ABI = parseAbi([
+  'function balanceOf(address) view returns (uint256)',
+  'function transfer(address to, uint256 amount) returns (bool)',
+])
 
 /** On-chain expiry (seconds) for a 2LD `label`, per the current V2 registry. */
 function readExpiry(label: string): Promise<bigint> {
@@ -382,6 +395,97 @@ test.describe('ENS profile', () => {
       expiryAfter - expiryBefore,
       `expiry moved by ${expiryAfter - expiryBefore}s, expected exactly ${TWENTY_EIGHT_DAYS}s (28 days)`,
     ).toBe(TWENTY_EIGHT_DAYS)
+  })
+
+  test('renewing with no USDC: no payment can be made and the expiry does not move', {
+    tag: ['@scenario:B12'],
+  }, async ({ profileConnectedPage: page, makeV2Name, accounts }) => {
+    const name = await makeV2Name({ label: 'b12-broke' })
+    const label = name.replace(/\.eth$/, '')
+    const expiryBefore = await readExpiry(label)
+
+    // Stablecoin balances are read from the smart account's owner EOA
+    // (useSmartAccountBalances). Measured: which EOA that is varies between
+    // the headless wallet and the Para-embedded one, so park the USDC of
+    // both with a third account and bring it back whatever happens.
+    const payers = [
+      privateKeyToAccount(accounts.getPrivateKey('user')),
+      privateKeyToAccount(
+        (process.env.ANVIL_PARA_PRIVATE_KEY ??
+          '0x4d1cf5e322e2a7dbfc9e3eccde100ed93167879de7449d18872911ed3a957a81') as `0x${string}`,
+      ),
+    ]
+    const parking = accounts.getAddress('user2') as Address
+    const parkingAccount = privateKeyToAccount(accounts.getPrivateKey('user2'))
+    const balances = await Promise.all(
+      payers.map((p) =>
+        publicClient.readContract({
+          address: USDC,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [p.address],
+        }),
+      ),
+    )
+    const move = async (
+      from: ReturnType<typeof privateKeyToAccount>,
+      to: Address,
+      amount: bigint,
+    ) => {
+      if (amount === 0n) return
+      const hash = await walletClient.sendTransaction({
+        account: from,
+        to: USDC,
+        data: encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'transfer',
+          args: [to, amount],
+        }),
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+    }
+    for (const [i, payer] of payers.entries())
+      await move(payer, parking, balances[i])
+    // A dev build with VITE_TIME_TRAVEL tops the owner up to 10,000 USDC on
+    // every load (anvilSetupOwner: ERC20 mint through the /rpc proxy) and may
+    // ask the backend to fund it. Refuse exactly those, so the empty wallet
+    // the test made is the wallet the page sees.
+    const MINT = '40c10f19' // mint(address,uint256)
+    await page.route('**/rpc', async (route) => {
+      const body = route.request().postData() ?? ''
+      if (!body.includes(MINT)) return route.fallback()
+      const calls = JSON.parse(body)
+      const reply = (c: { id: unknown }) => ({
+        jsonrpc: '2.0',
+        id: c.id,
+        error: { code: -32000, message: 'mint blocked by e2e (B12)' },
+      })
+      return route.fulfill({
+        json: Array.isArray(calls) ? calls.map(reply) : reply(calls),
+      })
+    })
+    await page.route('**/wallet/fund', (route) =>
+      route.fulfill({ json: { txHash: null } }),
+    )
+    try {
+      await goToProfile(page, name)
+      await page.getByRole('link', { name: /renew/i }).click()
+      await page.getByRole('button', { name: /pay with stablecoins/i }).click()
+      await clickThroughEnableSessions(page)
+      // Measured: the picker shows the empty balance and the shortfall, and
+      // will not let USDC be chosen.
+      const usdc = page.getByRole('button', { name: 'Select USDC' })
+      await expect(usdc, 'USDC cannot be chosen').toBeDisabled({
+        timeout: 30_000,
+      })
+      await expect(usdc).toContainText('$0.00')
+      await expect(usdc, 'the shortfall is stated').toContainText(/Need \$\d/)
+      await expect(page.getByText('Renewal Complete!')).toHaveCount(0)
+      expect(await readExpiry(label), 'nothing was renewed').toBe(expiryBefore)
+    } finally {
+      for (const [i, payer] of payers.entries())
+        await move(parkingAccount, payer.address, balances[i])
+    }
   })
 
   test('extend unowned name by 28 days', { tag: ['@scenario:B2'] }, async ({
