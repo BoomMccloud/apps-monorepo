@@ -5,6 +5,37 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 48 — 2026-10-11 · registration preset prices against the oracle (A23)
+
+**Result:** PASS A23 in both modes (registration spec).
+
+**What the page does** (`register-v2/utils/time.ts`, `discount.ts`):
+- A preset of N years lasts max(N × 365.25 days, whole calendar days from
+  local midnight to the same date N years on).
+- Its base price is `ETHRegistrar.getRegisterPrice(label, that duration,
+  USDC).base`. The "Save" amount is duration ×
+  `baseRates[min(len, n) − 1]` / 1e12 minus that base.
+- Measured: 1y $8.0055 → "$8.01"; 3y $16.5151 → "$16.52", save $7.51;
+  6y $27.0247 → "$27.02", save $21.02.
+
+The ledger said "the discount table in discount.ts", but there is no table:
+the discount is derived from the oracle's base rate. The oracle's
+discount points (`getDiscountPoints`) are not exercised through the UI
+beyond the three presets.
+
+**Harness:**
+- The summary renders text in fragments, so compare it unspaced.
+- "Save" is an animated digit counter; read its `aria-label` and poll until
+  it settles.
+- Compute durations inside the page, so local midnight matches the browser.
+
+**In flight:** nothing.
+
+**Next:** A25 (registration progress monotonic), A24 (premium chart vs
+oracle), A22 (two tabs, one label).
+
+---
+
 ## Iteration 47 — 2026-10-11 · renew from every entry point (B18); bulk renew with a refusal (B9)
 
 **Result:** PASS B18 and B9 (real index). The renewal suite's manager rows are

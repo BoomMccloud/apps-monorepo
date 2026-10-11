@@ -1,5 +1,8 @@
 // e2e/projects/manager/tests/registration.spec.ts
+import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
+import { type Address, parseAbi } from 'viem'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
+import { publicClient } from '../../../helpers/anvil-client.js'
 import { expectFlowSuccess } from '../../../helpers/flow-completion.js'
 import {
   authorizeHeadlessConnection,
@@ -11,6 +14,17 @@ import {
 const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
 const DISCONNECTED_DOMAIN = `e2e-${(Date.now() + 1).toString(36)}.eth`
 const LATE_AUTH_DOMAIN = `e2e-${(Date.now() + 2).toString(36)}.eth`
+
+const sepolia = ensL1Contracts[supportedL1Chains.sepolia]
+const ETH_REGISTRAR = sepolia.ensEthRegistrar.address as Address
+const USDC = sepolia.usdc.address as Address
+const ORACLE_ABI = parseAbi([
+  'function rentPriceOracle() view returns (address)',
+  'function getBaseRates() view returns (uint256[])',
+])
+const REGISTER_PRICE_ABI = parseAbi([
+  'function getRegisterPrice(string label, uint64 duration, address paymentToken) view returns (uint256 base, uint256 premium)',
+])
 
 test.describe('ENS name registration', () => {
   test('user is unable to register a name when disconnected', {
@@ -108,5 +122,114 @@ test.describe('ENS name registration', () => {
     // Confirms the redirect landed on a real profile render, not a blank
     // route or an error boundary that happens to match the URL pattern.
     await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 })
+  })
+})
+
+test.describe('Registration pricing against the oracle (A23)', () => {
+  test('each duration preset shows the registrar’s own price, and its saving against the yearly rate', {
+    tag: ['@scenario:A23'],
+  }, async ({ connectedPage: page }) => {
+    const label = `a23${Date.now().toString(36)}`
+    await page.goto(`${MANAGER_APP_URL}/register/${label}.eth`)
+    const presets = page.getByRole('button', {
+      name: /\d years? \$[\d.,]+\/year/,
+    })
+    await expect(presets.first()).toBeVisible({ timeout: 60_000 })
+    await page.waitForLoadState('networkidle')
+
+    // A preset's duration, exactly as the page sizes it (register-v2/utils/
+    // time.ts getDurationInSecondsFromYears): the longer of years × 365.25
+    // days and the whole calendar days from local midnight — computed in the
+    // browser so "local" is the page's own timezone.
+    const durationFor = async (years: number) =>
+      BigInt(
+        await page.evaluate((y) => {
+          const start = new Date()
+          start.setHours(0, 0, 0, 0)
+          const end = new Date(start)
+          end.setFullYear(end.getFullYear() + y)
+          const days = Math.round(
+            (end.getTime() - start.getTime()) / 86_400_000,
+          )
+          return Math.max(y * 365.25 * 86_400, days * 86_400)
+        }, years),
+      )
+    const oracle = await publicClient.readContract({
+      address: ETH_REGISTRAR,
+      abi: ORACLE_ABI,
+      functionName: 'rentPriceOracle',
+    })
+    const rates = await publicClient.readContract({
+      address: oracle,
+      abi: ORACLE_ABI,
+      functionName: 'getBaseRates',
+    })
+    const baseRate = rates[Math.min(label.length, rates.length) - 1]
+    const prices = async (years: number) => {
+      const duration = await durationFor(years)
+      const [base] = await publicClient.readContract({
+        address: ETH_REGISTRAR,
+        abi: REGISTER_PRICE_ABI,
+        functionName: 'getRegisterPrice',
+        args: [label, duration, USDC],
+      })
+      return {
+        discounted: Number(base) / 1e6,
+        // The undiscounted price the page compares against (discount.ts).
+        undiscounted: Number(duration * baseRate) / 1e12,
+      }
+    }
+    const dollars = (text: string, pattern: RegExp) => {
+      const match = text.match(pattern)
+      if (!match) throw new Error(`no ${pattern} in "${text}"`)
+      return Number(match[1].replace(/,/g, ''))
+    }
+
+    for (const text of await presets.allInnerTexts()) {
+      const flat = text.replace(/\s+/g, ' ')
+      const years = Number(flat.match(/(\d+) years?/)?.[1])
+      const shownBase = dollars(flat, /\$([\d,]+\.\d{2}) base price/)
+      const { discounted, undiscounted } = await prices(years)
+      console.log(
+        `[A23] ${years}y: shown $${shownBase}, oracle $${discounted.toFixed(4)}, undiscounted $${undiscounted.toFixed(4)}`,
+      )
+      expect(
+        Math.abs(shownBase - discounted),
+        `${years} years: the base price is the oracle's`,
+      ).toBeLessThan(0.006)
+      if (years > 1) {
+        await page
+          .getByRole('button', { name: new RegExp(`${years} years`) })
+          .click()
+        // The summary renders its text in fragments; compare it unspaced.
+        await expect
+          .poll(async () =>
+            (await page.locator('main').innerText()).replace(/\s+/g, ''),
+          )
+          .toContain(`Registeringfor${years}years`)
+        // The saving is an animated digit counter; its accessible label holds
+        // the settled amount.
+        const saveAmount = page
+          .locator('span', { hasText: /^\s*Save/ })
+          .locator('[aria-label^="$"]')
+          .first()
+        const expectedSave = undiscounted - discounted
+        await expect
+          .poll(
+            async () =>
+              Math.abs(
+                dollars(
+                  (await saveAmount.getAttribute('aria-label')) ?? '',
+                  /\$([\d,]+\.\d{2})/,
+                ) - expectedSave,
+              ),
+            {
+              timeout: 15_000,
+              message: `${years} years: saving = undiscounted − discounted price ($${expectedSave.toFixed(4)})`,
+            },
+          )
+          .toBeLessThan(0.011)
+      }
+    }
   })
 })
