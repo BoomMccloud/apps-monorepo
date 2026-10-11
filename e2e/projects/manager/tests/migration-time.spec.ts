@@ -115,6 +115,9 @@ const REGISTRY_ABI = parseAbi([
 const RENEWER_ABI = parseAbi([
   'function isRenewable(string label) view returns (bool)',
 ])
+const REGISTER_PRICE_ABI_A24 = parseAbi([
+  'function getRegisterPrice(string label, uint64 duration, address paymentToken) view returns (uint256 base, uint256 premium)',
+])
 const RENEW_PRICE_ABI = parseAbi([
   'function getRenewPrice(string label, uint64 duration, address paymentToken) view returns (uint256)',
 ])
@@ -961,5 +964,87 @@ test.describe('Grace on the dashboard (§5.B)', () => {
       ).toBeGreaterThanOrEqual(365n * BigInt(DAY))
       expect(moved).toBeLessThanOrEqual(366n * BigInt(DAY))
     }
+  })
+})
+
+test.describe('Temporary premium on registration (A24)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  test("the cooldown banner's live fee is the oracle's premium, and it says when the fee reaches $0", {
+    tag: ['@scenario:A24'],
+  }, async ({ migrationConnectedPage: page, makeV2Name }) => {
+    // 28 days of grace + 5 days into the 21-day premium window.
+    const name = await makeV2Name({
+      label: 'a24-premium',
+      duration: -(28 + 5) * DAY,
+    })
+    const label = name.replace(/\.eth$/, '')
+    const expiry = (await v2State(label)).expiry
+    await syncBrowserToChain(page)
+    await page.goto(`${MANAGER_APP_URL}/register/${name}`)
+    await expect(page.getByText('This name is in price cooldown')).toBeVisible({
+      timeout: 60_000,
+    })
+
+    // The page computes the live fee itself (lib/premiumDecay); the oracle
+    // computes it on chain. Two independent computations of one curve.
+    const oraclePremium = async () => {
+      const [, premium] = await publicClient.readContract({
+        address: ETH_REGISTRAR,
+        abi: REGISTER_PRICE_ABI_A24,
+        functionName: 'getRegisterPrice',
+        args: [
+          label,
+          BigInt(365 * DAY),
+          ensL1Contracts[supportedL1Chains.sepolia].usdc.address as Address,
+        ],
+      })
+      return Number(premium) / 1e6
+    }
+    const shownFee = page
+      .getByText(/Fee at this moment|Additional fee/)
+      .first()
+      .locator('xpath=..')
+      .locator('[aria-label^="$"]')
+      .first()
+    const shown = async () =>
+      Number(
+        ((await shownFee.getAttribute('aria-label')) ?? '').replace(
+          /[$,]/g,
+          '',
+        ),
+      )
+    const chain = await oraclePremium()
+    console.log(`[A24] oracle premium $${chain.toFixed(2)}`)
+    expect(chain, 'precondition: the name is in premium').toBeGreaterThan(0)
+    await expect
+      .poll(async () => Math.abs((await shown()) - chain) / chain, {
+        timeout: 20_000,
+        message: 'the live fee matches the oracle premium (within 1%)',
+      })
+      .toBeLessThan(0.01)
+
+    // Zero at the end of the premium window: expiry + 28-day grace + 21 days.
+    const zeroAt = new Date(Number(expiry + BigInt((28 + 21) * DAY)) * 1000)
+    const zeroText = await page.evaluate(
+      (ms) =>
+        new Date(ms).toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+      zeroAt.getTime(),
+    )
+    await page
+      .getByRole('button', { name: /How it works/ })
+      .first()
+      .click()
+    await expect(
+      page
+        .getByText(/The fee hits \$0 on/)
+        .first()
+        .locator('xpath=..'),
+      'the banner names the day the fee ends',
+    ).toContainText(zeroText.replace(/,? \d{4}$/, ''))
   })
 })

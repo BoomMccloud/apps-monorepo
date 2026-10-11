@@ -5,6 +5,26 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 50 — 2026-10-11 · temporary premium: page vs oracle (A24)
+
+**Result:** PASS A24 (time project).
+
+A V2 name 28 + 5 days past expiry is in price cooldown. On `/register/$name`,
+with the browser synced to chain time:
+- the banner's live fee (computed client-side by `lib/premiumDecay`) equals
+  `getRegisterPrice(...).premium` at chain time within 1% (measured
+  $3,124,952, i.e. $100M halved five times);
+- "The fee hits $0 on" shows expiry + 28-day grace + 21 days.
+
+The old `temporaryPremium.spec.ts` stays `describe.skip`: it was written
+against V1 names and the old rentPrice assumptions. A24 replaces its purpose.
+
+**In flight:** nothing.
+
+**Next:** A22 (two tabs registering one label), the last open manager P2 row.
+
+---
+
 ## Iteration 49 — 2026-10-11 · registration progress is monotonic (A25)
 
 **Result:** PASS A25 in both modes (registration spec).
