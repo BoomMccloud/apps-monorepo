@@ -284,6 +284,32 @@ export async function resolveRegistryPath(
 }
 
 /**
+ * Assert that `fullName` was never registered in V2: either the path from the
+ * .eth registry stops before it (some ancestor has no subregistry), or the
+ * registry that would hold it reports the label AVAILABLE with no history.
+ */
+export async function assertNotInV2(fullName: string): Promise<void> {
+  const labels = labelPath(fullName)
+  let registry: Address = V2_ETH_REGISTRY
+  for (const label of labels.slice(0, -1)) {
+    const next = await readSubregistry(registry, label)
+    if (next === zeroAddress) return
+    registry = next
+  }
+  const label = labels[labels.length - 1]
+  const state = await publicClient.readContract({
+    address: registry,
+    abi: USER_REGISTRY_ABI,
+    functionName: 'getState',
+    args: [BigInt(keccak256(toHex(label)))],
+  })
+  expect(
+    { status: state.status, latestOwner: state.latestOwner },
+    `${fullName} must not have been registered in ${registry}`,
+  ).toEqual({ status: 0, latestOwner: zeroAddress })
+}
+
+/**
  * Assert that `parentFullName` has a `UserRegistry` attached, that it is
  * factory-certified against the canonical implementation, and that it knows
  * the parent it hangs off. Returns the registry address.

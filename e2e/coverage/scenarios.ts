@@ -1258,7 +1258,7 @@ const migrationGS: Scenario[] = suite('G.GS', 'migration', 'manager', 'P3', [
   [
     'GS5',
     'PCC-expired subname',
-    'define expected behaviour from the case study first, then assert it',
+    'defined 2026-10-11: the NameWrapper zeroes an expired emancipated child’s owner and fuses, so nobody holds it — not offered, not moved, and its parent (with a live sibling) migrates unaffected',
   ],
   [
     'GS6',
@@ -1294,7 +1294,7 @@ const migrationGS: Scenario[] = suite('G.GS', 'migration', 'manager', 'P3', [
   [
     'GS12',
     'Copy child whose V1 expiry has already passed',
-    'ineligible `expired-registration`. Note the escape: a parent-controlled NameWrapper subname legitimately carries a ZERO expiry, so zero-and-no-PCC must NOT be treated as expired',
+    'ineligible `expired-registration` — not offered (the UI surfaces no reason for it), never copied, and a live sibling still is. Note the escape: a parent-controlled NameWrapper subname legitimately carries a ZERO expiry, so zero-and-no-PCC must NOT be treated as expired',
   ],
   [
     'GS13',

@@ -32,6 +32,7 @@ import { createMakeV1Name } from '../../../fixtures/makeV1Name.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { publicClient } from '../../../helpers/anvil-client.js'
 import {
+  assertLockedTokenRoute,
   assertUnlockedTokenRoute,
   assertV2Reserved,
   readV2TokenRoles,
@@ -357,5 +358,55 @@ test.describe('ENS V1 → V2 migration — unwrapped and emancipated 2LDs', () =
       await page.screenshot({
         path: `${process.env.QA_SHOTS_DIR}/a11-reserved-profile.png`,
       })
+  })
+})
+
+test.describe('ENS V1 → V2 migration — a large mixed batch', () => {
+  // Seeding 24 names is ~6 minutes on the fork; the flow itself several more.
+  test.describe.configure({ timeout: 1_200_000 })
+
+  test('7 unwrapped, 8 unlocked and 9 locked names migrate in one flow, each through its own controller', {
+    tag: ['@scenario:GS11'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const makeV1Name = createMakeV1Name({ userAccount: owner })
+    const shapes = [
+      ...Array.from({ length: 7 }, () => 'unwrapped' as const),
+      ...Array.from({ length: 8 }, () => 'wrapped' as const),
+      ...Array.from({ length: 9 }, () => 'locked' as const),
+    ]
+    const names: { name: string; type: (typeof shapes)[number] }[] = []
+    for (const [i, type] of shapes.entries())
+      names.push({
+        name: await makeV1Name({ label: `gs11-${type}-${i}`, type }),
+        type,
+      })
+
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: names.map(({ name, type }) => ({
+        kind: 'registration' as const,
+        label: labelOf(name),
+        type,
+      })),
+    })
+    await migrate(
+      page,
+      wallet,
+      names.map((n) => n.name),
+    )
+
+    // Every name lands, and by the route its V1 shape dictates: unwrapped
+    // and unlocked through the unlocked controller (an unlocked wrapper is
+    // unwrapped into the Graveyard on the way), locked through the locked
+    // controller with its wrapper kept.
+    for (const { name, type } of names) {
+      if (type === 'locked')
+        await assertLockedTokenRoute(labelOf(name), namehash(name))
+      else
+        await assertUnlockedTokenRoute(labelOf(name), namehash(name), {
+          wrapped: type === 'wrapped',
+        })
+    }
   })
 })

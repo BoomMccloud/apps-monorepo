@@ -5,6 +5,56 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 36 — 2026-10-11 · E2E-024 logged; subname edge cases (GS5, GS8, GS10, GS11, GS12, GS18)
+
+**Batch:** the user's call was "log that latency defect, then move on to next in
+queue". E2E-024 got witness GR13 (mock mode: records on chain, no keys in the
+bigname mock), and a test confirmed it fails for that reason. Then the GS rows.
+
+**Result:** PASS GS5, GS8, GS11, GS12, GS18 · DEFECT GS10 (new **E2E-025**, S3)
+· terminal 425 → 432.
+- GS11 (24 mixed 2LDs in one flow) is green in both modes.
+- The subname tests run in real mode only; mock mode skips them (6 skipped).
+
+**Ground truth (`classifyNames.ts`, `preflightChecks.ts`, `v1Names.ts`):**
+- All V1 data comes from bigname lookups. `wrapper_expires_at: null` with
+  reason `not_set` becomes `expiryDate '0'`.
+- Copy children are offered only when the wrapper or registry owner is the
+  wallet (GS18: another holder gives `null`, silently).
+- An expired PCC child has owner and fuses zeroed on chain, and live
+  eligibility drops it (GS5).
+- An expired copy child is `expired-registration` (GS12).
+- No ineligible reason is shown in the UI except `missing-registration` and
+  `not-reserved` (`getUnavailableNames`), plus grace-period 2LDs.
+
+**E2E-025:** a child wrapped under an unwrapped 2LD (`NameWrapper.wrap`, wrapper
+expiry 0) passes classification, where zero expiry without PCC counts as no
+independent expiry. The live preflight then drops it (`expiry <= now`, no
+exemption), so the parent migrates without it and nothing is said. A
+4-level chain of wrapped children with their own expiries copies fine.
+
+**Fixtures:**
+- `makeV1Subname` accepts an expiry in the past and checks the expired
+  state on read-back (owner zeroed only with PCC).
+- `wrapV1SubnameOfUnwrapped` wraps a child under an unwrapped 2LD.
+- `assertNotInV2(fullName)` checks the name was never registered in V2.
+
+**Skipped-blocked:**
+- GS13 (over-long label): a label over 255 bytes can only exist on a
+  registry-only subname. Local bigname has no labels for those, and the mock
+  cannot express subname trees.
+- GS17 (dirty UserRegistry slot) is not started. It needs prior V2 state
+  planted at the deterministic UserRegistry address (salt
+  `keccak256(abi.encode(keccak256("ENSManagerMigrationUserRegistry:v1"),
+  namehash(parent)))`, deployer = the HCA). The UI maps every readiness
+  failure to the generic "Your permissions changed…".
+
+**In flight:** nothing.
+
+**Next:** GA5, GA9–GA12, GU5–GU9, GW4, GM5, then GS17.
+
+---
+
 ## Iteration 35 — 2026-10-11 · records through migration (GR2–GR12)
 
 **Batch:** the remaining migration rows, starting with GR. The portal is parked

@@ -42,6 +42,7 @@ import {
   CHILD_FUSES,
   makeV1Subname,
   readWrapperExpiry,
+  wrapV1SubnameOfUnwrapped,
 } from '../../../fixtures/makeV1Subname.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
@@ -50,6 +51,7 @@ import {
   assertCopyExpiry,
   assertCopyRegistered,
   assertLockedMigration,
+  assertNotInV2,
   assertNotUserRegistry,
   assertUserRegistryAttached,
   assertV2Registered,
@@ -58,6 +60,7 @@ import {
   MAX_UINT64,
 } from '../../../helpers/migration-assertions.js'
 import {
+  anyRow,
   nestedRow,
   openMigrationFlow,
   rootRow,
@@ -754,5 +757,389 @@ test.describe('ENS V1 → V2 migration — wrapped children of a locked 2LD', ()
       parentWr,
       'the child is registered before the grandchild',
     ).toBeLessThan(childWr)
+  })
+})
+
+test.describe('ENS V1 → V2 migration — subname edge cases (§G.GS)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  const DAY = 24n * 3600n
+  const chainNow = async () =>
+    (await publicClient.getBlock({ blockTag: 'latest' })).timestamp
+
+  test('an unlocked subname wrapped under an UNWRAPPED 2LD is copied with its parent', {
+    tag: ['@scenario:GS10'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    test.fail(
+      true,
+      'E2E-025: the live preflight treats a zero wrapper expiry as expired, so the child is silently dropped',
+    )
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs10-unwrapped',
+    })
+    // `NameWrapper.wrap` under an unwrapped parent: no fuses, and a wrapper
+    // expiry of 0 — no expiry of its own, which the copy route must not read
+    // as expired.
+    const child = await wrapV1SubnameOfUnwrapped({
+      parentLabel: labelOf(parent),
+      childLabel: 'wrapped',
+      parentOwnerAccount: userAccount,
+      ownerAccount: userAccount,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'wrapped',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: 0,
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(
+      nestedRow(page, child),
+      'the wrapped child is offered as a copy under its root',
+    ).toBeVisible({ timeout: 30_000 })
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertV2Registered(labelOf(parent))
+    await assertUserRegistryAttached(parent)
+    await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
+  })
+
+  test('a four-level chain of unlocked subnames is copied level by level', {
+    tag: ['@scenario:GS10'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs10-chain',
+      type: 'wrapped',
+    })
+    const expiry = (await chainNow()) + 180n * DAY
+    const mid = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'mid',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry,
+    })
+    const leaf = await makeV1Subname({
+      parentName: mid.replace(/\.eth$/, ''),
+      childLabel: 'leaf',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          wrapperExpiry: Number(await readWrapperExpiry(parent)),
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'mid',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: Number(await readWrapperExpiry(mid)),
+              children: [
+                {
+                  kind: 'wrapped-child',
+                  label: 'leaf',
+                  fuses: CHILD_FUSES.UNLOCKED_CHILD,
+                  expiryDate: Number(await readWrapperExpiry(leaf)),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, mid)).toBeVisible({ timeout: 30_000 })
+    await expect(nestedRow(page, leaf)).toBeVisible()
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertUserRegistryAttached(parent)
+    await assertCopyRegistered(mid, HEADLESS_USER_ADDRESS)
+    await assertUserRegistryAttached(mid)
+    await assertCopyRegistered(leaf, HEADLESS_USER_ADDRESS)
+  })
+
+  test('a copy child whose own expiry has passed is not offered, and its parent migrates alone', {
+    tag: ['@scenario:GS12'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs12-parent',
+      type: 'wrapped',
+    })
+    const now = await chainNow()
+    const expired = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'lapsed',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry: now - DAY,
+    })
+    // Control: a live sibling, so "not offered" cannot mean "nothing listed".
+    const live = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'live',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry: now + 180n * DAY,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          wrapperExpiry: Number(await readWrapperExpiry(parent)),
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'lapsed',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: Number(await readWrapperExpiry(expired)),
+            },
+            {
+              kind: 'wrapped-child',
+              label: 'live',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: Number(await readWrapperExpiry(live)),
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, live)).toBeVisible({ timeout: 30_000 })
+    await expect(
+      anyRow(page, expired),
+      'an expired copy child is not offered',
+    ).toHaveCount(0)
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertCopyRegistered(live, HEADLESS_USER_ADDRESS)
+    await assertNotInV2(expired)
+  })
+
+  test('an emancipated child whose wrapper expired is not offered, and its locked parent migrates alone', {
+    tag: ['@scenario:GS5'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    // The NameWrapper zeroes an expired PARENT_CANNOT_CONTROL child's owner
+    // and fuses: on chain nobody holds it any more, so it has nothing to
+    // migrate. Expected behaviour, defined here: not offered, not moved, and
+    // the parent unaffected.
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs5-locked',
+      type: 'locked',
+    })
+    const now = await chainNow()
+    const expired = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'gone',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      fuses: CHILD_FUSES.EMANCIPATED,
+      expiry: now - DAY,
+    })
+    const live = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'kept',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      fuses: CHILD_FUSES.EMANCIPATED,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'gone',
+              fuses: CHILD_FUSES.EMANCIPATED,
+            },
+            {
+              kind: 'wrapped-child',
+              label: 'kept',
+              fuses: CHILD_FUSES.EMANCIPATED,
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, live)).toBeVisible({ timeout: 30_000 })
+    await expect(
+      anyRow(page, expired),
+      'an expired emancipated child is not offered',
+    ).toHaveCount(0)
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertLockedMigration(labelOf(parent))
+    await assertWrappedChildMigrated(live, HEADLESS_USER_ADDRESS, {
+      locked: false,
+    })
+    await assertNotInV2(expired)
+  })
+
+  test('a copy child held by another address is not offered to the parent’s owner', {
+    tag: ['@scenario:GS18'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const other = accounts.getAddress('user2') as Address
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs18-parent',
+      type: 'wrapped',
+    })
+    const expiry = (await chainNow()) + 180n * DAY
+    const theirs = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'theirs',
+      ownerAddress: other,
+      parentOwnerAccount: userAccount,
+      expiry,
+    })
+    const mine = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'mine',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          wrapperExpiry: Number(await readWrapperExpiry(parent)),
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'theirs',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              ownerAddress: other,
+              expiryDate: Number(await readWrapperExpiry(theirs)),
+            },
+            {
+              kind: 'wrapped-child',
+              label: 'mine',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: Number(await readWrapperExpiry(mine)),
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, mine)).toBeVisible({ timeout: 30_000 })
+    await expect(
+      anyRow(page, theirs),
+      'a child someone else holds is not the parent owner’s to move',
+    ).toHaveCount(0)
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertCopyRegistered(mine, HEADLESS_USER_ADDRESS)
+    await assertNotInV2(theirs)
+  })
+
+  test('a locked 2LD with ten locked children: every child lands, after its parent', {
+    tag: ['@scenario:GS8'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs8-locked',
+      type: 'locked',
+    })
+    const labels = Array.from({ length: 10 }, (_, i) => `c${i}`)
+    const children: string[] = []
+    for (const childLabel of labels)
+      children.push(
+        await makeV1Subname({
+          parentName: labelOf(parent),
+          childLabel,
+          ownerAddress: HEADLESS_USER_ADDRESS,
+          parentOwnerAccount: userAccount,
+          fuses: CHILD_FUSES.LOCKED_CHILD,
+        }),
+      )
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: labels.map((label) => ({
+            kind: 'wrapped-child' as const,
+            label,
+            fuses: CHILD_FUSES.LOCKED_CHILD,
+          })),
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    for (const child of children)
+      await expect(nestedRow(page, child)).toBeVisible({ timeout: 30_000 })
+
+    const fromBlock = (await publicClient.getBlockNumber({ cacheTime: 0 })) + 1n
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertLockedMigration(labelOf(parent))
+    let registry: Address | undefined
+    for (const child of children) {
+      const landed = await assertWrappedChildMigrated(
+        child,
+        HEADLESS_USER_ADDRESS,
+        { locked: true },
+      )
+      registry ??= landed.registry
+      expect(
+        landed.registry,
+        `${child} sits in its parent's WrapperRegistry`,
+      ).toBe(registry)
+    }
+    const ETH_REGISTRY = ensL1Contracts[supportedL1Chains.sepolia].ensRegistry
+      .address as Address
+    expect(
+      await firstRegistrationPosition(ETH_REGISTRY, fromBlock),
+      'the parent is registered before any child',
+    ).toBeLessThan(
+      await firstRegistrationPosition(registry as Address, fromBlock),
+    )
   })
 })

@@ -2,13 +2,17 @@ import {
   type Address,
   encodeFunctionData,
   type Hash,
+  labelhash,
   namehash,
   parseAbi,
+  stringToBytes,
+  toHex,
+  zeroAddress,
 } from 'viem'
 import type { privateKeyToAccount } from 'viem/accounts'
 
 import { publicClient, walletClient } from '../helpers/anvil-client.js'
-import { V1_NAME_WRAPPER } from './makeV1Name.js'
+import { V1_ENS_REGISTRY, V1_NAME_WRAPPER } from './makeV1Name.js'
 
 // ---------------------------------------------------------------------------
 // Parent-controlled fuse constants (bits 16-17)
@@ -44,6 +48,13 @@ export const CHILD_FUSES = {
 const NAME_WRAPPER_ABI = parseAbi([
   'function setSubnodeOwner(bytes32 parentNode, string label, address owner, uint32 fuses, uint64 expiry) returns (bytes32)',
   'function getData(uint256 tokenId) view returns (address owner, uint32 fuses, uint64 expiry)',
+  'function wrap(bytes name, address wrappedOwner, address resolver)',
+])
+
+const ENS_REGISTRY_ABI = parseAbi([
+  'function setSubnodeOwner(bytes32 node, bytes32 label, address owner) returns (bytes32)',
+  'function setApprovalForAll(address operator, bool approved)',
+  'function owner(bytes32 node) view returns (address)',
 ])
 
 // ---------------------------------------------------------------------------
@@ -167,6 +178,24 @@ export async function makeV1Subname(config: V1SubnameConfig): Promise<string> {
       functionName: 'getData',
       args: [BigInt(namehash(childName))],
     })
+  // A child created already expired (`expiry` in the chain's past) is the
+  // shape GS5/GS12 need. The NameWrapper reports an expired name's fuses as 0,
+  // and its owner as 0 too once PARENT_CANNOT_CONTROL was burnt.
+  if (actualExpiry <= now) {
+    const wantOwner =
+      (fuses & PARENT_CANNOT_CONTROL) !== 0 ? zeroAddress : ownerAddress
+    if (
+      actualOwner.toLowerCase() !== wantOwner.toLowerCase() ||
+      actualFuses !== 0
+    )
+      throw new Error(
+        `[makeV1Subname] ${childName} is expired but reports owner ${actualOwner}, fuses 0x${actualFuses.toString(16)}; expected ${wantOwner}, 0`,
+      )
+    console.log(
+      `[makeV1Subname] ✅ ${childName} created expired (expiry ${actualExpiry}, owner ${actualOwner})`,
+    )
+    return childName
+  }
   if (actualOwner.toLowerCase() !== ownerAddress.toLowerCase()) {
     throw new Error(
       `[makeV1Subname] ${childName} reports owner ${actualOwner}, expected ${ownerAddress}`,
@@ -181,6 +210,90 @@ export async function makeV1Subname(config: V1SubnameConfig): Promise<string> {
 
   console.log(
     `[makeV1Subname] ✅ ${childName} (owner: ${ownerAddress}, expiry: ${actualExpiry})`,
+  )
+  return childName
+}
+
+/**
+ * Wrap a subname of an **unwrapped** 2LD: the parent's controller creates the
+ * child in the legacy registry, then the child's owner wraps it with
+ * `NameWrapper.wrap`. A name wrapped this way has no fuses and a wrapper
+ * expiry of 0 — it has no expiry of its own, which is the shape the copy
+ * route's "zero expiry without PARENT_CANNOT_CONTROL is not expired" rule is
+ * for.
+ */
+export async function wrapV1SubnameOfUnwrapped(config: {
+  /** The 2LD label, without `.eth`. */
+  readonly parentLabel: string
+  readonly childLabel: string
+  readonly parentOwnerAccount: ReturnType<typeof privateKeyToAccount>
+  readonly ownerAccount: ReturnType<typeof privateKeyToAccount>
+}): Promise<string> {
+  const { parentLabel, childLabel, parentOwnerAccount, ownerAccount } = config
+  const childName = `${childLabel}.${parentLabel}.eth`
+
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: parentOwnerAccount,
+      to: V1_ENS_REGISTRY,
+      data: encodeFunctionData({
+        abi: ENS_REGISTRY_ABI,
+        functionName: 'setSubnodeOwner',
+        args: [
+          namehash(`${parentLabel}.eth`),
+          labelhash(childLabel),
+          ownerAccount.address,
+        ],
+      }),
+    }),
+    `registry setSubnodeOwner(${childName})`,
+  )
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: ownerAccount,
+      to: V1_ENS_REGISTRY,
+      data: encodeFunctionData({
+        abi: ENS_REGISTRY_ABI,
+        functionName: 'setApprovalForAll',
+        args: [V1_NAME_WRAPPER, true],
+      }),
+    }),
+    'registry setApprovalForAll(NameWrapper)',
+  )
+  const dnsName = (() => {
+    const bytes: number[] = []
+    for (const label of childName.split('.')) {
+      const encoded = stringToBytes(label)
+      bytes.push(encoded.length, ...encoded)
+    }
+    bytes.push(0)
+    return toHex(new Uint8Array(bytes))
+  })()
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: ownerAccount,
+      to: V1_NAME_WRAPPER,
+      data: encodeFunctionData({
+        abi: NAME_WRAPPER_ABI,
+        functionName: 'wrap',
+        args: [dnsName, ownerAccount.address, zeroAddress],
+      }),
+    }),
+    `NameWrapper.wrap(${childName})`,
+  )
+
+  const [owner, fuses, expiry] = await publicClient.readContract({
+    address: V1_NAME_WRAPPER,
+    abi: NAME_WRAPPER_ABI,
+    functionName: 'getData',
+    args: [BigInt(namehash(childName))],
+  })
+  if (owner.toLowerCase() !== ownerAccount.address.toLowerCase())
+    throw new Error(
+      `[wrapV1SubnameOfUnwrapped] ${childName} reports owner ${owner}, expected ${ownerAccount.address}`,
+    )
+  console.log(
+    `[wrapV1SubnameOfUnwrapped] ✅ ${childName} (fuses 0x${fuses.toString(16)}, expiry ${expiry})`,
   )
   return childName
 }
