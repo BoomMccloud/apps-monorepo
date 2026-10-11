@@ -66,6 +66,7 @@ import {
 } from '../../../helpers/migration-assertions.js'
 import { selectOnlyRoots } from '../../../helpers/migration-flow.js'
 import type { MockV1Name } from '../../../helpers/mock-v1-subgraph.js'
+import { renewFor28Days } from '../../../helpers/profile-helpers.js'
 import {
   dnsEncode,
   expectRecordsResolve,
@@ -472,5 +473,175 @@ test.describe('An unmigrated V1 name after its V1 expiry (GA9)', () => {
       }),
       'and the name is open to register in V2',
     ).toBe(true)
+  })
+})
+
+/**
+ * Renew by the minimum on /renew-v1. The V1 path pays from the owner's EOA —
+ * a USDC approve (when the allowance is short) then `ETHRenewerV1.renew` —
+ * so every send the flow asks for is authorized until it reports success.
+ */
+async function renewV1(
+  page: Page,
+  wallet: Parameters<typeof authorizeTransactionsWhile>[1],
+): Promise<void> {
+  // The date picker ignores a click made before pricing has loaded.
+  await expect(
+    page.getByRole('button', { name: /pay with stablecoins/i }),
+  ).toBeVisible({ timeout: 60_000 })
+  await page.waitForLoadState('networkidle')
+  let done = false
+  const authorizing = authorizeTransactionsWhile(page, wallet, () => done)
+  try {
+    await renewFor28Days(page)
+  } finally {
+    done = true
+    await authorizing
+  }
+}
+
+test.describe('V1 renewal through ETHRenewerV1 (§5.B)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  const wrapperExpiry = async (name: string) =>
+    (
+      await publicClient.readContract({
+        address: NAME_WRAPPER,
+        abi: NAME_WRAPPER_ABI,
+        functionName: 'getData',
+        args: [BigInt(namehash(name))],
+      })
+    )[2]
+
+  test('renewing a wrapped V1 name in grace also moves its NameWrapper expiry', {
+    tag: ['@scenario:B15'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    // In grace, reserved in V2 with the premigration bonus — renewable.
+    const g = await makeGraceV1Name({
+      label: 'b15-wrapped',
+      owner,
+      wrapped: true,
+    })
+    const before = await v1Expiry(g)
+    expect(
+      await wrapperExpiry(g.name),
+      'precondition: a wrapped .eth 2LD carries registrar expiry + 90 days',
+    ).toBe(before + 90n * BigInt(DAY))
+
+    await serveV1Names(page, [
+      {
+        name: g.name,
+        ownerAddress: owner.address,
+        type: 'wrapped',
+        expiryDate: Number(g.expiry),
+      },
+    ])
+    await syncBrowserToChain(page)
+    await page.goto(`${MANAGER_APP_URL}/renew-v1/${g.name}`)
+    await renewV1(page, wallet)
+
+    const after = await v1Expiry(g)
+    expect(after - before, 'the registrar lease moved by 28 days').toBe(
+      28n * BigInt(DAY),
+    )
+    // Unsynced, the wrapper would lapse at the OLD expiry + 90 days and the
+    // name would desync (E2E-027's state). The deployed ETHRenewerV1 renews
+    // through the wrapped controller inline (NameWrapper.renew), so it does
+    // not — this pins that.
+    expect(
+      await wrapperExpiry(g.name),
+      'the NameWrapper expiry follows the renewed lease',
+    ).toBe(after + 90n * BigInt(DAY))
+  })
+
+  test('renewing an unwrapped V1 name in grace moves its lease, and touches no wrapper', {
+    tag: ['@scenario:B14', '@scenario:B15'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const g = await makeGraceV1Name({ label: 'b14-unwrapped', owner })
+    const before = await v1Expiry(g)
+    const reservationBefore = (await v2State(g.label)).expiry
+
+    await serveV1Names(page, [
+      {
+        name: g.name,
+        ownerAddress: owner.address,
+        type: 'unwrapped',
+        expiryDate: Number(g.expiry),
+      },
+    ])
+    await syncBrowserToChain(page)
+    await page.goto(`${MANAGER_APP_URL}/renew-v1/${g.name}`)
+    await renewV1(page, wallet)
+
+    const after = await v1Expiry(g)
+    expect(after - before, 'the registrar lease moved by 28 days').toBe(
+      28n * BigInt(DAY),
+    )
+    expect(await wrapperExpiry(g.name), 'no wrapper exists to sync').toBe(0n)
+    // The deployed ETHRenewerV1 renews the V2 reservation in the same call
+    // (traced 2026-10-11; the local contracts-v2 source predates this), so
+    // the reservation keeps step with the lease.
+    expect(
+      (await v2State(g.label)).expiry - reservationBefore,
+      'the V2 reservation moved with the lease',
+    ).toBe(28n * BigInt(DAY))
+  })
+
+  test('the continuity bonus: renewing on grace day 61 and day 63 both re-reserve V2 at renewed V1 expiry + bonus', {
+    tag: ['@scenario:B16'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    // Two names whose V1 leases end two days apart, so one warp puts the
+    // first at grace day 63 (past the 62-day bonus window) and the second at
+    // day 61 (inside it).
+    const late = await makeGraceV1Name({ label: 'b16-day63', owner })
+    await warpDays(2)
+    const early = await makeGraceV1Name({ label: 'b16-day61', owner })
+    await warpDays(61)
+    expect(await graceDay(early)).toBeGreaterThan(60.9)
+    expect(await graceDay(early)).toBeLessThan(62)
+    expect(await graceDay(late)).toBeGreaterThan(62.9)
+    expect((await v2State(early.label)).status, 'day 61: still RESERVED').toBe(
+      1,
+    )
+    expect(
+      (await v2State(late.label)).status,
+      'day 63: reservation lapsed',
+    ).toBe(AVAILABLE)
+
+    const measured: Record<string, bigint> = {}
+    for (const g of [early, late]) {
+      await serveV1Names(page, [
+        {
+          name: g.name,
+          ownerAddress: owner.address,
+          type: 'unwrapped',
+          expiryDate: Number(g.expiry),
+        },
+      ])
+      await syncBrowserToChain(page)
+      await page.goto(`${MANAGER_APP_URL}/renew-v1/${g.name}`)
+      await renewV1(page, wallet)
+      const leased = await v1Expiry(g)
+      const state = await v2State(g.label)
+      measured[g.label] = state.expiry - leased
+      console.log(
+        `[B16] ${g.label}: V2 status ${state.status}, V2 expiry − V1 expiry = ${measured[g.label]}s`,
+      )
+    }
+    // The bonus is not a window that closes at day 62: it is the offset that
+    // lines V1's 90-day grace up with V2's 28 (premigration reserves every
+    // name at V1 expiry + bonus), and every renewal restores it — inside the
+    // reservation (day 61) and after it lapsed but while still renewable
+    // (day 63), as GA7 measured at day 89.
+    expect(measured[early.label], 'day 61: V2 = renewed V1 + bonus').toBe(
+      PREMIGRATION_BONUS_PERIOD,
+    )
+    expect(
+      measured[late.label],
+      'day 63: re-reserved at renewed V1 + bonus',
+    ).toBe(PREMIGRATION_BONUS_PERIOD)
   })
 })

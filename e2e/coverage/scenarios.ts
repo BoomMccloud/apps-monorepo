@@ -1108,7 +1108,7 @@ const renewalB: Scenario[] = [
     [
       'B16',
       'V1 continuity bonus at day 61 and day 63',
-      'inside the 62-day window the bonus applies; outside it does not — assert both boundaries',
+      'measured 2026-10-11: the bonus is an invariant, not a window — renewing at grace day 61 (V2 still RESERVED) and day 63 (reservation lapsed, still renewable) both leave V2 expiry = renewed V1 expiry + PREMIGRATION_BONUS_PERIOD (GA7 measured the same at day 89). The old "outside it does not apply" oracle contradicted premigration\'s rule',
       { planId: 'B15 (superseded plan)' },
     ],
     [

@@ -5,6 +5,52 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 43 — 2026-10-11 · portal stays parked; V1 renewal through ETHRenewerV1 (B14, B15, B16)
+
+**Coverage revisit (user asked for transfer and roles):**
+- Suites C (roles) and F (transfer) and the V1 shape matrix are all portal;
+  the manager has no roles or transfer UI.
+- The portal's transfer (×26) and roles (×14) tests are red in both modes: its
+  new `RoleHolders` query (#1353) gets no holders from the stale local Panoptes
+  image or from the mock, so the WEB-1484 guard disables Transfer.
+- User decision: **wait for the portal to move to bigname** (memory
+  `portal-e2e-parked-until-bigname`).
+- Open portal rows for then: C6, C10, C13–C17, F6, VL20, VF10, VF11, VF32,
+  VF33, VF44, VO33.
+
+**Result:** PASS B14, B15, B16 in both modes (`manager-migration-time`, on
+/renew-v1).
+
+**Correction — the deployed ETHRenewerV1 is not the local source.** A
+`debug_traceTransaction` of a real /renew-v1 renewal shows one call doing
+three things: renew the V2 reservation, renew the BaseRegistrar lease, and
+`NameWrapper.renew` through the wrapped controller (it adds and removes
+itself as controller). The local contracts-v2 `_onRenew` (last touched
+2026-07-28) does only the lease. Consequences:
+- **B15:** a wrapped V1 name renewed in grace keeps its wrapper at lease +
+  90 days. The manager's own renewal does not desync.
+- **E2E-027's summary is corrected.** Desynced names come from older
+  registrar-only renewals through legacy controllers, not from ETHRenewerV1.
+  The defect itself (such names vanish from /upgrade, with no sync offered)
+  stands.
+- **B14:** the V2 reservation moves with the lease, by 28 days for 28 days.
+- **B16 oracle corrected:** the bonus is an invariant, not a window. Renewing
+  on grace day 61 (RESERVED) and day 63 (reservation lapsed, still renewable)
+  both leave V2 expiry = renewed V1 expiry + 62 days + 1 s, as GA7 found at
+  day 89.
+- Memory `v1-grace-renewal-mechanics` is rewritten to match.
+
+**Harness:** the V1 renewal pays from the EOA (USDC approve, then `renew`), so
+`renewV1` authorizes every send until success. It also waits for the pricing
+panel first, because the date picker ignores an early click.
+
+**In flight:** nothing.
+
+**Next:** the other renewal rows (B4, B6–B10, B12, B13, B18), then
+registration (A22–A25).
+
+---
+
 ## Iteration 42 — 2026-10-11 · a copy interrupted between its batches (GU7, copies)
 
 **Result:** PASS. A second GU7 test, real mode only (a subname tree).
