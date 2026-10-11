@@ -5,6 +5,44 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 42 — 2026-10-11 · a copy interrupted between its batches (GU7, copies)
+
+**Result:** PASS. A second GU7 test, real mode only (a subname tree).
+
+**Why it was worth a test.** The parent's block (its migration, the UserRegistry
+deploy and wiring) is atomic: a name is never split across outer calls. Each
+subname copy, though, is its own name and can fall into a later transaction.
+Stopping between transactions therefore leaves the parent in V2 and some copies
+still in V1 only. A copy is only classified under a parent that is migrating
+in the same selection, so the worry was that the leftover copies would become
+`missing-parent`, which no UI surfaces, and be stranded.
+
+**Measured:** a wrapped parent with 12 unlocked children, each with 30 text
+records, plans "Approve your wrapped names → Upgrade batch 1 of 2 → Upgrade
+batch 2 of 2". The test authorizes the approval and batch 1, rejects batch 2,
+then reloads.
+- On chain: the parent is REGISTERED with its certified UserRegistry, and 8
+  copies are registered with their records.
+- 4 copies are left. Reopening /upgrade (after `waitForBignameBlock`) offers
+  all 4, and they copy into the existing registry with their records.
+
+The app takes the existing-registry path from chain state, so this needs no
+local journal.
+
+**Iteration 41's follow-up, resolved:** the "retry from another browser" worry
+reduces to a brief index lag. The registry and the parent's migration land
+together, so code at the registry address implies a migrated parent, which the
+app reads as such. Only while bigname still lists the parent as V1 does it say
+"Couldn't prepare your upgrade". The real half-finished state is the one
+above, and it recovers.
+
+**In flight:** nothing.
+
+**Next:** migration is down to GU5 (waiting on the user) and GS13 (blocked).
+Then the transfer and roles coverage from the original ask.
+
+---
+
 ## Iteration 41 — 2026-10-11 · a dirty deterministic UserRegistry slot (GS17)
 
 **Result:** PASS GS17 · real mode only (a subname tree). The settle-on-outcome

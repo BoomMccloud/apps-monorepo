@@ -298,6 +298,28 @@ export async function readGraveyard(): Promise<Address> {
 }
 
 /**
+ * `fullName`'s V2 status by walking the registry path from .eth: 0 when any
+ * ancestor has no subregistry (or the label is AVAILABLE), 1 RESERVED,
+ * 2 REGISTERED. Reads only — for tests that classify a set of names.
+ */
+export async function readV2NameStatus(fullName: string): Promise<number> {
+  const labels = labelPath(fullName)
+  let registry: Address = V2_ETH_REGISTRY
+  for (const label of labels.slice(0, -1)) {
+    const next = await readSubregistry(registry, label)
+    if (next === zeroAddress) return 0
+    registry = next
+  }
+  const state = await publicClient.readContract({
+    address: registry,
+    abi: USER_REGISTRY_ABI,
+    functionName: 'getState',
+    args: [BigInt(keccak256(toHex(labels[labels.length - 1])))],
+  })
+  return Number(state.status)
+}
+
+/**
  * Assert that `fullName` was never registered in V2: either the path from the
  * .eth registry stops before it (some ancestor has no subregistry), or the
  * registry that would hold it reports the label AVAILABLE with no history.

@@ -59,6 +59,7 @@ import {
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
 import { publicClient, testClient } from '../../../helpers/anvil-client.js'
+import { waitForBignameBlock } from '../../../helpers/bigname-sync.js'
 import {
   assertCopyExpiry,
   assertCopyRegistered,
@@ -70,11 +71,14 @@ import {
   assertWrappedChildMigrated,
   firstRegistrationPosition,
   MAX_UINT64,
+  readV2NameStatus,
 } from '../../../helpers/migration-assertions.js'
 import {
   anyRow,
+  confirmAndAuthorize,
   nestedRow,
   openMigrationFlow,
+  readPlan,
   rootRow,
   runMigrationFlow,
   selectOnlyRoots,
@@ -1281,5 +1285,122 @@ test.describe('ENS V1 → V2 migration — subname edge cases (§G.GS)', () => {
       'the parent is still RESERVED in V2',
     ).toBe(1)
     await assertNotInV2(child)
+  })
+
+  test('a copy stopped between its batches: the parent and the first copies land, and the rest are still offered and copy on retry', {
+    tag: ['@scenario:GU7'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gu7-copy-split',
+      type: 'wrapped',
+    })
+    // Records make each copy heavy (one replayed text ~50k gas), so the
+    // copies cannot share one transaction with the parent's own block.
+    const records: V1Records = {
+      texts: Array.from({ length: 30 }, (_, i) => ({
+        key: `gu7.key-${String(i).padStart(2, '0')}`,
+        value: `value ${i}`,
+      })),
+    }
+    const expiry = (await chainNow()) + 180n * DAY
+    const labels = Array.from({ length: 12 }, (_, i) => `c${i}`)
+    const children: string[] = []
+    for (const childLabel of labels) {
+      const child = await makeV1Subname({
+        parentName: labelOf(parent),
+        childLabel,
+        ownerAddress: HEADLESS_USER_ADDRESS,
+        parentOwnerAccount: userAccount,
+        expiry,
+      })
+      await setV1RecordsOn(child, userAccount, true, records)
+      children.push(child)
+    }
+
+    const childNode = async (label: string, child: string) => ({
+      kind: 'wrapped-child' as const,
+      label,
+      fuses: CHILD_FUSES.UNLOCKED_CHILD,
+      expiryDate: Number(await readWrapperExpiry(child)),
+      records: { texts: records.texts?.map((t) => ({ ...t })) },
+    })
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          wrapperExpiry: Number(await readWrapperExpiry(parent)),
+          children: await Promise.all(
+            labels.map((label, i) => childNode(label, children[i])),
+          ),
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    for (const child of children)
+      await expect(nestedRow(page, child)).toBeVisible({ timeout: 30_000 })
+    await selectOnlyRoots(page, [parent])
+
+    const plan = await readPlan(page)
+    const batches = plan.steps.filter((s) => /^Upgrade /.test(s))
+    expect(
+      batches.length,
+      `precondition: the copy spans transactions (${batches.join(' · ')})`,
+    ).toBeGreaterThan(1)
+
+    // Authorize every prompt but the last upgrade batch; reject that one.
+    await page.getByRole('button', { name: /^Upgrade \d+ names?$/ }).click()
+    for (let i = 0; i < plan.count - 1; i++) {
+      await expect
+        .poll(
+          () => wallet.getPendingRequestCount(Web3RequestKind.SendTransaction),
+          { timeout: 120_000 },
+        )
+        .toBeGreaterThanOrEqual(1)
+      await wallet.authorize(Web3RequestKind.SendTransaction)
+    }
+    await expect
+      .poll(
+        () => wallet.getPendingRequestCount(Web3RequestKind.SendTransaction),
+        { timeout: 120_000 },
+      )
+      .toBeGreaterThanOrEqual(1)
+    await wallet.reject(Web3RequestKind.SendTransaction)
+    await page.reload()
+    while (wallet.getPendingRequestCount(Web3RequestKind.SendTransaction) > 0)
+      await wallet.reject(Web3RequestKind.SendTransaction)
+
+    // On chain: the parent's block landed whole, the later copies did not.
+    await assertV2Registered(labelOf(parent))
+    await assertUserRegistryAttached(parent)
+    const statuses = await Promise.all(children.map(readV2NameStatus))
+    const copied = children.filter((_, i) => statuses[i] === 2)
+    const left = children.filter((_, i) => statuses[i] !== 2)
+    console.log(
+      `[GU7] after batch 1: ${copied.length} copied, ${left.length} left`,
+    )
+    expect(
+      left.length,
+      'precondition: some copies were left for batch 2',
+    ).toBeGreaterThan(0)
+    for (const child of copied) await expectRecordsResolve(child, records)
+
+    // The retry: every remaining subname is still offered, and copies.
+    await waitForBignameBlock()
+    await openMigrationFlow(page)
+    for (const child of left)
+      await expect(
+        rootRow(page, child).or(nestedRow(page, child)).first(),
+        `${child} is still offered after the interrupted copy`,
+      ).toBeVisible({ timeout: 60_000 })
+    await confirmAndAuthorize(page, wallet)
+    for (const child of left) {
+      await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
+      await expectRecordsResolve(child, records)
+    }
   })
 })

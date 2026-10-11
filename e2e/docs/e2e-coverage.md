@@ -234,7 +234,7 @@ Committed tests that no project config executes. Not counted as terminal.
 | GU4 <sub>(G24)</sub> | G.GU | Edit profile immediately after migration | PASS | 1 test(s) in manager-migration |
 | GU5 <sub>(G25)</sub> | G.GU | Commemorative NFT at /migration_.nft | not-started | — |
 | GU6 <sub>(G26)</sub> | G.GU | Migration idempotence | PASS | 1 test(s) in manager-migration |
-| GU7 <sub>(G27)</sub> | G.GU | Interrupted mid-batch (reload, close tab) | PASS | 1 test(s) in manager-migration |
+| GU7 <sub>(G27)</sub> | G.GU | Interrupted mid-batch (reload, close tab) | PASS | 2 test(s) in manager-migration |
 | GU8 | G.GU | Migration via HCA vs EOA | EXEMPT | One production path. The manager runs the HCA smart-account path in every environment (`VITE_FF_USE_EOA=false` in .env, .env.local and .env.ci), and migration there is an owner-signed `executeByOwner` on the HCA — the path every manager migration spec already exercises and counts prompts against. `VITE_FF_USE_EOA=true` is documented in apps/manager/.env as a local-debugging bypass of Rhinestone, not a user-facing mode, so there is no second confirmation profile to compare. |
 | GU9 | G.GU | Selection screen promise vs what actually migrates | DEFECT | E2E-023 S1 · 1 test(s) |
 | I1 | 5.I | Fuse list for a V1 wrapped name shows exactly the burnt fuses | not-started | — |
