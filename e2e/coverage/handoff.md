@@ -5,6 +5,42 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 44 — 2026-10-11 · the dashboard grace banner and badge (B6, B7)
+
+**Result:** PASS B6 (real mode, time project), B7 (mock mode, dashboard spec).
+- **B7:** two ENSv2 names in grace (−10 d, −3 d), an active name and an
+  ENSv1 name in grace (−20 d). One banner, "One of your names expired.",
+  whose Renew links `/renew/<the −10 d name>`, with grace end = its expiry +
+  28 days. The banner skips ENSv1 ("Only ENSv2 names in grace are renewed
+  from the dashboard banner"); the "Grace period" badge does not, and marks
+  all three grace names, never the active one. The banner names **one**
+  name: the ledger's "aggregates N" is really "picks the first-expired".
+- **B6:** a real V2 name 3 days into grace shows the badge on its row; after
+  a 28-day renewal on /renew the badge is gone and no banner links to it.
+
+**Measured on the real index:** an expired V2 name has owner, manager and
+registrant all null. The wallet's address listing leaves it out, and the
+dashboard re-adds it from a separate grace query
+(`getDashboardGraceNames` → `toGraceName`, keyed on
+`lapsed_registration.owner`). That is why the mock grace test passes with an
+owner and the real one also works.
+
+**Open question, not filed:** with `page.clock.install` (the synced chain
+clock) the banner once read "Renew by — to keep it". `formatDashboardDate`
+returns "—" for a value that is not `instanceof Date`, and installing the fake
+clock on a loaded page is the likely cause. Unconfirmed; B6 does not assert
+the date.
+
+**Harness:** dashboard search must wait for the list ("Select all names") or
+the first render wipes the typed text. A row is the outermost element with
+exactly one "More options for …" button.
+
+**In flight:** nothing.
+
+**Next:** bulk renew (B8, B10, B9), B12, B4, B18.
+
+---
+
 ## Iteration 43 — 2026-10-11 · portal stays parked; V1 renewal through ETHRenewerV1 (B14, B15, B16)
 
 **Coverage revisit (user asked for transfer and roles):**

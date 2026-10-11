@@ -58,7 +58,10 @@ import {
   testClient,
   walletClient,
 } from '../../../helpers/anvil-client.js'
-import { isRealBigname } from '../../../helpers/bigname-sync.js'
+import {
+  isRealBigname,
+  waitForBignameBlock,
+} from '../../../helpers/bigname-sync.js'
 import {
   assertUnlockedMigration,
   assertV2Reserved,
@@ -643,5 +646,70 @@ test.describe('V1 renewal through ETHRenewerV1 (§5.B)', () => {
       measured[late.label],
       'day 63: re-reserved at renewed V1 + bonus',
     ).toBe(PREMIGRATION_BONUS_PERIOD)
+  })
+})
+
+test.describe('Grace on the dashboard (§5.B)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  /** A dashboard row: the outermost element holding one "More options" control. */
+  const rowOf = (page: Page, name: string) =>
+    page
+      .getByRole('button', { name: `More options for ${name}`, exact: true })
+      .locator(
+        'xpath=ancestor::div[count(.//button[starts-with(@aria-label,"More options for")])=1][last()]',
+      )
+
+  const openDashboard = async (page: Page, name: string) => {
+    await waitForBignameBlock()
+    await page.goto(`${MANAGER_APP_URL}/dashboard`)
+    // Typing before the list has loaded is wiped by its first render.
+    await expect(
+      page.getByRole('button', { name: /^Select all names$/ }),
+    ).toBeVisible({ timeout: 60_000 })
+    const search = page.getByPlaceholder('Search my names')
+    await search.fill(name.replace(/\.eth$/, ''))
+    await expect(search).toHaveValue(name.replace(/\.eth$/, ''))
+    await expect(
+      page.getByRole('button', {
+        name: `More options for ${name}`,
+        exact: true,
+      }),
+    ).toBeVisible({ timeout: 60_000 })
+  }
+
+  test('a name in grace carries the badge and banner until it is renewed, then neither', {
+    tag: ['@scenario:B6'],
+  }, async ({ migrationConnectedPage: page, makeV2Name, wallet }) => {
+    test.skip(
+      !isRealBigname,
+      'renewal has to reach the index the dashboard reads',
+    )
+    const name = await makeV2Name({ label: 'b6-grace', duration: -3 * DAY })
+    const label = name.replace(/\.eth$/, '')
+    const before = (await v2State(label)).expiry
+    await syncBrowserToChain(page)
+
+    await openDashboard(page, name)
+    await expect(
+      rowOf(page, name).getByText('Grace period').first(),
+      'in grace: the badge is on its row',
+    ).toBeVisible()
+
+    await page.goto(`${MANAGER_APP_URL}/renew/${name}`)
+    await renewV1(page, wallet)
+    expect((await v2State(label)).expiry - before, 'renewed by 28 days').toBe(
+      28n * BigInt(DAY),
+    )
+
+    await openDashboard(page, name)
+    await expect(
+      rowOf(page, name).getByText('Grace period'),
+      'renewed: the badge is gone',
+    ).toHaveCount(0, { timeout: 30_000 })
+    await expect(
+      page.locator(`a[href="/renew/${name}"]`).filter({ hasText: /^Renew$/ }),
+      'and no grace banner offers to renew it',
+    ).toHaveCount(0)
   })
 })
