@@ -21,6 +21,7 @@
  * Every test starts from a known approval state for the shared wallet.
  */
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
+import { Web3RequestKind } from '@ensdomains/headless-web3-provider'
 import type { Page } from '@playwright/test'
 import {
   type Address,
@@ -33,9 +34,11 @@ import { type PrivateKeyAccount, privateKeyToAccount } from 'viem/accounts'
 import { createMakeV1Name, FUSES } from '../../../fixtures/makeV1Name.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { publicClient, walletClient } from '../../../helpers/anvil-client.js'
+import { authorizeTransactionsWhile } from '../../../helpers/manager-auth.js'
 import {
   assertLockedMigration,
   assertUnlockedMigration,
+  readV2Status,
 } from '../../../helpers/migration-assertions.js'
 import {
   openMigrationFlow,
@@ -51,6 +54,13 @@ const BASE_REGISTRAR = sepolia.ensBaseRegistrarImplementation.address as Address
 const NAME_WRAPPER = sepolia.ensNameWrapper.address as Address
 const MIGRATION_HELPER = sepolia.ensMigrationHelper.address as Address
 
+const APPROVED_ABI = parseAbi([
+  'function getApproved(uint256 tokenId) view returns (address)',
+])
+const ERC721_ABI = parseAbi([
+  'function transferFrom(address from, address to, uint256 tokenId)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+])
 const OPERATOR_ABI = parseAbi([
   'function setApprovalForAll(address operator, bool approved)',
   'function isApprovedForAll(address owner, address operator) view returns (bool)',
@@ -337,5 +347,239 @@ test.describe('ENS V1 → V2 migration — approvals and confirmation accounting
       page.getByText(frozen, { exact: true }),
       `${frozen} is in neither list`,
     ).toBeVisible()
+  })
+})
+
+/** Every way the upgrade can end, as the page says it. */
+const OUTCOMES = {
+  success: /your names? (has|have) been upgraded/i,
+  ownerChanged: /One of your names changed owners/i,
+  permissionMissing: /A permission is missing/i,
+  planChanged: /Your permissions changed/i,
+  generic: /Upgrade details:/i,
+} as const
+type Outcome = keyof typeof OUTCOMES
+
+/**
+ * Click Upgrade, authorize whatever the wallet is asked, and return the first
+ * outcome the page shows. A state change between selection and confirmation
+ * must end in exactly one named outcome — never a spinner, never the generic
+ * message.
+ */
+async function upgradeAndSettle(
+  page: Page,
+  wallet: Parameters<typeof authorizeTransactionsWhile>[1],
+): Promise<Outcome> {
+  const upgrade = page.getByRole('button', { name: /^Upgrade \d+ names?$/ })
+  await expect(upgrade).toBeEnabled({ timeout: 60_000 })
+  let settled: Outcome | null = null
+  const authorizing = authorizeTransactionsWhile(
+    page,
+    wallet,
+    () => settled !== null,
+  )
+  await upgrade.click()
+  const deadline = Date.now() + 180_000
+  while (!settled && Date.now() < deadline) {
+    for (const [outcome, pattern] of Object.entries(OUTCOMES) as [
+      Outcome,
+      RegExp,
+    ][]) {
+      if (
+        await page
+          .getByText(pattern)
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
+        settled = outcome
+        break
+      }
+    }
+    if (!settled) await page.waitForTimeout(500)
+  }
+  settled ??= 'generic'
+  // Bounded: a send that fails at estimate is never answered by the wallet.
+  await Promise.race([authorizing, page.waitForTimeout(5_000)])
+  console.log(`[GA10] outcome: ${settled}`)
+  return settled
+}
+
+test.describe('ENS V1 → V2 migration — the name changes under the flow (GA10)', () => {
+  test.describe.configure({ timeout: 300_000 })
+
+  test('the token leaves the wallet after selection: the upgrade stops and says the owner changed', {
+    tag: ['@scenario:GA10'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    test.fail(
+      true,
+      'E2E-028: a token that changed owner is reported as "A permission is missing. Try again."',
+    )
+    const owner = ownerOf(accounts)
+    const other = accounts.getAddress('user2') as Address
+    const name = await createMakeV1Name({ userAccount: owner })({
+      label: 'ga10-moved',
+    })
+    // Operator approval held, so the plan has no per-token approve: an
+    // approve for a token the wallet no longer holds reverts at estimate, and
+    // the headless wallet never answers a send that fails there.
+    await setOperatorApprovals(owner, true)
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: [{ kind: 'registration', label: labelOf(name) }],
+    })
+    await open(page, [name])
+    await readPlan(page)
+
+    // Behind the page's back: the registrant sends the token away.
+    const tokenId = BigInt(labelhash(labelOf(name)))
+    const hash = await walletClient.sendTransaction({
+      account: owner,
+      to: BASE_REGISTRAR,
+      data: encodeFunctionData({
+        abi: ERC721_ABI,
+        functionName: 'transferFrom',
+        args: [owner.address, other, tokenId],
+      }),
+    })
+    await publicClient.waitForTransactionReceipt({ hash })
+
+    expect(await upgradeAndSettle(page, wallet)).toBe('ownerChanged')
+    expect(
+      await publicClient.readContract({
+        address: BASE_REGISTRAR,
+        abi: ERC721_ABI,
+        functionName: 'ownerOf',
+        args: [tokenId],
+      }),
+      'nothing moved the token back or onward',
+    ).toBe(other)
+    expect(await readV2Status(labelOf(name)), 'still RESERVED in V2').toBe(1)
+  })
+
+  for (const shape of ['unwrapped', 'wrapped'] as const)
+    test(`a ${shape} name whose operator approval is revoked after the plan: never a generic failure`, {
+      tag: ['@scenario:GA10'],
+    }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+      const owner = ownerOf(accounts)
+      const name = await createMakeV1Name({ userAccount: owner })({
+        label: `ga10-revoked-${shape}`,
+        type: shape,
+      })
+      // Approved up front, so the plan asks for no approval step…
+      await setOperatorApprovals(owner, true)
+      await serveV1Names(page, {
+        ownerAddress: owner.address,
+        roots: [{ kind: 'registration', label: labelOf(name), type: shape }],
+      })
+      await open(page, [name])
+      const plan = await readPlan(page)
+      expect(
+        approvalSteps(plan.steps),
+        'precondition: no approval planned',
+      ).toEqual([])
+
+      // …then revoked behind the page's back.
+      await setOperatorApprovals(owner, false)
+
+      const outcome = await upgradeAndSettle(page, wallet)
+      // Honest endings: the app asks again and the name lands, or it stops
+      // and names the permission (measured: "Your permissions changed. Go
+      // back to check the updated estimate."). Silence or the generic message
+      // is not.
+      expect(['success', 'permissionMissing', 'planChanged']).toContain(outcome)
+      if (outcome === 'success') await assertUnlockedMigration(labelOf(name))
+      else
+        expect(await readV2Status(labelOf(name)), 'still RESERVED in V2').toBe(
+          1,
+        )
+    })
+})
+
+test.describe('ENS V1 → V2 migration — interrupted between prompts (GU7)', () => {
+  test.describe.configure({ timeout: 300_000 })
+
+  test('a reload after the approval but before the upgrade: nothing half-done, and the rest resumes', {
+    tag: ['@scenario:GU7'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const owner = ownerOf(accounts)
+    const name = await createMakeV1Name({ userAccount: owner })({
+      label: 'gu7-interrupted',
+    })
+    await setOperatorApprovals(owner, false)
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: [{ kind: 'registration', label: labelOf(name) }],
+    })
+    await open(page, [name])
+    const before = await readPlan(page)
+    expect(
+      approvalSteps(before.steps),
+      'precondition: an approval is planned',
+    ).toEqual([`Approve ${name}`])
+    expect(before.count).toBe(2)
+
+    // Authorize the first prompt (the approval) only.
+    const upgrade = page.getByRole('button', { name: /^Upgrade \d+ names?$/ })
+    await upgrade.click()
+    await expect
+      .poll(
+        () => wallet.getPendingRequestCount(Web3RequestKind.SendTransaction),
+        {
+          timeout: 60_000,
+        },
+      )
+      .toBeGreaterThanOrEqual(1)
+    await wallet.authorize(Web3RequestKind.SendTransaction)
+    const tokenId = BigInt(labelhash(labelOf(name)))
+    await expect
+      .poll(
+        () =>
+          publicClient.readContract({
+            address: BASE_REGISTRAR,
+            abi: APPROVED_ABI,
+            functionName: 'getApproved',
+            args: [tokenId],
+          }),
+        { timeout: 60_000, message: 'the approval landed' },
+      )
+      .toBe(MIGRATION_HELPER)
+
+    // The upgrade prompt is next; close the page on it instead.
+    await expect
+      .poll(
+        () => wallet.getPendingRequestCount(Web3RequestKind.SendTransaction),
+        {
+          timeout: 60_000,
+        },
+      )
+      .toBeGreaterThanOrEqual(1)
+    await wallet.reject(Web3RequestKind.SendTransaction).catch(() => undefined)
+    await page.reload()
+
+    // Nothing half-done: the name is untouched on both sides.
+    expect(await readV2Status(labelOf(name)), 'still RESERVED in V2').toBe(1)
+    expect(
+      await publicClient.readContract({
+        address: BASE_REGISTRAR,
+        abi: ERC721_ABI,
+        functionName: 'ownerOf',
+        args: [tokenId],
+      }),
+      'the token never left the owner',
+    ).toBe(owner.address)
+
+    // Resumes: the plan now skips the approval that already executed, and
+    // the upgrade completes.
+    await open(page, [name])
+    const after = await readPlan(page)
+    expect(
+      approvalSteps(after.steps),
+      'the executed approval is not asked again',
+    ).toEqual([])
+    expect(after.count).toBe(1)
+    const prompts = await upgradeCountingPrompts(page, wallet)
+    expect(prompts).toBe(after.count)
+    await assertUnlockedMigration(labelOf(name))
   })
 })

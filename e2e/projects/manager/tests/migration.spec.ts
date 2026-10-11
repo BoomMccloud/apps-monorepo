@@ -30,6 +30,7 @@ import { type Address, namehash, parseAbi, parseAbiItem } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { createMakeV1Name } from '../../../fixtures/makeV1Name.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
+import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
 import { publicClient } from '../../../helpers/anvil-client.js'
 import { isRealBigname } from '../../../helpers/bigname-sync.js'
 import {
@@ -42,8 +43,10 @@ import {
 import {
   confirmAndAuthorize,
   openMigrationFlow,
+  readPlan,
   rootRow,
   selectOnlyRoots,
+  upgradeCountingPrompts,
 } from '../../../helpers/migration-flow.js'
 import type { MockV1Records } from '../../../helpers/mock-v1-subgraph.js'
 import {
@@ -51,6 +54,7 @@ import {
   saveProfileChanges,
   waitForProfileUpdated,
 } from '../../../helpers/profile-helpers.js'
+import { expectRecordsResolve } from '../../../helpers/resolve-records.js'
 import { serveV1Names } from '../../../helpers/v1-names.js'
 
 const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
@@ -409,6 +413,63 @@ test.describe('ENS V1 → V2 migration — a large mixed batch', () => {
         await assertUnlockedTokenRoute(labelOf(name), namehash(name), {
           wrapped: type === 'wrapped',
         })
+    }
+  })
+})
+
+test.describe('ENS V1 → V2 migration — more than one transaction (GA5)', () => {
+  test.describe.configure({ timeout: 1_800_000 })
+
+  test('a selection over the gas budget splits into several upgrade transactions: every one confirms, every name and record lands', {
+    tag: ['@scenario:GA5'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    // The plan packs executions into transactions by estimated gas
+    // (TARGET_GAS 15M; ~195k per unwrapped name, +50k per replayed text
+    // record). Plain names would need ~70 to split; thirty records each make
+    // a name ~1.8M, so twelve of them cannot fit in one transaction.
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const makeV1Name = createMakeV1Name({ userAccount: owner })
+    const records: V1Records = {
+      texts: Array.from({ length: 30 }, (_, i) => ({
+        key: `ga5.key-${String(i).padStart(2, '0')}`,
+        value: `value ${i}`,
+      })),
+    }
+    const names: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const name = await makeV1Name({ label: `ga5-heavy-${i}` })
+      await setV1RecordsOn(name, owner, false, records)
+      names.push(name)
+    }
+
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: names.map((name) => ({
+        kind: 'registration' as const,
+        label: labelOf(name),
+        records: { texts: records.texts?.map((t) => ({ ...t })) },
+      })),
+    })
+    await openMigrationFlow(page)
+    for (const name of names)
+      await expect(rootRow(page, name)).toBeVisible({ timeout: 60_000 })
+    await selectOnlyRoots(page, names)
+
+    const plan = await readPlan(page)
+    const upgradeSteps = plan.steps.filter((s) => /^Upgrade /.test(s))
+    expect(
+      upgradeSteps.length,
+      `the plan splits the upgrade (${upgradeSteps.join(' · ')})`,
+    ).toBeGreaterThan(1)
+
+    const prompts = await upgradeCountingPrompts(page, wallet)
+    expect(prompts, 'one wallet prompt per planned request').toBe(plan.count)
+
+    for (const name of names) {
+      await assertUnlockedTokenRoute(labelOf(name), namehash(name), {
+        wrapped: false,
+      })
+      await expectRecordsResolve(name, records)
     }
   })
 })

@@ -1458,8 +1458,8 @@ const migrationGA: Scenario[] = suite('G.GA', 'migration', 'manager', 'P3', [
   ],
   [
     'GA5',
-    'More than 29 names',
-    'multi-batch ordering; blocked-env on the dev-panel cookie cap — needs a harness fix',
+    'Selection over one transaction’s gas budget',
+    'a selection over one transaction’s gas budget (TARGET_GAS 15M) splits into several upgrade transactions; each confirms, prompts = planned requests, and every name and replayed record lands. The old "29 names" limit was the dev-panel cookie, gone with the bigname harness; the real split is by gas (~70 plain names, or fewer heavy ones)',
   ],
   [
     'GA6',
@@ -1499,7 +1499,15 @@ const migrationGA: Scenario[] = suite('G.GA', 'migration', 'manager', 'P3', [
     'GA11',
     'Name-data mismatch (label ≠ tokenId)',
     'NameDataMismatch — assert the app can never construct it. Carried from the superseded plan; not in the catalogue',
-    { planId: 'G14' },
+    {
+      planId: 'G14',
+      exempt: {
+        reason:
+          'Not constructible by the app. The token id it transfers and the label in the migration data come from one label string: `v1Names.ts` sets `domain.labelhash = labelhash(label)` (the tokenId moved), and `createMigrationData` carries that same `label`, so the helper\'s label-vs-tokenId check (NameDataMismatch) cannot fail on an app-built call. The contract-side revert is covered by contracts-v2; the app-side decode by `decodeMigrationError.test.ts` ("unwraps NameDataMismatch").',
+        approvedBy: 'sugh01',
+        date: '2026-10-11',
+      },
+    },
   ],
   [
     'GA12',
@@ -1554,6 +1562,14 @@ const migrationGU: Scenario[] = suite('G.GU', 'migration', 'manager', 'P3', [
     'GU8',
     'Migration via HCA vs EOA',
     'same end state on chain, different confirmation profile — both asserted',
+    {
+      exempt: {
+        reason:
+          'One production path. The manager runs the HCA smart-account path in every environment (`VITE_FF_USE_EOA=false` in .env, .env.local and .env.ci), and migration there is an owner-signed `executeByOwner` on the HCA — the path every manager migration spec already exercises and counts prompts against. `VITE_FF_USE_EOA=true` is documented in apps/manager/.env as a local-debugging bypass of Rhinestone, not a user-facing mode, so there is no second confirmation profile to compare.',
+        approvedBy: 'sugh01',
+        date: '2026-10-11',
+      },
+    },
   ],
   [
     'GU9',

@@ -5,6 +5,52 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 39 — 2026-10-11 · the flow under change (GA10, GU7), a split upgrade (GA5); GA11 and GU8 exempt
+
+**Result:** PASS GA5, GU7 · GA10 passes on revocation and has a DEFECT on an
+owner change (new **E2E-028**, S3) · EXEMPT GA11, GU8 (approved by the user,
+2026-10-11). All new tests are green in both modes.
+
+- **GA10:** the state changes between selection and confirmation.
+  - An operator approval revoked behind the page, for an unwrapped or a
+    wrapped name, ends on "Your permissions changed. Go back to check the
+    updated estimate.", with nothing moved.
+  - A token sent to another wallet ends on **"A permission is missing. Try
+    again."** That is the wrong reason, and a retry cannot work (E2E-028).
+    The app's "One of your names changed owners" copy is never reached.
+- **GU7:** the test authorizes the approval, then reloads instead of answering
+  the upgrade prompt (rejected first, so the stale request cannot be sent
+  later). Nothing is half-done: the token is still the owner's and V2 is still
+  RESERVED. On reopening, the plan drops the executed approval (2 requests
+  become 1) and the name migrates.
+- **GA5:** "more than 29 names" was the dev-panel cookie cap, which no longer
+  exists. Measured: 32 plain and locked names fit in **one** upgrade
+  transaction. The split is by gas (`TARGET_GAS` 15M, ~195k per unwrapped
+  name, +50k per replayed text record). Twelve names with 30 text records
+  each plan "Upgrade batch 1 of 2 → Upgrade batch 2 of 2"; prompts equal the
+  planned count, and every name and record lands. Row title and oracle
+  reworded to match.
+- **GA11 exempt:** the transferred tokenId and the migration-data label come
+  from one label string, so the app cannot build a NameDataMismatch.
+- **GU8 exempt:** HCA is the only production path (`VITE_FF_USE_EOA=false`
+  everywhere), and every migration spec exercises it. EOA mode is a
+  local-debugging bypass.
+
+**Harness lessons:**
+- An approval for a token the wallet no longer holds reverts at estimate, and
+  the headless wallet never answers it. Pin the approval state before a race
+  test, and bound `authorizeTransactionsWhile` with a timeout.
+- An unwrapped name without an operator approval asks for one per-token
+  approve per name. In GA5 that was 20 prompts for 20 names.
+
+**In flight:** nothing.
+
+**Next:** GA9 (unmigrated name after V1 expiry: registry frozen, ENSV1Resolver,
+Graveyard), GS17 (dirty UserRegistry slot). GU5 (commemorative NFT) waits on
+the user. GS13 is blocked.
+
+---
+
 ## Iteration 38 — 2026-10-11 · desynced 2LD (GW4) → E2E-027; GA7 runs in real mode
 
 **Result:** DEFECT GW4 (new **E2E-027**, S2) · terminal 436 → 437. The time
