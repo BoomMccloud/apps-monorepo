@@ -37,16 +37,22 @@ import {
   PREMIGRATION_BONUS_PERIOD,
   syncBrowserToChain,
 } from '../../../fixtures/makeGraceV1Name.js'
-import { createMakeV1Name, reserveInV2 } from '../../../fixtures/makeV1Name.js'
+import {
+  createMakeV1Name,
+  reserveInV2,
+  V1_ENS_REGISTRY,
+} from '../../../fixtures/makeV1Name.js'
 import {
   authorizeTransactionsWhile,
   expect,
   test,
 } from '../../../fixtures/playwright.manager.fixture.js'
+import { discoverV1CompatResolver } from '../../../fixtures/premigration.js'
 import {
   APP_V1_CONTROLLER,
   ensureV1ControllersAuthorised,
 } from '../../../fixtures/v1-controller-auth.js'
+import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
 import {
   publicClient,
   testClient,
@@ -56,9 +62,16 @@ import { isRealBigname } from '../../../helpers/bigname-sync.js'
 import {
   assertUnlockedMigration,
   assertV2Reserved,
+  readGraveyard,
 } from '../../../helpers/migration-assertions.js'
 import { selectOnlyRoots } from '../../../helpers/migration-flow.js'
 import type { MockV1Name } from '../../../helpers/mock-v1-subgraph.js'
+import {
+  dnsEncode,
+  expectRecordsResolve,
+  resolveRecords,
+  resolverFor,
+} from '../../../helpers/resolve-records.js'
 import { serveV1Names } from '../../../helpers/v1-names.js'
 
 const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
@@ -76,6 +89,17 @@ const BASE_REGISTRAR_ABI = parseAbi([
   'function renew(uint256 id, uint256 duration) returns (uint256)',
 ])
 const NAME_WRAPPER = sepolia.ensNameWrapper.address as Address
+const GRAVEYARD_ABI = parseAbi(['function clear(bytes[] names)'])
+const V1_TOKEN_ABI = parseAbi([
+  'function ownerOf(uint256 tokenId) view returns (address)',
+])
+const V1_REGISTRY_ABI = parseAbi([
+  'function owner(bytes32 node) view returns (address)',
+  'function resolver(bytes32 node) view returns (address)',
+])
+const V2_RESOLVER_ABI = parseAbi([
+  'function getResolver(string label) view returns (address)',
+])
 const NAME_WRAPPER_ABI = parseAbi([
   'function getData(uint256 tokenId) view returns (address owner, uint32 fuses, uint64 expiry)',
 ])
@@ -350,5 +374,103 @@ test.describe('Migration of a desynced 2LD (§G.GW)', () => {
       page.getByText(name, { exact: false }).first(),
       'the desynced name is accounted for',
     ).toBeVisible({ timeout: 15_000 })
+  })
+})
+
+test.describe('An unmigrated V1 name after its V1 expiry (GA9)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  test('resolves through the ENSV1Resolver until the V2 reservation lapses; after V1 grace anyone can clear it into the Graveyard', {
+    tag: ['@scenario:GA9'],
+  }, async ({ accounts }) => {
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const stranger = privateKeyToAccount(accounts.getPrivateKey('user2'))
+    // Registered, reserved in V2 at expiry + PREMIGRATION_BONUS_PERIOD (as
+    // premigration does), and stepped just past its V1 expiry E.
+    const g = await makeGraceV1Name({ label: 'ga9-unmigrated', owner })
+    const records: V1Records = {
+      texts: [{ key: 'description', value: 'never migrated' }],
+    }
+    await setV1RecordsOn(g.name, owner, false, records)
+    const compat = await discoverV1CompatResolver()
+
+    // ── E … E + bonus: RESERVED, V1 data served through the ENSV1Resolver ──
+    expect(await v2State(g.label)).toMatchObject({ status: 1 })
+    expect(
+      (await resolverFor(g.name)).toLowerCase(),
+      'the V2 registry routes the name to the ENSV1Resolver',
+    ).toBe(compat.toLowerCase())
+    await expectRecordsResolve(g.name, records)
+
+    // ── past E + bonus: the reservation lapses, so does resolution ──
+    await warpDays(Number(PREMIGRATION_BONUS_PERIOD) / DAY + 1)
+    expect((await v2State(g.label)).status, 'AVAILABLE in V2').toBe(AVAILABLE)
+    expect(
+      await publicClient.readContract({
+        address: ETH_REGISTRY,
+        abi: V2_RESOLVER_ABI,
+        functionName: 'getResolver',
+        args: [g.label],
+      }),
+      'an expired reservation has no resolver',
+    ).toBe(zeroAddress)
+    const [lapsed] = await resolveRecords(g.name, records)
+    expect(lapsed.got, 'the V1 records no longer resolve').not.toBe(lapsed.want)
+
+    // ── still inside V1 grace: the Graveyard cannot take it yet ──
+    const graveyard = await readGraveyard()
+    const clear = () =>
+      walletClient.sendTransaction({
+        account: stranger,
+        to: graveyard,
+        data: encodeFunctionData({
+          abi: GRAVEYARD_ABI,
+          functionName: 'clear',
+          args: [[dnsEncode(g.name)]],
+        }),
+      })
+    await expect(clear(), 'not clearable inside V1 grace').rejects.toThrow()
+
+    // ── past E + 90 days: anyone may clear it ──
+    await warpDays(90 - Number(PREMIGRATION_BONUS_PERIOD) / DAY)
+    const hash = await clear()
+    expect(
+      (await publicClient.waitForTransactionReceipt({ hash })).status,
+      'a stranger clears the expired V1 name',
+    ).toBe('success')
+
+    const node = namehash(g.name)
+    const [registrant, registryOwner, v1Resolver] = await Promise.all([
+      publicClient.readContract({
+        address: BASE_REGISTRAR,
+        abi: V1_TOKEN_ABI,
+        functionName: 'ownerOf',
+        args: [g.tokenId],
+      }),
+      publicClient.readContract({
+        address: V1_ENS_REGISTRY,
+        abi: V1_REGISTRY_ABI,
+        functionName: 'owner',
+        args: [node],
+      }),
+      publicClient.readContract({
+        address: V1_ENS_REGISTRY,
+        abi: V1_REGISTRY_ABI,
+        functionName: 'resolver',
+        args: [node],
+      }),
+    ])
+    expect(registrant, 'the V1 token sits in the Graveyard').toBe(graveyard)
+    expect(registryOwner, 'so does the registry record').toBe(graveyard)
+    expect(v1Resolver, 'and its V1 resolver is cleared').toBe(zeroAddress)
+    expect(
+      await publicClient.readContract({
+        address: ETH_REGISTRAR,
+        abi: REGISTRAR_ABI,
+        functionName: 'isAvailable',
+        args: [g.label],
+      }),
+      'and the name is open to register in V2',
+    ).toBe(true)
   })
 })

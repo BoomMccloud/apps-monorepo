@@ -288,6 +288,15 @@ export async function resolveRegistryPath(
   return { registry, label: labels[labels.length - 1] }
 }
 
+/** The V2 Graveyard, as the unlocked migration controller names it. */
+export async function readGraveyard(): Promise<Address> {
+  return publicClient.readContract({
+    address: V2_UNLOCKED_MIGRATION_CONTROLLER,
+    abi: V1_ROUTE_ABI,
+    functionName: 'GRAVEYARD',
+  })
+}
+
 /**
  * Assert that `fullName` was never registered in V2: either the path from the
  * .eth registry stops before it (some ancestor has no subregistry), or the

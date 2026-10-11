@@ -5,6 +5,43 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 40 — 2026-10-11 · an unmigrated name after V1 expiry (GA9)
+
+**Result:** PASS GA9 · terminal 442 → 443. It is chain-only and green in both
+modes, in the `manager-migration-time` project.
+
+**What it walks** (`makeGraceV1Name`: V1 expiry E, V2 RESERVED at E + 62 days
++ 1 s, as premigration does; one text record on the public resolver):
+1. RESERVED: the UniversalResolver routes to the ENSV1Resolver
+   (`discoverV1CompatResolver`), and the V1 record resolves.
+2. After E + bonus + 1 day: AVAILABLE in V2, `getResolver` returns 0, and the
+   record no longer resolves.
+3. Still inside V1 grace: `Graveyard.clear` is refused.
+4. After E + 90 days: a stranger's `Graveyard.clear([dns(name)])` succeeds.
+   BaseRegistrar `ownerOf` and the registry owner are both the Graveyard, the
+   V1 resolver is 0, and the V2 ETHRegistrar says `isAvailable`.
+
+The contract facts came from contracts-v2: `Graveyard.sol` (`clear` is
+permissionless and gated only by V1 `available()`; it emits no event of its
+own), `PermissionedRegistry.getResolver` (0 once expired), and `ETHRegistrar`
+`_checkGrace` (registrable at reservation expiry + 28 days, with a decaying
+premium). Upstream has no e2e test of this whole lifecycle.
+
+**Oracle narrowed:** "registry frozen" (V1 controllers removed at launch) cannot
+be observed here, because the harness re-authorises the V1 controllers to seed
+names. That half is recorded in the row as not observable on the fork.
+
+**Noted, not acted on:** contracts-v2's premigration CLI defaults
+`--bonus-period-days` to 62 (exactly 62 days), while `ETHRenewerV1` is deployed
+with 62 days + 1 s. Off by one second at the very end of grace.
+
+**In flight:** nothing.
+
+**Next:** GS17 (dirty deterministic UserRegistry slot). GU5 waits on the user.
+GS13 is blocked.
+
+---
+
 ## Iteration 39 — 2026-10-11 · the flow under change (GA10, GU7), a split upgrade (GA5); GA11 and GU8 exempt
 
 **Result:** PASS GA5, GU7 · GA10 passes on revocation and has a DEFECT on an

@@ -1486,7 +1486,7 @@ const migrationGA: Scenario[] = suite('G.GA', 'migration', 'manager', 'P3', [
   [
     'GA9',
     'Unmigrated name after V1 expiry',
-    'registry frozen; ENSV1Resolver still resolves until the V2 expiry; Graveyard.clear() reachable',
+    'ENSV1Resolver resolves the V1 records while the V2 reservation lives (to V1 expiry + PREMIGRATION_BONUS_PERIOD); after it the V2 registry returns no resolver and they stop resolving; Graveyard.clear() is refused inside V1 grace and open to anyone after it, taking the V1 token and registry record and clearing the resolver; the name is then registrable in V2. "V1 controllers removed" is not observable on the fork: the harness re-authorises them to seed names',
     { planId: 'G21' },
   ],
   [
