@@ -5,6 +5,44 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 41 — 2026-10-11 · a dirty deterministic UserRegistry slot (GS17)
+
+**Result:** PASS GS17 · real mode only (a subname tree). The settle-on-outcome
+helper moved to `helpers/migration-flow.ts` as `upgradeAndSettle` /
+`UPGRADE_OUTCOMES`; GA10 re-verified with it.
+
+**How:** the test predicts the parent's UserRegistry address the way the app
+does (`computeUserRegistryAddress`). That is a VerifiableFactory CREATE2 with
+deployer = account 0's standalone HCA `0xF155…ED91`, proxy logic
+`0xC415…6BDd`, and salt = keccak(`ENSManagerMigrationUserRegistry:v1`,
+namehash(parent)). The prediction was checked against a registry the app
+really deployed (GS3's parent: `0x6e91…Ac16`, an exact match). The test plants
+code there before the first run.
+
+**Behaviour:** refused while planning. The footer says "Couldn't prepare your
+upgrade. Please try again." and Upgrade stays disabled. The wallet is never
+asked, the planted code is untouched, the parent stays RESERVED, and the child
+is not in V2. Fail-closed, as the oracle asks.
+
+**Follow-up worth a test (not done):**
+- The copy is generic, and "try again" cannot help while the slot is
+  occupied.
+- A realistic way to reach this state: an earlier attempt deployed the real
+  UserRegistry and then failed, and the user retries from another browser,
+  which has no local `migrationBatchJournal`.
+- Whether the app then recovers through the existing-registry path or stays
+  stuck on this message is untested. It needs a real UserRegistry deployed by
+  the HCA, not planted bytecode.
+- The other two readiness reasons (`uncertified-registry`, `v2-name-history`)
+  need that existing-registry path too.
+
+**In flight:** nothing.
+
+**Next:** the migration queue is down to GU5 (commemorative NFT, waiting on the
+user) and GS13 (blocked: needs a registry-only subname label in bigname).
+
+---
+
 ## Iteration 40 — 2026-10-11 · an unmigrated name after V1 expiry (GA9)
 
 **Result:** PASS GA9 · terminal 442 → 443. It is chain-only and green in both

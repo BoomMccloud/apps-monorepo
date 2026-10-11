@@ -280,3 +280,60 @@ export async function goToProfile(page: Page, name: string): Promise<void> {
   await page.waitForLoadState('networkidle')
   await page.waitForTimeout(2_000)
 }
+
+/** Every way the upgrade can end, as the page says it. */
+export const UPGRADE_OUTCOMES = {
+  success: /your names? (has|have) been upgraded/i,
+  ownerChanged: /One of your names changed owners/i,
+  permissionMissing: /A permission is missing/i,
+  planChanged: /Your permissions changed/i,
+  subregistryConflict: /now has its own subname registry/i,
+  retryBlocked: /couldn.t safely retry/i,
+  generic: /Upgrade details:/i,
+} as const
+export type UpgradeOutcome = keyof typeof UPGRADE_OUTCOMES
+
+/**
+ * Click Upgrade, authorize whatever the wallet is asked, and return the first
+ * outcome the page shows. A state change between selection and confirmation
+ * must end in exactly one named outcome — never a spinner, never the generic
+ * message.
+ */
+export async function upgradeAndSettle(
+  page: Page,
+  wallet: Parameters<typeof authorizeTransactionsWhile>[1],
+): Promise<UpgradeOutcome> {
+  const upgrade = page.getByRole('button', { name: /^Upgrade \d+ names?$/ })
+  await expect(upgrade).toBeEnabled({ timeout: 60_000 })
+  let settled: UpgradeOutcome | null = null
+  const authorizing = authorizeTransactionsWhile(
+    page,
+    wallet,
+    () => settled !== null,
+  )
+  await upgrade.click()
+  const deadline = Date.now() + 180_000
+  while (!settled && Date.now() < deadline) {
+    for (const [outcome, pattern] of Object.entries(UPGRADE_OUTCOMES) as [
+      UpgradeOutcome,
+      RegExp,
+    ][]) {
+      if (
+        await page
+          .getByText(pattern)
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
+        settled = outcome
+        break
+      }
+    }
+    if (!settled) await page.waitForTimeout(500)
+  }
+  settled ??= 'generic'
+  // Bounded: a send that fails at estimate is never answered by the wallet.
+  await Promise.race([authorizing, page.waitForTimeout(5_000)])
+  console.log(`[migration] outcome: ${settled}`)
+  return settled
+}

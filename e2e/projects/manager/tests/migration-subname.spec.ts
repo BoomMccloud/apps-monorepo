@@ -30,7 +30,19 @@
  *   - Manager app running with Rhinestone enabled
  */
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
-import type { Address, Hex } from 'viem'
+import { Web3RequestKind } from '@ensdomains/headless-web3-provider'
+import {
+  type Address,
+  concatHex,
+  encodeAbiParameters,
+  getContractAddress,
+  type Hex,
+  keccak256,
+  labelhash,
+  namehash as namehashOf,
+  parseAbi,
+  stringToHex,
+} from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import {
@@ -46,7 +58,7 @@ import {
 } from '../../../fixtures/makeV1Subname.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
-import { publicClient } from '../../../helpers/anvil-client.js'
+import { publicClient, testClient } from '../../../helpers/anvil-client.js'
 import {
   assertCopyExpiry,
   assertCopyRegistered,
@@ -65,6 +77,7 @@ import {
   openMigrationFlow,
   rootRow,
   runMigrationFlow,
+  selectOnlyRoots,
 } from '../../../helpers/migration-flow.js'
 import type { MockV1Tree } from '../../../helpers/mock-v1-subgraph.js'
 import {
@@ -760,6 +773,53 @@ test.describe('ENS V1 → V2 migration — wrapped children of a locked 2LD', ()
   })
 })
 
+/** Account 0's standalone HCA — the deployer the app predicts UserRegistries for. */
+const HEADLESS_USER_HCA = '0xF1554d7361E0663896F57A121C83638856f0ED91' as const
+/** `@ens-apps/smart-account` `verifiableFactoryProxyLogic` (Sepolia). */
+const VERIFIABLE_FACTORY_PROXY_LOGIC =
+  '0xC41576B4B809B99CF0fF2e5B41b4F147cd9b6BDd' as const
+const STATUS_ABI = parseAbi([
+  'function getStatus(uint256 anyId) view returns (uint8)',
+])
+
+/**
+ * The address the app deploys `parent`'s UserRegistry at
+ * (`computeUserRegistryAddress`: VerifiableFactory CREATE2, deployer = the
+ * HCA, salt = keccak(domain, namehash(parent))). Checked against a registry
+ * the app really deployed on the fork, 2026-10-11.
+ */
+function predictUserRegistry(parent: string): Address {
+  const salt = BigInt(
+    keccak256(
+      encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'bytes32' }],
+        [
+          keccak256(stringToHex('ENSManagerMigrationUserRegistry:v1')),
+          namehashOf(parent),
+        ],
+      ),
+    ),
+  )
+  const outer = keccak256(
+    encodeAbiParameters(
+      [{ type: 'address' }, { type: 'uint256' }],
+      [HEADLESS_USER_HCA, salt],
+    ),
+  )
+  return getContractAddress({
+    bytecode: concatHex([
+      '0x3d604d80600a3d3981f3363d3d373d3d3d363d73',
+      VERIFIABLE_FACTORY_PROXY_LOGIC,
+      '0x5af43d82803e903d91602b57fd5bf3',
+      outer,
+    ]),
+    from: ensL1Contracts[supportedL1Chains.sepolia].ensVerifiableFactory
+      .address as Address,
+    opcode: 'CREATE2',
+    salt: outer,
+  })
+}
+
 test.describe('ENS V1 → V2 migration — subname edge cases (§G.GS)', () => {
   test.describe.configure({ timeout: 600_000 })
 
@@ -1141,5 +1201,85 @@ test.describe('ENS V1 → V2 migration — subname edge cases (§G.GS)', () => {
     ).toBeLessThan(
       await firstRegistrationPosition(registry as Address, fromBlock),
     )
+  })
+
+  test('a copy whose deterministic UserRegistry slot is already occupied fails closed, writing nothing', {
+    tag: ['@scenario:GS17'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gs17-dirty',
+      type: 'wrapped',
+    })
+    const child = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'sub',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      expiry: (await chainNow()) + 180n * DAY,
+    })
+
+    // The UserRegistry the app will deploy for this parent lives at a
+    // CREATE2 address it predicts without a chain read. Occupy it first:
+    // "prior state" the copy must not write over.
+    const slot = predictUserRegistry(parent)
+    const planted = '0x60006000fd' as const // PUSH 0 PUSH 0 REVERT
+    await testClient.setCode({ address: slot, bytecode: planted })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          wrapperExpiry: Number(await readWrapperExpiry(parent)),
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'sub',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              expiryDate: Number(await readWrapperExpiry(child)),
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, child)).toBeVisible({ timeout: 30_000 })
+    await selectOnlyRoots(page, [parent])
+
+    // Refused while planning, before any prompt: the readiness check finds
+    // code where the registry should not exist yet (`unexpected-registry`).
+    await expect(
+      page.getByText("Couldn't prepare your upgrade"),
+      'the plan is refused',
+    ).toBeVisible({ timeout: 60_000 })
+    await expect(
+      page.getByRole('button', { name: /^Upgrade \d+ names?$/ }),
+      'nothing can be submitted',
+    ).toBeDisabled()
+    expect(
+      wallet.getPendingRequestCount(Web3RequestKind.SendTransaction),
+      'the wallet was never asked',
+    ).toBe(0)
+
+    // Fails closed: nothing written anywhere.
+    expect(
+      await publicClient.getCode({ address: slot }),
+      'the occupied slot is untouched',
+    ).toBe(planted)
+    expect(
+      await publicClient.readContract({
+        address: ensL1Contracts[supportedL1Chains.sepolia].ensRegistry
+          .address as Address,
+        abi: STATUS_ABI,
+        functionName: 'getStatus',
+        args: [BigInt(labelhash(labelOf(parent)))],
+      }),
+      'the parent is still RESERVED in V2',
+    ).toBe(1)
+    await assertNotInV2(child)
   })
 })
