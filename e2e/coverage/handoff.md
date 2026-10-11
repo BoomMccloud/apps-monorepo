@@ -5,6 +5,93 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 35 — 2026-10-11 · records through migration (GR2–GR12)
+
+**Batch:** the remaining migration rows, starting with GR. The portal is parked
+until it reads bigname (user, 2026-10-11), so step 3 (the V1 roles-tab cells)
+waits with it. New `migration-records.spec.ts`; GR2 sits in
+`migration-subname.spec.ts` next to GS1.
+
+**Result:** PASS GR2, GR3, GR4, GR5, GR8, GR9, GR10, GR11, GR12 · DEFECT GR6,
+GR7 (new **E2E-023**, S1) · terminal 414 → 425. The records spec is 7/7 in both
+modes; GR2 runs in real mode only, because it is a subname tree.
+
+**Ground truth (manager `features/migration`, `packages/migration`):**
+- Record **keys** come from bigname: `seen_texts`, `seen_addresses`,
+  `seen_singletons` (contenthash) and `seen_abis`. **Values** are read on chain
+  from the V1 resolver. There is no fixed key or coin list, so a custom text
+  key and BTC are carried when bigname lists them.
+- `resolverStrategyFor` picks between two strategies:
+  - `to-owned-permres` for a name on a known public resolver (8 on Sepolia,
+    `knownResolvers.ts`) or with none. Replay is one
+    `PermissionedResolver.multicall` per name, batched by gas, not by count.
+  - `keep-v1` for any other resolver, or for a locked name with
+    CANNOT_SET_RESOLVER. Nothing is fetched or replayed.
+- Copy routes only accept known or null resolvers.
+- A resolver with zero records gets no replay call at all.
+- Replayed types: text, multicoin address, contenthash, ABI. **Not** replayed:
+  pubkey and interfaceImplementer. The V2 resolver can hold interfaces
+  (`InterfaceUpdated`) but has no pubkey record at all.
+
+**Oracle correction (GR12):** the row assumed a custom resolver strands the
+records. GR3 measures the opposite: the name keeps its resolver, and every
+record still resolves through the UniversalResolver after migration. So the
+screen's "will be carried over" holds, and GR12 is a positive check folded
+into the GR3 test. No defect.
+
+**Helpers:**
+- `setV1RecordsOn` writes every record type in one resolver multicall and
+  takes `{ resolver }`.
+- `cloneV1PublicResolver` (`anvil_setCode` of the public resolver's bytecode
+  to a fresh address) gives a working resolver outside the known list.
+- `helpers/resolve-records.ts`: `resolveRecords`, `expectRecordsResolve` and
+  `resolverFor`, all reading through the UniversalResolver.
+- The bigname mock now serves `seen_singletons` and `seen_abis` from
+  `contentHash` and `abiContentTypes`.
+
+**Stack:** the machine restarted overnight and Anvil and bigname had exited.
+`start-local-env.sh` was rerun with the publicnode and Tenderly upstreams,
+plus `reset-bigname.sh`, on a fresh fork. That also cleared the accumulated
+names and the clock drift.
+
+**Suite runs:**
+
+| run | result |
+|---|---|
+| mock (CI) | **44 pass**, 11 skip, 0 fail |
+| real #1 | 39 pass, 15 fail — GR8 lost every record (see below) plus load timeouts |
+| real #2 | Anvil panicked mid-run (exit 133, publicnode dropped TLS) — 26 fail from GR3 on; discarded |
+| real #3 (fresh fork) | 41 pass, 13 fail, 1 did not run — **all GR rows green** |
+
+Real #3's 13 failures are known real-mode gaps:
+- grace banner on the shared wallet (7)
+- registry-only subname copies with no label (4)
+- `fuses :284` (GW3) and `migration :160` (GW2): the row is not listed within
+  30 s on a busy wallet, the slowness iteration 32 recorded for GW3/7/8.
+
+**Finding: bigname publishes record keys after the block.** In real #1, GR8's
+name moved resolver and every record read back empty. The page had read
+bigname as soon as `waitForBignameBlock` and `waitForBignameNames` returned.
+The keys were not listed yet, so the app saw "no records" and replayed nothing.
+`serveV1Names` now also waits for each name's record keys
+(`waitForBignameRecordKeys`). In real #3 it logged the gap on every records
+test: **1.0–1.5 s after the block was published.**
+
+App-side, this is a risk rather than a defect so far. The app treats an empty
+key inventory as "no records", so a stale bigname makes it migrate a name and
+silently, irreversibly drop its records. It only throws (`ProfileFetchError`)
+when a name is missing from the lookup entirely, not when its key lists are
+empty. A user would have to write records and open /upgrade within the
+lag, so it is not logged in the defect register; raise it if bigname lag in
+production is ever seconds or more.
+
+**In flight:** nothing.
+
+**Next:** the rest of the migration rows: GS5, GS8, GS10–GS13, GS17, GS18,
+GA5, GA9–GA12, GU5–GU9, GW4, GM5.
+
+---
+
 ## Iteration 34 — 2026-10-10 · wrapped children of a locked 2LD (GS1, GS2, GS6)
 
 **Batch:** step 2 of the queue. A new describe in `migration-subname.spec.ts`;

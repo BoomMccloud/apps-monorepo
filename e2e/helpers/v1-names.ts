@@ -20,11 +20,13 @@ import {
   isRealBigname,
   waitForBignameBlock,
   waitForBignameNames,
+  waitForBignameRecordKeys,
 } from './bigname-sync.js'
 import type { MockDomain } from './mock-indexer.js'
 import { type MockV1Name, mockV1Names } from './mock-v1-names.js'
 import type {
   MockV1Node,
+  MockV1Records,
   MockV1Name as MockV1SubgraphName,
   MockV1Tree,
 } from './mock-v1-subgraph.js'
@@ -51,6 +53,25 @@ export function v1NamesOf(input: V1NamesInput): string[] {
     }
   }
   return names
+}
+
+/** Every name in the input that carries records, with those records. */
+function v1RecordsOf(input: V1NamesInput): [string, MockV1Records][] {
+  const out: [string, MockV1Records][] = []
+  const walk = (node: MockV1Node, parent: string) => {
+    const name = `${node.label}.${parent}`
+    if (node.records) out.push([name, node.records])
+    for (const child of node.children ?? []) walk(child, name)
+  }
+  if (isTree(input)) {
+    for (const root of input.roots) walk(root, root.parentName ?? 'eth')
+  } else {
+    for (const n of input) {
+      if (n.records) out.push([n.name, n.records])
+      for (const child of n.children ?? []) walk(child, n.name)
+    }
+  }
+  return out
 }
 
 /** The input as flat 2LDs, or null when it holds anything else. */
@@ -106,6 +127,13 @@ export async function serveV1Names(
   if (isRealBigname) {
     await waitForBignameBlock()
     await waitForBignameNames(v1NamesOf(input))
+    for (const [name, records] of v1RecordsOf(input))
+      await waitForBignameRecordKeys(name, {
+        texts: records.texts?.map((t) => t.key),
+        coinTypes: records.addresses?.map((a) => a.coinType),
+        contentHash: Boolean(records.contentHash),
+        abiContentTypes: records.abiContentTypes,
+      })
     return
   }
   const flat = asFlatNames(input)

@@ -75,6 +75,9 @@ export type MockV1Name = {
   readonly records?: {
     readonly texts?: readonly V1TextRecord[]
     readonly addresses?: readonly V1AddressRecord[]
+    /** Presence, not value: served as the `contenthash` singleton key. */
+    readonly contentHash?: string | null
+    readonly abiContentTypes?: readonly number[]
   }
 }
 
@@ -133,9 +136,9 @@ function v1Record(n: MockV1Name, now: number) {
         addresses: {},
         seen_texts: n.records?.texts?.map(({ key }) => key) ?? [],
         texts: {},
-        seen_abis: [],
+        seen_abis: n.records?.abiContentTypes?.map(String) ?? [],
         abis: {},
-        seen_singletons: [],
+        seen_singletons: n.records?.contentHash ? ['contenthash'] : [],
       },
     }),
     read_status: 'ok',

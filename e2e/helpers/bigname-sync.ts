@@ -118,3 +118,99 @@ export async function waitForBignameNames(
 ): Promise<void> {
   for (const name of names) await waitForBignameName(name, accept, timeoutMs)
 }
+
+/** The record keys bigname lists for a name — what migration replays from. */
+export type BignameRecordKeys = {
+  readonly texts?: readonly string[]
+  readonly coinTypes?: readonly number[]
+  readonly contentHash?: boolean
+  readonly abiContentTypes?: readonly number[]
+}
+
+async function lookupRecordKeys(name: string) {
+  try {
+    const res = await fetch(`${BIGNAME_URL}/v1/lookup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        namespace: 'ens',
+        profile: 'detail',
+        inputs: [{ name }],
+      }),
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as {
+      data?: {
+        record?: {
+          records?: {
+            seen_texts?: string[]
+            seen_addresses?: string[]
+            seen_singletons?: string[]
+            seen_abis?: string[]
+          }
+        }
+      }[]
+    }
+    return body.data?.[0]?.record?.records ?? null
+  } catch {
+    return null
+  }
+}
+
+type SeenKeys = NonNullable<Awaited<ReturnType<typeof lookupRecordKeys>>>
+
+/** The keys in `expected` that bigname does not list yet. */
+function missingKeys(
+  keys: SeenKeys | null,
+  expected: BignameRecordKeys,
+): string[] {
+  const texts = new Set(keys?.seen_texts ?? [])
+  const coins = new Set(keys?.seen_addresses ?? [])
+  const abis = new Set(keys?.seen_abis ?? [])
+  const hasContentHash = (keys?.seen_singletons ?? []).includes('contenthash')
+  return [
+    ...(expected.texts ?? []).filter((k) => !texts.has(k)),
+    ...(expected.coinTypes ?? [])
+      .filter((c) => !coins.has(String(c)))
+      .map((c) => `coin ${c}`),
+    ...(expected.contentHash && !hasContentHash ? ['contenthash'] : []),
+    ...(expected.abiContentTypes ?? [])
+      .filter((t) => !abis.has(String(t)))
+      .map((t) => `abi ${t}`),
+  ]
+}
+
+/**
+ * Block until bigname lists every record key in `expected` for `name`.
+ *
+ * Migration learns which records exist from these keys and replays only
+ * those, so a page that reads before bigname has projected them migrates the
+ * name with nothing replayed. Publishing the block is not enough: in a busy
+ * full-suite run the keys were measured to arrive after it (GR8, 2026-10-11).
+ */
+export async function waitForBignameRecordKeys(
+  name: string,
+  expected: BignameRecordKeys,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<void> {
+  if (!isRealBigname) return
+  const started = Date.now()
+  const deadline = started + timeoutMs
+  let missing: string[] = []
+  while (Date.now() < deadline) {
+    const keys = await lookupRecordKeys(name)
+    missing = missingKeys(keys, expected)
+    if (keys && missing.length === 0) {
+      const waited = Date.now() - started
+      if (waited > POLL_MS)
+        console.log(
+          `[bigname-sync] ${name}: record keys arrived after ${waited}ms`,
+        )
+      return
+    }
+    await new Promise((r) => setTimeout(r, POLL_MS))
+  }
+  throw new Error(
+    `bigname did not list ${name}'s record keys within ${timeoutMs}ms; missing: ${missing.join(', ')}`,
+  )
+}

@@ -30,10 +30,13 @@
  *   - Manager app running with Rhinestone enabled
  */
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
-import { createMakeV1Name } from '../../../fixtures/makeV1Name.js'
+import {
+  createMakeV1Name,
+  V1_PUBLIC_RESOLVER,
+} from '../../../fixtures/makeV1Name.js'
 import { makeV1RegistrySubname } from '../../../fixtures/makeV1RegistrySubname.js'
 import {
   CHILD_FUSES,
@@ -41,6 +44,7 @@ import {
   readWrapperExpiry,
 } from '../../../fixtures/makeV1Subname.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
+import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
 import { publicClient } from '../../../helpers/anvil-client.js'
 import {
   assertCopyExpiry,
@@ -60,6 +64,10 @@ import {
   runMigrationFlow,
 } from '../../../helpers/migration-flow.js'
 import type { MockV1Tree } from '../../../helpers/mock-v1-subgraph.js'
+import {
+  expectRecordsResolve,
+  resolverFor,
+} from '../../../helpers/resolve-records.js'
 import { serveV1Names } from '../../../helpers/v1-names.js'
 
 // Headless wallet user = Anvil account 0 (same private key as ANVIL_FUNDER)
@@ -555,6 +563,70 @@ test.describe('ENS V1 → V2 migration — wrapped children of a locked 2LD', ()
       await firstRegistrationPosition(ETH_REGISTRY, fromBlock),
       'the parent is registered in the .eth registry before its child is registered in its WrapperRegistry',
     ).toBeLessThan(await firstRegistrationPosition(registry, fromBlock))
+  })
+
+  test('records on a locked child are carried to the new V2 resolver, one level down', {
+    tag: ['@scenario:GR2'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gr2-locked',
+      type: 'locked',
+    })
+    const child = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'rec',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      fuses: CHILD_FUSES.LOCKED_CHILD,
+    })
+    const records: V1Records = {
+      texts: [{ key: 'description', value: 'records one level down' }],
+      addresses: [{ coinType: 60, value: accounts.getAddress('user2') as Hex }],
+      contenthash:
+        '0xe3010170122029f2d17be6139079dc48696d1f582a8530eb9805b561eda517e22a892c7e3f1f',
+    }
+    // The child's wrapper owner writes its records (the shared wallet).
+    await setV1RecordsOn(child, userAccount, true, records)
+    await expectRecordsResolve(child, records)
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'rec',
+              fuses: CHILD_FUSES.LOCKED_CHILD,
+              records: {
+                texts: records.texts?.map((t) => ({ ...t })),
+                addresses: [
+                  { coinType: 60, value: accounts.getAddress('user2') },
+                ],
+                contentHash: records.contenthash,
+              },
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, child)).toBeVisible()
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertWrappedChildMigrated(child, HEADLESS_USER_ADDRESS, {
+      locked: true,
+    })
+    expect(
+      (await resolverFor(child)).toLowerCase(),
+      'the child now resolves from a V2 resolver, not the V1 one',
+    ).not.toBe(V1_PUBLIC_RESOLVER.toLowerCase())
+    await expectRecordsResolve(child, records)
   })
 
   test('an emancipated child of a locked 2LD is registered in the parent WrapperRegistry, unwrapped', {

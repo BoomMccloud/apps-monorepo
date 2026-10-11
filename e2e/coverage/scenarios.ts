@@ -1347,17 +1347,28 @@ const migrationGR: Scenario[] = suite('G.GR', 'migration', 'manager', 'P3', [
     'Custom / unknown resolver',
     'strategy `keep-v1`; V2 points at the V1 resolver and nothing is replayed',
   ],
+  // GR4–GR7 were written as "known lost". Measured 2026-10-11: contenthash
+  // and ABI are read and replayed (`fetchV1Profiles.helpers.ts`,
+  // `buildProfileReplayCalls.ts`); pubkey and interfaceImplementer are not.
   [
     'GR4',
     'Contenthash',
-    'INV2: known lost — migration reports success while destroying it. Assert the before/after contenthash independently of the app model',
+    'carried byte for byte — resolved through the UniversalResolver before and after, independently of the app model',
   ],
-  ['GR5', 'ABI record', 'INV2: known lost — assert before/after'],
-  ['GR6', 'Pubkey record', 'INV2: known lost — assert before/after'],
+  [
+    'GR5',
+    'ABI record',
+    'carried byte for byte (content type and data) — resolved before and after',
+  ],
+  [
+    'GR6',
+    'Pubkey record',
+    'INV2: survives migration or the owner is told it will not — resolved before and after',
+  ],
   [
     'GR7',
     'interfaceImplementer record',
-    'INV2: known lost — assert before/after',
+    'INV2: survives migration or the owner is told it will not — resolved before and after',
   ],
   [
     'GR8',
@@ -1381,8 +1392,8 @@ const migrationGR: Scenario[] = suite('G.GR', 'migration', 'manager', 'P3', [
   ],
   [
     'GR12',
-    'Resolver outside the hardcoded 9-address known list',
-    'silently degrades to `keep-v1` — the UI must state that records will not be carried',
+    'Resolver outside the known-resolver list (8 on Sepolia)',
+    '`keep-v1`: the name keeps its resolver, so its records still resolve after migration and the screen’s "will be carried over" holds — no record is stranded (measured with GR3)',
   ],
 ])
 
