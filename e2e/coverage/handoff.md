@@ -5,6 +5,31 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 51 — 2026-10-11 · two tabs, one label (A22) → E2E-030
+
+**Result:** DEFECT A22 (new **E2E-030**, S3), in both modes.
+
+**Setup:** the tab opens `/register/<label>`, chooses USDC, and then another
+account registers the exact label (`makeV2Name` gained `exactLabel`) before
+the tab confirms.
+
+**Measured:** "Register name" runs about 64 s (through the commitment wait)
+and then shows "Error loading name: Try again". It never says the name was
+taken. "Try again" opens `/<name>`, which still renders registration presets
+with "…" prices. The tab is not stuck and never claims it won, but the user
+cannot tell what happened.
+
+**Manager P2 status:**
+- Renewal (5.B): done except B13, which is portal.
+- Registration (A): done.
+- Remaining manager-side work is P5/P6: payments (Y) and the shared suites
+  (H profile, J wallet, R resolution, S search, U shell, K resilience,
+  L quality), plus cross-app (6).
+
+**In flight:** nothing.
+
+---
+
 ## Iteration 50 — 2026-10-11 · temporary premium: page vs oracle (A24)
 
 **Result:** PASS A24 (time project).

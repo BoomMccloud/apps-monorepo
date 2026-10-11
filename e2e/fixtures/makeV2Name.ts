@@ -134,6 +134,8 @@ const PARA_EOA = privateKeyToAccount(PARA_EOA_KEY)
 export type V2NameConfig = {
   /** The label (without `.eth`). A timestamp suffix is appended for uniqueness. */
   label: string
+  /** Register `label` exactly, with no suffix (the caller guarantees it is free). */
+  exactLabel?: boolean
   /**
    * Duration in seconds.
    *  - Positive: name will expire this many seconds from now.
@@ -219,7 +221,9 @@ export function createMakeV2Name(deps: MakeV2NameDependencies = {}) {
     const ownerAddress = isOther ? resolvedOther.address : resolvedUser.address
     const ownerAccount = isOther ? resolvedOther : resolvedUser
     const timestamp = Math.floor(Date.now() / 1000)
-    const uniqueLabel = `${config.label}-${timestamp}`
+    const uniqueLabel = config.exactLabel
+      ? config.label
+      : `${config.label}-${timestamp}`
 
     const requestedDuration = config.duration ?? MIN_REGISTRATION_DURATION
     let registrationDuration: number
