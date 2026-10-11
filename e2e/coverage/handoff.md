@@ -5,6 +5,39 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 47 — 2026-10-11 · renew from every entry point (B18); bulk renew with a refusal (B9)
+
+**Result:** PASS B18 and B9 (real index). The renewal suite's manager rows are
+done; only B13 (portal) is left.
+- **B18:** the profile link, dashboard row menu ("More options for X" → "Renew
+  name"), address-page row menu (`/<owner>`) and the `/renew/$name` deep link
+  all land on `/renew/$name`, and each 28-day renewal moves the expiry by
+  exactly 28 days. Skipped in mock mode: the mock row offers no "Renew name"
+  (it lacks the role data `canRenew` reads).
+- **B9:** bulk renewal is **sequential, not atomic** (`useBulkRenewSubmit`:
+  one approve, then one `renew` per name from the EOA; the HCA session
+  policy forbids `renew`). With 3 names, the first renewal is authorized and
+  the second refused. The run stops at "Renewal failed" with exactly one
+  name renewed. "Try again" resumes from the refused name, and every name
+  ends exactly one calendar year on, so the first is not charged twice. The
+  ledger oracle "the others still renewed" was half right: names after the
+  failure wait for the retry.
+
+**UX note, not filed:** the failure step shows only the error message (here a
+raw viem dump with calldata, partly because the headless wallet drops the
+4001 code). It does not say which names were already renewed.
+
+**Harness:** a single headless `reject` is retried by the app (no 4001 code), so
+refuse every attempt until the failure step shows. A one-shot
+`authorizeTransaction` is not enough for consecutive renewals; use
+`authorizeTransactionsWhile` per renewal.
+
+**In flight:** nothing.
+
+**Next:** registration A22–A25.
+
+---
+
 ## Iteration 46 — 2026-10-11 · renewing with no USDC (B12)
 
 **Result:** PASS B12, in both modes (profile spec).

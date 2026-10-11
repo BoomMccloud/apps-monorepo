@@ -20,6 +20,7 @@
  */
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
 import { labelToCanonicalId } from '@ensdomains/ensjs/utils/v2'
+import { Web3RequestKind } from '@ensdomains/headless-web3-provider'
 import type { Page } from '@playwright/test'
 import {
   type Address,
@@ -857,5 +858,108 @@ test.describe('Grace on the dashboard (§5.B)', () => {
       page.getByRole('button', { name: /pay with stablecoins/i }),
       'no renewal is offered',
     ).toHaveCount(0)
+  })
+
+  test('bulk renew with the second renewal refused: the first stays renewed, and a retry finishes the rest without charging the first again', {
+    tag: ['@scenario:B9'],
+  }, async ({ migrationConnectedPage: page, makeV2Name, wallet }) => {
+    test.skip(
+      !isRealBigname,
+      'the dashboard has to list the names from the real index',
+    )
+    test.setTimeout(600_000)
+    const tag = `b9${Date.now().toString(36)}`
+    const names = [
+      await makeV2Name({ label: `${tag}a` }),
+      await makeV2Name({ label: `${tag}b` }),
+      await makeV2Name({ label: `${tag}c` }),
+    ]
+    const labels = names.map((n) => n.replace(/\.eth$/, ''))
+    const expiries = async () =>
+      Promise.all(labels.map(async (l) => (await v2State(l)).expiry))
+    const before = await expiries()
+    await syncBrowserToChain(page)
+
+    await waitForBignameBlock()
+    await page.goto(`${MANAGER_APP_URL}/dashboard`)
+    await expect(
+      page.getByRole('button', { name: /^Select all names$/ }),
+    ).toBeVisible({
+      timeout: 60_000,
+    })
+    const search = page.getByPlaceholder('Search my names')
+    await search.fill(tag)
+    await expect(search).toHaveValue(tag)
+    for (const name of names)
+      await page
+        .getByRole('button', { name: `Select ${name}`, exact: true })
+        .click()
+    await page.getByRole('button', { name: 'Renew', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click()
+    await dialog.getByRole('button', { name: /USDC/ }).first().click()
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+
+    // Authorize until exactly one name has renewed, then refuse the next send.
+    const renewedCount = async () =>
+      (await expiries()).filter((e, i) => e !== before[i]).length
+    const pending = () =>
+      wallet.getPendingRequestCount(Web3RequestKind.SendTransaction)
+    while ((await renewedCount()) < 1) {
+      await expect.poll(pending, { timeout: 120_000 }).toBeGreaterThanOrEqual(1)
+      await wallet.authorize(Web3RequestKind.SendTransaction)
+      // Wait for that send to land or for the next one to be asked.
+      await expect
+        .poll(async () => (await renewedCount()) >= 1 || pending() >= 1, {
+          timeout: 60_000,
+        })
+        .toBe(true)
+    }
+    // The headless wallet drops the 4001 code, so the app retries a refusal
+    // as transient (up to 3 times): refuse every attempt until it gives up.
+    const failed = dialog.getByText('Renewal failed')
+    for (
+      let attempt = 0;
+      attempt < 8 && !(await failed.isVisible());
+      attempt++
+    ) {
+      await expect
+        .poll(async () => (await failed.isVisible()) || pending() >= 1, {
+          timeout: 60_000,
+        })
+        .toBe(true)
+      if (pending() >= 1) await wallet.reject(Web3RequestKind.SendTransaction)
+    }
+    await expect(failed).toBeVisible({ timeout: 60_000 })
+    const failureText = await dialog.innerText()
+    console.log(
+      `[B9] failure step: ${failureText.replace(/\s+/g, ' ').slice(0, 300)}`,
+    )
+
+    const afterFailure = await expiries()
+    const renewed = labels.filter((_, i) => afterFailure[i] !== before[i])
+    expect(renewed.length, 'exactly the name before the refusal renewed').toBe(
+      1,
+    )
+
+    // Retry: it resumes from the refused name and does not pay for the first again.
+    let done = false
+    const authorizing = authorizeTransactionsWhile(page, wallet, () => done)
+    await dialog.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.getByText('Renewal Complete')).toBeVisible({
+      timeout: 120_000,
+    })
+    done = true
+    await authorizing
+
+    const final = await expiries()
+    for (const [i, label] of labels.entries()) {
+      const moved = final[i] - before[i]
+      expect(
+        moved,
+        `${label} renewed once — one calendar year, not two`,
+      ).toBeGreaterThanOrEqual(365n * BigInt(DAY))
+      expect(moved).toBeLessThanOrEqual(366n * BigInt(DAY))
+    }
   })
 })
