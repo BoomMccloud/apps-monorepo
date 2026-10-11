@@ -16,7 +16,11 @@ import {
   test,
 } from '../../../fixtures/playwright.manager.fixture.js'
 import { publicClient, walletClient } from '../../../helpers/anvil-client.js'
-import { clickThroughEnableSessions } from '../../../helpers/manager-auth.js'
+import { waitForBignameBlock } from '../../../helpers/bigname-sync.js'
+import {
+  authorizeTransactionsWhile,
+  clickThroughEnableSessions,
+} from '../../../helpers/manager-auth.js'
 import {
   goToEditProfile,
   goToProfile,
@@ -485,6 +489,95 @@ test.describe('ENS profile', () => {
     } finally {
       for (const [i, payer] of payers.entries())
         await move(parkingAccount, payer.address, balances[i])
+    }
+  })
+
+  test('renewing from each entry point — profile, dashboard row, address page, deep link — lands on the same renewal and moves expiry the same', {
+    tag: ['@scenario:B18'],
+  }, async ({
+    profileConnectedPage: page,
+    makeV2Name,
+    wallet,
+    mockIndexer,
+    accounts,
+  }) => {
+    test.setTimeout(600_000)
+    test.skip(
+      mockIndexer.enabled,
+      'the mock row offers no "Renew name" (it lacks the role data canRenew reads); the entry points are checked against the real index',
+    )
+    const owner = accounts.getAddress('user')
+    const tag = `b18${Date.now().toString(36)}`
+    const routes = ['profile', 'dashboard', 'address', 'deeplink'] as const
+    const names: Record<(typeof routes)[number], string> = {} as never
+    for (const route of routes) {
+      names[route] = await makeV2Name({ label: `${tag}${route}` })
+    }
+    await waitForBignameBlock()
+
+    /** Open the row menu for `name` in a names list and choose "Renew name". */
+    const renewFromRow = async (name: string) => {
+      const search = page.getByPlaceholder(/Search/).last()
+      if (await search.isVisible().catch(() => false)) await search.fill(tag)
+      const more = page.getByRole('button', {
+        name: `More options for ${name}`,
+        exact: true,
+      })
+      await expect(more).toBeVisible({ timeout: 60_000 })
+      await more.click()
+      await page.getByRole('menuitem', { name: /Renew name/ }).click()
+    }
+
+    const enter: Record<
+      (typeof routes)[number],
+      (name: string) => Promise<void>
+    > = {
+      profile: async (name) => {
+        await goToProfile(page, name)
+        await page.getByRole('link', { name: /renew/i }).click()
+      },
+      dashboard: async (name) => {
+        await page.goto(`${MANAGER_APP_URL}/dashboard`)
+        await expect(
+          page.getByRole('button', { name: /^Select all names$/ }),
+        ).toBeVisible({ timeout: 60_000 })
+        await renewFromRow(name)
+      },
+      address: async (name) => {
+        await page.goto(`${MANAGER_APP_URL}/${owner}`)
+        await renewFromRow(name)
+      },
+      deeplink: async (name) => {
+        await page.goto(`${MANAGER_APP_URL}/renew/${name}`)
+      },
+    }
+
+    for (const route of routes) {
+      const name = names[route]
+      const label = name.replace(/\.eth$/, '')
+      const before = await readExpiry(label)
+      await enter[route](name)
+      await expect(
+        page,
+        `${route}: lands on the renewal for ${name}`,
+      ).toHaveURL(new RegExp(`/renew/${name.replace(/\./g, '\\.')}$`), {
+        timeout: 30_000,
+      })
+      await page.waitForLoadState('networkidle')
+      // Answer every send this renewal asks for (a USDC approve may precede
+      // the renew), and stop once it reports success.
+      let done = false
+      const authorizing = authorizeTransactionsWhile(page, wallet, () => done)
+      try {
+        await renewFor28Days(page)
+      } finally {
+        done = true
+        await authorizing
+      }
+      expect(
+        (await readExpiry(label)) - before,
+        `${route}: the expiry moved by exactly 28 days`,
+      ).toBe(28n * 24n * 60n * 60n)
     }
   })
 
