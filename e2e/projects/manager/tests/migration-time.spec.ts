@@ -21,7 +21,15 @@
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
 import { labelToCanonicalId } from '@ensdomains/ensjs/utils/v2'
 import type { Page } from '@playwright/test'
-import { type Address, parseAbi } from 'viem'
+import {
+  type Address,
+  encodeFunctionData,
+  keccak256,
+  namehash,
+  parseAbi,
+  toHex,
+  zeroAddress,
+} from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import {
   type GraceV1Name,
@@ -29,17 +37,27 @@ import {
   PREMIGRATION_BONUS_PERIOD,
   syncBrowserToChain,
 } from '../../../fixtures/makeGraceV1Name.js'
-import { createMakeV1Name } from '../../../fixtures/makeV1Name.js'
+import { createMakeV1Name, reserveInV2 } from '../../../fixtures/makeV1Name.js'
 import {
   authorizeTransactionsWhile,
   expect,
   test,
 } from '../../../fixtures/playwright.manager.fixture.js'
-import { publicClient, testClient } from '../../../helpers/anvil-client.js'
+import {
+  APP_V1_CONTROLLER,
+  ensureV1ControllersAuthorised,
+} from '../../../fixtures/v1-controller-auth.js'
+import {
+  publicClient,
+  testClient,
+  walletClient,
+} from '../../../helpers/anvil-client.js'
+import { isRealBigname } from '../../../helpers/bigname-sync.js'
 import {
   assertUnlockedMigration,
   assertV2Reserved,
 } from '../../../helpers/migration-assertions.js'
+import { selectOnlyRoots } from '../../../helpers/migration-flow.js'
 import type { MockV1Name } from '../../../helpers/mock-v1-subgraph.js'
 import { serveV1Names } from '../../../helpers/v1-names.js'
 
@@ -55,6 +73,11 @@ const DAY = 24 * 60 * 60
 
 const BASE_REGISTRAR_ABI = parseAbi([
   'function nameExpires(uint256 id) view returns (uint256)',
+  'function renew(uint256 id, uint256 duration) returns (uint256)',
+])
+const NAME_WRAPPER = sepolia.ensNameWrapper.address as Address
+const NAME_WRAPPER_ABI = parseAbi([
+  'function getData(uint256 tokenId) view returns (address owner, uint32 fuses, uint64 expiry)',
 ])
 const REGISTRY_ABI = parseAbi([
   'struct State { uint8 status; uint64 expiry; address latestOwner; uint256 tokenId; uint256 resource; }',
@@ -177,9 +200,10 @@ test.describe('Migration deep into and after the V1 grace period', () => {
     ).toHaveCount(0)
 
     // ── GA7: renew then upgrade the two grace names (not the control) ──
-    const control$ = nameCheckbox(page, control)
-    if (await control$.isChecked()) await control$.locator('xpath=..').click()
-    await expect(control$).not.toBeChecked()
+    // `selectOnlyRoots`, not "untick the control": on a real index the shared
+    // wallet lists every name it ever made, all ticked by default.
+    await selectOnlyRoots(page, [day45.name, day89.name])
+    await expect(nameCheckbox(page, control)).not.toBeChecked()
     for (const grace of [day45, day89])
       await expect(nameCheckbox(page, grace.name)).toBeChecked()
 
@@ -222,5 +246,109 @@ test.describe('Migration deep into and after the V1 grace period', () => {
     await expect(page).toHaveURL(new RegExp(`/register/${lapsed.label}`), {
       timeout: 30_000,
     })
+  })
+})
+
+test.describe('Migration of a desynced 2LD (§G.GW)', () => {
+  test.describe.configure({ timeout: 600_000 })
+
+  test('a 2LD renewed on the registrar but expired in the NameWrapper is accounted for on /upgrade', {
+    tag: ['@scenario:GW4'],
+  }, async ({ migrationConnectedPage: page, accounts }) => {
+    // The bigname route mock has one expiry for registrar and wrapper; the
+    // disagreement is the whole shape, so only a live index can serve it.
+    test.skip(
+      !isRealBigname,
+      'needs the local bigname: the mock cannot split the two expiries',
+    )
+    test.fail(
+      true,
+      'E2E-027: a desynced wrapped 2LD has no owner in the index, so the owner never sees it and is never offered syncWrapper',
+    )
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const makeV1Name = createMakeV1Name({ userAccount: owner })
+
+    // ens-app-v3 `registrationStatus` "desynced": the registrar expiry is in
+    // the future, the NameWrapper reports owner 0. It arises when a wrapped
+    // name is renewed on the registrar alone (a legacy controller) — the
+    // wrapper's own expiry never moves, lapses, and with PARENT_CANNOT_CONTROL
+    // burnt (every wrapped .eth 2LD) the wrapper zeroes the owner.
+    const name = await makeV1Name({
+      label: 'gw4-desync',
+      type: 'wrapped',
+      duration: 28 * DAY,
+      reserveInV2: false,
+    })
+    const label = name.replace(/\.eth$/, '')
+    const tokenId = BigInt(keccak256(toHex(label)))
+
+    await ensureV1ControllersAuthorised()
+    await testClient.impersonateAccount({ address: APP_V1_CONTROLLER })
+    await testClient.setBalance({
+      address: APP_V1_CONTROLLER,
+      value: 10n ** 19n,
+    })
+    try {
+      const hash = await walletClient.sendTransaction({
+        account: APP_V1_CONTROLLER,
+        to: BASE_REGISTRAR,
+        data: encodeFunctionData({
+          abi: BASE_REGISTRAR_ABI,
+          functionName: 'renew',
+          args: [tokenId, BigInt(365 * DAY)],
+        }),
+      })
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      expect(receipt.status, 'registrar-only renewal').toBe('success')
+    } finally {
+      await testClient.stopImpersonatingAccount({ address: APP_V1_CONTROLLER })
+    }
+    const registrarExpiry = await publicClient.readContract({
+      address: BASE_REGISTRAR,
+      abi: BASE_REGISTRAR_ABI,
+      functionName: 'nameExpires',
+      args: [tokenId],
+    })
+    // Reserve in V2 at the renewed expiry, so a lapsed reservation cannot be
+    // why the name is missing.
+    await reserveInV2(label, registrarExpiry)
+
+    // Past the wrapper's expiry (registrar + 90 days, from the 28-day lease).
+    await warpDays(28 + 90 + 2)
+    const [wrapperOwner, , wrapperExpiry] = await publicClient.readContract({
+      address: NAME_WRAPPER,
+      abi: NAME_WRAPPER_ABI,
+      functionName: 'getData',
+      args: [BigInt(namehash(name))],
+    })
+    const now = await chainNow()
+    expect(
+      registrarExpiry,
+      'precondition: the registrar lease is live',
+    ).toBeGreaterThan(now)
+    expect(wrapperExpiry, 'precondition: the wrapper has lapsed').toBeLessThan(
+      now,
+    )
+    expect(wrapperOwner, 'precondition: the wrapper reports no owner').toBe(
+      zeroAddress,
+    )
+    expect(await v2State(label)).toMatchObject({ status: 1 })
+
+    // A fresh, ordinary name after the warp: the list rendered at all.
+    const control = await makeV1Name({ label: 'gw4-control', type: 'wrapped' })
+
+    await serveV1Names(page, [
+      { name, ownerAddress: owner.address, type: 'wrapped' },
+      { name: control, ownerAddress: owner.address, type: 'wrapped' },
+    ])
+    await syncBrowserToChain(page)
+    await page.goto(`${MANAGER_APP_URL}/upgrade`)
+    await expect(nameCheckbox(page, control)).toBeVisible({ timeout: 60_000 })
+    // INV3: every input lands in a visible bucket — offered, or listed as not
+    // upgradable with a reason. Silence is the one wrong answer.
+    await expect(
+      page.getByText(name, { exact: false }).first(),
+      'the desynced name is accounted for',
+    ).toBeVisible({ timeout: 15_000 })
   })
 })

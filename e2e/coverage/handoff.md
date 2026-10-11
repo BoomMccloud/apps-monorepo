@@ -5,6 +5,35 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 38 — 2026-10-11 · desynced 2LD (GW4) → E2E-027; GA7 runs in real mode
+
+**Result:** DEFECT GW4 (new **E2E-027**, S2) · terminal 436 → 437. The time
+project is green in both modes: GA7 passes in real and mock, and GW4 runs in
+real mode only.
+
+**Desync is a product state, not a contrivance.** By ens-app-v3's definition
+(`registrationStatus.ts`), a desynced 2LD has a live registrar lease while
+the NameWrapper reports owner 0. `ETHRenewerV1.renew` produces it, because it
+renews only the BaseRegistrar; the wrapper needs a separate `syncWrapper`
+(see memory `v1-grace-renewal-mechanics`). The fixture does the same
+registrar-only renewal by impersonating the V1 controller, reserves V2 at the
+renewed expiry, and warps past the old wrapper expiry. bigname then records
+the name `active`, `wrapper_state: "lapsed"`, owner and manager null, and
+leaves it out of the wallet's listing, so /upgrade never shows it. Nothing in
+the manager calls `syncWrapper`.
+
+**GA7 in real mode:** it unticked only its control and expected "Upgrade 2
+names". On a real index the shared wallet lists everything it ever made, all
+ticked, so it now uses `selectOnlyRoots`.
+
+**In flight:** nothing.
+
+**Next:** GA10 (three distinct "not yours" reasons), GA9 (unmigrated after V1
+expiry), GU7 (interrupted mid-batch), GU8 (HCA vs EOA), GU5 (commemorative
+NFT), GA11, GA5, GS17.
+
+---
+
 ## Iteration 37 — 2026-10-11 · names the controllers cannot claim (GA12, GU6, GM5) and GU9
 
 **Result:** PASS GA12, GU6 · DEFECT GM5 (new **E2E-026**, S4), GU9 (folded into
