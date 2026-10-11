@@ -28,6 +28,7 @@ import {
   type V1Records,
 } from '../../../fixtures/v1-records.js'
 import { publicClient } from '../../../helpers/anvil-client.js'
+import { isRealBigname } from '../../../helpers/bigname-sync.js'
 import {
   confirmAndAuthorize,
   openMigrationFlow,
@@ -110,8 +111,11 @@ async function migrateWithRecords(
   {
     resolver,
     beforeConfirm,
+    servedKeys,
   }: {
     readonly resolver?: Address
+    /** The keys the bigname mock lists, when they should differ from the chain. */
+    readonly servedKeys?: MockV1Records
     /** Assertions on the selection screen, with only this name selected. */
     readonly beforeConfirm?: () => Promise<void>
   } = {},
@@ -127,7 +131,7 @@ async function migrateWithRecords(
       {
         kind: 'registration',
         label: labelOf(name),
-        records: mockKeys(records),
+        records: servedKeys ?? mockKeys(records),
         resolver: resolver ?? V1_PUBLIC_RESOLVER,
       },
     ],
@@ -290,6 +294,37 @@ test.describe('ENS V1 → V2 migration — records', () => {
     ).toEqual([])
     // The records were never copied, and needed not be: they still resolve,
     // from the resolver the name kept.
+    await expectRecordsResolve(name, records)
+  })
+
+  test('records survive when the index has not listed their keys yet', {
+    tag: ['@scenario:GR13'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    // The stale state is served by the bigname mock; a live local bigname
+    // catches up in about a second and cannot be held there.
+    test.skip(isRealBigname, 'needs the bigname route mock to serve stale keys')
+    test.fail(
+      true,
+      'E2E-024: an empty key inventory is read as "no records" and the name migrates without them',
+    )
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const records: V1Records = {
+      texts: [
+        { key: 'description', value: 'written before the index caught up' },
+      ],
+      addresses: [{ coinType: 60, value: accounts.getAddress('user2') as Hex }],
+    }
+    // On chain the records exist; the index lists the name and its resolver
+    // but none of the keys — what a real bigname serves for ~1 s after the
+    // block (measured, iteration 35).
+    const { name } = await migrateWithRecords(
+      page,
+      wallet,
+      owner,
+      'gr13-stale-keys',
+      records,
+      { servedKeys: { texts: [], addresses: [] } },
+    )
     await expectRecordsResolve(name, records)
   })
 

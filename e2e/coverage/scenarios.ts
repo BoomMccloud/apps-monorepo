@@ -1395,6 +1395,11 @@ const migrationGR: Scenario[] = suite('G.GR', 'migration', 'manager', 'P3', [
     'Resolver outside the known-resolver list (8 on Sepolia)',
     '`keep-v1`: the name keeps its resolver, so its records still resolve after migration and the screen’s "will be carried over" holds — no record is stranded (measured with GR3)',
   ],
+  [
+    'GR13',
+    'Index has not listed the record keys yet (stale key inventory)',
+    'records on chain survive migration, or the app refuses to migrate until the index is current — an empty key list is not proof of no records',
+  ],
 ])
 
 const migrationGM: Scenario[] = suite('G.GM', 'migration', 'manager', 'P3', [

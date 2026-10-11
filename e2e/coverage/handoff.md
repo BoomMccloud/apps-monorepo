@@ -13,7 +13,7 @@ waits with it. New `migration-records.spec.ts`; GR2 sits in
 `migration-subname.spec.ts` next to GS1.
 
 **Result:** PASS GR2, GR3, GR4, GR5, GR8, GR9, GR10, GR11, GR12 · DEFECT GR6,
-GR7 (new **E2E-023**, S1) · terminal 414 → 425. The records spec is 7/7 in both
+GR7 (new **E2E-023**, S1) and GR13 (new **E2E-024**, S1) · terminal 414 → 426. The records spec is 7/7 in both
 modes; GR2 runs in real mode only, because it is a subname tree.
 
 **Ground truth (manager `features/migration`, `packages/migration`):**
@@ -77,13 +77,11 @@ The keys were not listed yet, so the app saw "no records" and replayed nothing.
 (`waitForBignameRecordKeys`). In real #3 it logged the gap on every records
 test: **1.0–1.5 s after the block was published.**
 
-App-side, this is a risk rather than a defect so far. The app treats an empty
-key inventory as "no records", so a stale bigname makes it migrate a name and
-silently, irreversibly drop its records. It only throws (`ProfileFetchError`)
-when a name is missing from the lookup entirely, not when its key lists are
-empty. A user would have to write records and open /upgrade within the
-lag, so it is not logged in the defect register; raise it if bigname lag in
-production is ever seconds or more.
+App-side, **logged as E2E-024 (S1)** at the user's call (2026-10-11). The
+app treats an empty key inventory as "no records", so a stale bigname makes it
+migrate a name and silently, irreversibly drop its records. Witness: GR13 (new
+row), mock mode only. The name's records are on chain and the mock lists none
+of their keys; it fails as expected, with both records empty after the upgrade.
 
 **In flight:** nothing.
 
