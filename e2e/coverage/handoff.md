@@ -5,6 +5,33 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 45 — 2026-10-11 · bulk renew (B8, B10); past grace (B4) → E2E-029
+
+**Result:** PASS B8 and B10 (real mode, time project) · DEFECT B4 (new
+**E2E-029**, S3, both modes).
+- **B8/B10:** an active name and a name 2 days into grace, selected on the
+  dashboard and renewed together for 1 year ("Renew 2 names for 1 year").
+  Both leases advanced by a calendar year. The dialog total ($16.01) equals
+  Σ `ETHRegistrar.getRenewPrice(label, applied duration, USDC)` ($16.011).
+  The per-name subtotals display $8.01 each, which is display rounding.
+- **B4:** a V2 name 30 days past expiry is AVAILABLE and `getRenewPrice`
+  reverts, yet `/renew/$name` renders the full renewal page with "Pay with
+  stablecoins" enabled (prices stuck on "…"). B11 redirects a
+  never-registered name to `/register`; this case does not.
+
+**Flow notes:** bulk renew runs Select rows → "Renew" → summary (presets,
+per-name subtotal, "Total: $X USD") → Next → "Confirm renewal" (Select
+payment, USDC) → Confirm → "Renewal Complete". Create the grace name
+**before** an active one: the negative-duration fixture warps the clock past
+its own expiry.
+
+**In flight:** nothing.
+
+**Next:** B12 (insufficient balance), B18 (four entry points), B9 (bulk
+partial failure), then A22–A25.
+
+---
+
 ## Iteration 44 — 2026-10-11 · the dashboard grace banner and badge (B6, B7)
 
 **Result:** PASS B6 (real mode, time project), B7 (mock mode, dashboard spec).

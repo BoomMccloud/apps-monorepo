@@ -811,4 +811,51 @@ test.describe('Grace on the dashboard (§5.B)', () => {
       'total = Σ per-name price',
     ).toBeLessThan(0.01)
   })
+
+  test('a name past its grace cannot be extended: renewal is not offered', {
+    tag: ['@scenario:B4'],
+  }, async ({ migrationConnectedPage: page, makeV2Name }) => {
+    test.fail(
+      true,
+      'E2E-029: /renew offers a full renewal (with "Pay with stablecoins") for a name past grace',
+    )
+    const name = await makeV2Name({ label: 'b4-lapsed', duration: -30 * DAY })
+    const label = name.replace(/\.eth$/, '')
+    const state = await v2State(label)
+    expect(state.status, 'past grace: AVAILABLE on chain').toBe(AVAILABLE)
+    await expect(
+      publicClient.readContract({
+        address: ETH_REGISTRAR,
+        abi: RENEW_PRICE_ABI,
+        functionName: 'getRenewPrice',
+        args: [
+          label,
+          BigInt(28 * DAY),
+          ensL1Contracts[supportedL1Chains.sepolia].usdc.address as Address,
+        ],
+      }),
+      'the registrar will not price a renewal',
+    ).rejects.toThrow()
+
+    await waitForBignameBlock()
+    await syncBrowserToChain(page)
+    await page.goto(`${MANAGER_APP_URL}/renew/${name}`)
+    // Blocked or shown as available — either is honest; offering to take
+    // payment for a renewal the registrar refuses is not.
+    await expect(
+      page
+        .getByRole('heading', { name: /available|can.t be renewed|expired/i })
+        .or(
+          page.getByText(
+            /is available|can.t be renewed|grace period has ended/i,
+          ),
+        )
+        .first(),
+      'the page says the name is lapsed or available',
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(
+      page.getByRole('button', { name: /pay with stablecoins/i }),
+      'no renewal is offered',
+    ).toHaveCount(0)
+  })
 })
