@@ -5,6 +5,27 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 49 — 2026-10-11 · registration progress is monotonic (A25)
+
+**Result:** PASS A25 in both modes (registration spec).
+
+**Measured:** about 620 in-page samples at 100 ms across a full HCA
+registration. The fill went 0.1% → 100% with no regression. It reached 100%
+about 200 ms before "Registration Complete": the completion sweep runs on
+success, and the banner follows once the fill settles (`onFillSettled`).
+The fill never shows full while transactions are pending.
+
+**How:** the weave fill draws progress as `clip-path: inset(0 X% 0 0)` on the
+name's line, so progress = 100 − X for a one-line name. The fill unmounts at
+success, so the banner's first appearance is recorded separately.
+
+**In flight:** nothing.
+
+**Next:** A24 (premium chart vs oracle; see why the premium spec's tests skip),
+A22 (two tabs, one label).
+
+---
+
 ## Iteration 48 — 2026-10-11 · registration preset prices against the oracle (A23)
 
 **Result:** PASS A23 in both modes (registration spec).

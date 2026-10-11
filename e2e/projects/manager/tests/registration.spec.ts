@@ -233,3 +233,85 @@ test.describe('Registration pricing against the oracle (A23)', () => {
     }
   })
 })
+
+test.describe('Registration progress (A25)', () => {
+  test('the name fill only moves forward, and reaches 100% only once the registration has succeeded', {
+    tag: ['@scenario:A25'],
+  }, async ({ connectedPage: page, wallet }) => {
+    test.setTimeout(300_000)
+    const label = `a25${Date.now().toString(36)}`.slice(0, 10)
+    await page.goto(`${MANAGER_APP_URL}/register/${label}.eth`)
+    await page.getByRole('button', { name: /pay with stablecoins/i }).click()
+    await clickThroughEnableSessions(page)
+    await page.getByRole('button', { name: 'Select USDC' }).click()
+
+    // Sample from inside the page. The weave fill draws progress as
+    // `clip-path: inset(0 X% 0 0)` on the name's line (one line for a short
+    // name), so progress = 100 − X. The fill unmounts once success shows, so
+    // the moment "Registration Complete" appears is noted separately.
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>
+      const fill: { t: number; p: number }[] = []
+      w.__fill = fill
+      w.__doneAt = null
+      w.__fillTimer = window.setInterval(() => {
+        if (
+          w.__doneAt === null &&
+          document.body.innerText.includes('Registration Complete')
+        )
+          w.__doneAt = Date.now()
+        const line = [
+          ...document.querySelectorAll<HTMLElement>('[style*="clip-path"]'),
+        ].find((el) => el.style.clipPath.startsWith('inset('))
+        const inset = Number(
+          line?.style.clipPath.match(/inset\(0(?:px)? ([\d.]+)%/)?.[1] ?? 'NaN',
+        )
+        if (!Number.isNaN(inset)) fill.push({ t: Date.now(), p: 100 - inset })
+      }, 100)
+    })
+
+    await page.getByRole('button', { name: /register name/i }).click()
+    await page.getByRole('button', { name: 'Set up later' }).click()
+    let complete = false
+    const authorizing = authorizeTransactionsWhile(page, wallet, () => complete)
+    await expectFlowSuccess(page, {
+      success: page
+        .locator('p.text-ens-peridot-text-dark')
+        .filter({ hasText: 'Registration Complete' }),
+      failureTitle: 'Registration Failed',
+      timeout: 180_000,
+    })
+    complete = true
+    await authorizing
+
+    const { fill, doneAt } = await page.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>
+      window.clearInterval(w.__fillTimer as number)
+      return {
+        fill: w.__fill as { t: number; p: number }[],
+        doneAt: w.__doneAt as number | null,
+      }
+    })
+    console.log(
+      `[A25] ${fill.length} samples, ${fill[0]?.p.toFixed(1)}% → ${fill.at(-1)?.p.toFixed(1)}%`,
+    )
+    expect(
+      fill.length,
+      'the fill was observed during the flow',
+    ).toBeGreaterThan(10)
+    const regressions = fill.filter(
+      (s, i) => i > 0 && s.p < fill[i - 1].p - 0.5,
+    )
+    expect(regressions, 'the fill never moves backwards').toEqual([])
+
+    // The app sweeps the fill to 100% on success, then shows the banner once
+    // the fill settles — so 100% leads the banner by a beat. A full fill while
+    // transactions are still pending would lead it by much more.
+    const firstFull = fill.find((s) => s.p >= 99.5)
+    expect(firstFull, 'the fill reaches 100%').toBeTruthy()
+    expect(doneAt, 'success was observed').not.toBeNull()
+    const lead = (doneAt ?? 0) - (firstFull?.t ?? 0)
+    console.log(`[A25] 100% fill led the success banner by ${lead} ms`)
+    expect(lead, '100% only at success, not while pending').toBeLessThan(3_000)
+  })
+})
