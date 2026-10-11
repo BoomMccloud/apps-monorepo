@@ -114,6 +114,9 @@ const REGISTRY_ABI = parseAbi([
 const RENEWER_ABI = parseAbi([
   'function isRenewable(string label) view returns (bool)',
 ])
+const RENEW_PRICE_ABI = parseAbi([
+  'function getRenewPrice(string label, uint64 duration, address paymentToken) view returns (uint256)',
+])
 const REGISTRAR_ABI = parseAbi([
   'function isAvailable(string label) view returns (bool)',
 ])
@@ -711,5 +714,101 @@ test.describe('Grace on the dashboard (§5.B)', () => {
       page.locator(`a[href="/renew/${name}"]`).filter({ hasText: /^Renew$/ }),
       'and no grace banner offers to renew it',
     ).toHaveCount(0)
+  })
+
+  test('bulk renew an active name and a name in grace: the total is the sum of on-chain prices, and both leases move', {
+    tag: ['@scenario:B8', '@scenario:B10'],
+  }, async ({ migrationConnectedPage: page, makeV2Name, wallet }) => {
+    test.skip(
+      !isRealBigname,
+      'renewal has to reach the index the dashboard reads',
+    )
+    const tag = `b8${Date.now().toString(36)}`
+    // The grace name first: its fixture warps the clock past its expiry, which
+    // would also expire an active name made before it.
+    const grace = await makeV2Name({ label: `${tag}g`, duration: -2 * DAY })
+    const active = await makeV2Name({ label: `${tag}a` })
+    const names = [active, grace]
+    const labels = names.map((n) => n.replace(/\.eth$/, ''))
+    const before = await Promise.all(
+      labels.map(async (l) => (await v2State(l)).expiry),
+    )
+    await syncBrowserToChain(page)
+
+    await waitForBignameBlock()
+    await page.goto(`${MANAGER_APP_URL}/dashboard`)
+    await expect(
+      page.getByRole('button', { name: /^Select all names$/ }),
+    ).toBeVisible({
+      timeout: 60_000,
+    })
+    const search = page.getByPlaceholder('Search my names')
+    await search.fill(tag)
+    await expect(search).toHaveValue(tag)
+    for (const name of names)
+      await page
+        .getByRole('button', { name: `Select ${name}`, exact: true })
+        .click()
+    await page.getByRole('button', { name: 'Renew', exact: true }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Total:').first()).toBeVisible({
+      timeout: 30_000,
+    })
+    const readTotal = async () => {
+      const text = await dialog.innerText()
+      const match = text.match(/Total:\s*\$([\d,]+\.\d{2})/)
+      return match ? Number(match[1].replace(/,/g, '')) : Number.NaN
+    }
+    await expect.poll(readTotal, { timeout: 30_000 }).toBeGreaterThan(0)
+    const shownTotal = await readTotal()
+
+    await dialog.getByRole('button', { name: 'Next', exact: true }).click()
+    await expect(dialog.getByText('Select payment')).toBeVisible()
+    await dialog.getByRole('button', { name: /USDC/ }).first().click()
+    let done = false
+    const authorizing = authorizeTransactionsWhile(page, wallet, () => done)
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+    await expect(page.getByText('Renewal Complete')).toBeVisible({
+      timeout: 120_000,
+    })
+    done = true
+    await authorizing
+
+    // B8: every lease advanced, by its own calendar year.
+    const after = await Promise.all(
+      labels.map(async (l) => (await v2State(l)).expiry),
+    )
+    const durations = after.map((a, i) => a - before[i])
+    for (const [i, d] of durations.entries())
+      expect(
+        d,
+        `${names[i]} renewed by a calendar year`,
+      ).toBeGreaterThanOrEqual(365n * BigInt(DAY))
+
+    // B10: the dialog's total equals the registrar's own price for each name
+    // over the duration it actually applied, summed — read independently.
+    const prices = await Promise.all(
+      labels.map((label, i) =>
+        publicClient.readContract({
+          address: ETH_REGISTRAR,
+          abi: RENEW_PRICE_ABI,
+          functionName: 'getRenewPrice',
+          args: [
+            label,
+            durations[i],
+            ensL1Contracts[supportedL1Chains.sepolia].usdc.address as Address,
+          ],
+        }),
+      ),
+    )
+    const onChainTotal = Number(prices.reduce((a, b) => a + b, 0n)) / 1e6
+    console.log(
+      `[B10] shown $${shownTotal}, on chain $${onChainTotal.toFixed(6)}`,
+    )
+    expect(
+      Math.abs(shownTotal - onChainTotal),
+      'total = Σ per-name price',
+    ).toBeLessThan(0.01)
   })
 })

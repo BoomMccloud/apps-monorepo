@@ -4,12 +4,12 @@
   "tiers": {
     "HW": 8,
     "R0": 163,
-    "R1": 15,
+    "R1": 17,
     "R2": 100,
     "R3": 162,
     "R4": 1
   },
-  "totalTerminal": 449,
+  "totalTerminal": 451,
   "invariantSitesChecked": 0,
   "phasesLegacy": {
     "P0": 4,
