@@ -74,6 +74,13 @@ function v1RecordsOf(input: V1NamesInput): [string, MockV1Records][] {
   return out
 }
 
+/** The optional fields a tree root passes to the mock only when set. */
+const optionalRootFields = (root: MockV1Node): Partial<MockV1Name> => ({
+  ...(root.resolver && { resolver: root.resolver }),
+  ...(root.unreserved && { unreserved: true }),
+  ...(root.registrantAddress && { registrantAddress: root.registrantAddress }),
+})
+
 /** The input as flat 2LDs, or null when it holds anything else. */
 function asFlatNames(input: V1NamesInput): MockV1Name[] | null {
   if (!isTree(input)) {
@@ -99,10 +106,7 @@ function asFlatNames(input: V1NamesInput): MockV1Name[] | null {
       fuses: root.ownerFuses,
       expiryDate: root.expiryDate,
       records: root.records,
-      ...(root.resolver && { resolver: root.resolver }),
-      ...(root.registrantAddress && {
-        registrantAddress: root.registrantAddress,
-      }),
+      ...optionalRootFields(root),
     })
   }
   return flat

@@ -5,6 +5,37 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 37 — 2026-10-11 · names the controllers cannot claim (GA12, GU6, GM5) and GU9
+
+**Result:** PASS GA12, GU6 · DEFECT GM5 (new **E2E-026**, S4), GU9 (folded into
+E2E-023: the screen promises records it then drops) · terminal 432 → 436. Mock
+mode 3/3; all three skip in real mode, by design.
+
+- **GA12:** `makeV1Name({ reserveInV2: false })` leaves no V2 entry. The mock
+  serves `unresolvable_reason: 'no_live_ens_v2_entry'`, and /upgrade lists the
+  name under "These names can't be upgraded" with "it has no ENSv2
+  reservation.", while a control stays selectable. **Real-mode finding:** the
+  local bigname answers `not_found` for such a name and never lists it, so
+  against a live index the not-reserved bucket is unreachable. Whether
+  production bigname behaves the same is unknown; mainnet names are all
+  premigrated, so it may never matter.
+- **GU6 / GM5:** migrate a name, then reload with the stale V1 listing. The name
+  cannot be selected again (GU6 passes; the live preflight finds the V1 token
+  gone), but it drops off silently: `already-migrated` is never emitted
+  (E2E-026). GU6's oracle was split so that the reason half lives on GM5.
+
+**GW4 (desynced 2LD):** it was exempted on 2026-08-14 for having no fixture
+path. A path exists: wrap a 2LD with the minimum duration, warp past expiry and
+grace (~120 days), then re-register it unwrapped from another account. The
+NameWrapper keeps stale data while the registrar has a new owner. It belongs in
+the `manager-migration-time` project. Not started.
+
+**In flight:** nothing.
+
+**Next:** GW4 (time project), GA10, GA9, GU7, GU8, GU5, GA11, GA5, GS17.
+
+---
+
 ## Iteration 36 — 2026-10-11 · E2E-024 logged; subname edge cases (GS5, GS8, GS10, GS11, GS12, GS18)
 
 **Batch:** the user's call was "log that latency defect, then move on to next in

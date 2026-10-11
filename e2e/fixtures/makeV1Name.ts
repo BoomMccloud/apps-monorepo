@@ -220,6 +220,12 @@ export type V1NameConfig = {
     texts?: V1TextRecord[]
     addresses?: V1AddressRecord[]
   }
+  /**
+   * Create the V2 RESERVED placeholder (default true). `false` leaves the name
+   * with no V2 entry — the "premigration missing" shape the migration
+   * controllers cannot claim (GA12).
+   */
+  reserveInV2?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -455,7 +461,7 @@ export function createMakeV1Name(deps: MakeV1NameDependencies = {}) {
     // ── 5. Reserve in V2 BEFORE any time advancement ───────────────
     // The reservation must be created while v1Expiry is still in the future
     // so the V2 slot gets the correct active expiry.
-    await reserveInV2(uniqueLabel, v1Expiry)
+    if (config.reserveInV2 !== false) await reserveInV2(uniqueLabel, v1Expiry)
 
     // ── 6. Wrap if requested ────────────────────────────────────────
     const nameType = config.type ?? 'unwrapped'

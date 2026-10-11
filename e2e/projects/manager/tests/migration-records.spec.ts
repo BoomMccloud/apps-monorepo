@@ -329,7 +329,7 @@ test.describe('ENS V1 → V2 migration — records', () => {
   })
 
   test('a pubkey and an interface implementer survive migration', {
-    tag: ['@scenario:GR6', '@scenario:GR7'],
+    tag: ['@scenario:GR6', '@scenario:GR7', '@scenario:GU9'],
   }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
     test.fail(
       true,

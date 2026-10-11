@@ -174,6 +174,8 @@ export type MockV1Node = MockV1NodeKind & {
   readonly ownerAddress?: string
   /** `registration` nodes only — differs from the owner for the managed case. */
   readonly registrantAddress?: string
+  /** `registration` nodes only — no live ENSv2 entry (premigration missing). */
+  readonly unreserved?: boolean
   readonly children?: readonly MockV1Node[]
 }
 

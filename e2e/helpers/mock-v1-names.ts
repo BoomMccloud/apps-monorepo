@@ -71,6 +71,8 @@ export type MockV1Name = {
    * and `ownerAddress` is its manager.
    */
   readonly registrantAddress?: string
+  /** No live ENSv2 entry: bigname's `unresolvable_reason` says so (GA12). */
+  readonly unreserved?: boolean
   /** V1 records set on this name; only their keys are served. */
   readonly records?: {
     readonly texts?: readonly V1TextRecord[]
@@ -141,6 +143,7 @@ function v1Record(n: MockV1Name, now: number) {
         seen_singletons: n.records?.contentHash ? ['contenthash'] : [],
       },
     }),
+    ...(n.unreserved && { unresolvable_reason: 'no_live_ens_v2_entry' }),
     read_status: 'ok',
   }
 }

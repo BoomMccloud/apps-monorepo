@@ -31,10 +31,12 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { createMakeV1Name } from '../../../fixtures/makeV1Name.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { publicClient } from '../../../helpers/anvil-client.js'
+import { isRealBigname } from '../../../helpers/bigname-sync.js'
 import {
   assertLockedTokenRoute,
   assertUnlockedTokenRoute,
   assertV2Reserved,
+  readV2Status,
   readV2TokenRoles,
 } from '../../../helpers/migration-assertions.js'
 import {
@@ -408,5 +410,113 @@ test.describe('ENS V1 → V2 migration — a large mixed batch', () => {
           wrapped: type === 'wrapped',
         })
     }
+  })
+})
+
+test.describe('ENS V1 → V2 migration — names the controllers cannot claim', () => {
+  test.describe.configure({ timeout: 300_000 })
+
+  test('a V1 name with no V2 reservation is listed as not upgradable, with that reason', {
+    tag: ['@scenario:GA12'],
+  }, async ({ migrationConnectedPage: page, accounts }) => {
+    test.skip(
+      isRealBigname,
+      'the local bigname answers not_found for a V1 name with no V2 entry, so it never lists it; the not-reserved bucket needs the route mock',
+    )
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const makeV1Name = createMakeV1Name({ userAccount: owner })
+    const unreserved = await makeV1Name({
+      label: 'ga12-unreserved',
+      reserveInV2: false,
+    })
+    const control = await makeV1Name({ label: 'ga12-control' })
+    expect(
+      await readV2Status(labelOf(unreserved)),
+      'precondition: no V2 entry at all (AVAILABLE)',
+    ).toBe(0)
+
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: [
+        { kind: 'registration', label: labelOf(unreserved), unreserved: true },
+        { kind: 'registration', label: labelOf(control) },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, control)).toBeVisible({ timeout: 60_000 })
+    await expect(
+      rootRow(page, unreserved),
+      'a name the controller cannot claim is not selectable',
+    ).toHaveCount(0)
+    await expect(
+      page.getByRole('heading', { name: "These names can't be upgraded" }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('listitem').filter({ hasText: unreserved }),
+      'the name is listed with the reason',
+    ).toContainText('it has no ENSv2 reservation.')
+  })
+
+  /** Migrate `gm5-…` with a control beside it, then reopen /upgrade with the stale listing. */
+  async function reopenAfterMigrating(
+    page: Page,
+    wallet: Parameters<typeof confirmAndAuthorize>[1],
+    owner: ReturnType<typeof privateKeyToAccount>,
+  ): Promise<{ done: string; control: string }> {
+    const makeV1Name = createMakeV1Name({ userAccount: owner })
+    const done = await makeV1Name({ label: 'gm5-done' })
+    const control = await makeV1Name({ label: 'gm5-control' })
+    await serveV1Names(page, {
+      ownerAddress: owner.address,
+      roots: [done, control].map((name) => ({
+        kind: 'registration' as const,
+        label: labelOf(name),
+      })),
+    })
+    await migrate(page, wallet, [done])
+    await assertUnlockedTokenRoute(labelOf(done), namehash(done), {
+      wrapped: false,
+    })
+    // A fresh page with the same stale listing: the index still says V1.
+    await page.reload()
+    await openMigrationFlow(page)
+    await expect(rootRow(page, control)).toBeVisible({ timeout: 60_000 })
+    return { done, control }
+  }
+
+  test('a name that already migrated is not offered again, even while the index still lists it as V1', {
+    tag: ['@scenario:GU6'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    test.skip(
+      isRealBigname,
+      'a live bigname flips the name to ENSv2 within a second; the stale listing needs the route mock',
+    )
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const { done } = await reopenAfterMigrating(page, wallet, owner)
+    await expect(
+      rootRow(page, done),
+      'an already-migrated name must not be selectable again',
+    ).toHaveCount(0)
+  })
+
+  test('an already-migrated name the index still lists is shown with the reason', {
+    tag: ['@scenario:GM5'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    test.skip(
+      isRealBigname,
+      'a live bigname flips the name to ENSv2 within a second; the stale listing needs the route mock',
+    )
+    test.fail(
+      true,
+      'E2E-026: `already-migrated` is never emitted; the name silently drops off the list',
+    )
+    const owner = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const { done } = await reopenAfterMigrating(page, wallet, owner)
+    await expect(
+      page.getByRole('listitem').filter({ hasText: done }),
+      'the name is accounted for, with why it cannot be upgraded',
+    ).toContainText(/already (been )?upgraded|already migrated/i, {
+      timeout: 15_000,
+    })
   })
 })

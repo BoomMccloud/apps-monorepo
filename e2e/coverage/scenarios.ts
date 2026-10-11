@@ -1541,7 +1541,7 @@ const migrationGU: Scenario[] = suite('G.GU', 'migration', 'manager', 'P3', [
   [
     'GU6',
     'Migration idempotence',
-    'an already-migrated name is blocked, with the reason named (see GM5)',
+    'an already-migrated name cannot be selected or migrated twice, even while the index still lists it as V1 (the reason is GM5’s, open as E2E-026)',
     { planId: 'G26' },
   ],
   [

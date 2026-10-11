@@ -96,6 +96,11 @@ function labelHashBigInt(label: string): bigint {
   return BigInt(keccak256(toHex(label)))
 }
 
+/** The V2 ETH Registry status of `label`.eth (0 AVAILABLE, 1 RESERVED, 2 REGISTERED). */
+export async function readV2Status(label: string): Promise<number> {
+  return readStatus(label)
+}
+
 async function readStatus(label: string): Promise<number> {
   const labelHash = labelHashBigInt(label)
   return publicClient.readContract({
