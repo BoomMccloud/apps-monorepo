@@ -14,6 +14,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/../docker-compose.yml"
 
+# ---------- pinned fork ----------
+# Anvil forks Sepolia at the block in infra/fork-block, not at the latest one:
+# a pinned fork's reads are cached on disk (anvil-fork-cache volume), and so
+# are the bigname router's (bigname-rpc-cache), so after one warm-up run the
+# stack needs no public RPC. Move the pin by editing infra/fork-block (then
+# expect one slower, online run). SEPOLIA_FORK_BLOCK=latest forks the tip.
+: "${SEPOLIA_FORK_BLOCK:=$(tr -d '[:space:]' < "$SCRIPT_DIR/../fork-block")}"
+if [[ "$SEPOLIA_FORK_BLOCK" == "latest" ]]; then SEPOLIA_FORK_BLOCK=""; fi
+export SEPOLIA_FORK_BLOCK
+echo "Anvil fork block: ${SEPOLIA_FORK_BLOCK:-latest}"
+
 # ---------- tear-down shortcut ----------
 if [[ "${1:-}" == "--down" ]]; then
   echo "=== Stopping E2E stack ==="
@@ -103,10 +114,40 @@ check_running "v1-subgraph"
 # DQA overlay service (design-review comments). See e2e/docs/dqa-overlay.md.
 wait_for_service "dqa" 60
 
+# ---------- chain clock ----------
+# A pinned fork starts at its block's timestamp, which falls further behind the
+# wall clock every day; intents and sessions are dated by the wall clock, and
+# HCA registration fails when the chain lags it (memory: anvil clock drift).
+# Step a fresh chain forward to now. Never backwards: time tests warp ahead.
+sync_chain_clock() {
+  local chain_ts now
+  chain_ts=$(curl -fsS -X POST -H 'content-type: application/json' \
+    --data '{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]}' \
+    http://127.0.0.1:8545 | python3 -c "import sys,json; print(int(json.load(sys.stdin)['result']['timestamp'],16))")
+  now=$(date +%s)
+  if (( chain_ts < now - 60 )); then
+    echo "  Chain clock $(( (now - chain_ts) / 3600 ))h behind; stepping it to now"
+    curl -fsS -X POST -H 'content-type: application/json' \
+      --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$now]}" \
+      http://127.0.0.1:8545 >/dev/null
+    curl -fsS -X POST -H 'content-type: application/json' \
+      --data '{"jsonrpc":"2.0","id":1,"method":"evm_mine","params":[]}' \
+      http://127.0.0.1:8545 >/dev/null
+  fi
+}
+sync_chain_clock
+
 # ---------- bigname (the manager's indexer) ----------
 # Runs only when the patched image has been built (e2e/infra/bigname/README.md).
-# bigname cannot follow a different fork with the database it indexed the last
-# one into, so the database is wiped whenever Anvil's fork block changes.
+# bigname cannot follow a different chain with the database it indexed the last
+# one into. With a pinned fork the block alone no longer tells chains apart (a
+# restarted Anvil forks the same block and discards its local history), so the
+# database is wiped whenever Anvil (re)starts too — keyed on its start time.
+anvil_identity() {
+  echo "$(anvil_fork_block)/$(docker inspect -f '{{.State.StartedAt}}' \
+    "$(docker compose -f "$COMPOSE_FILE" ps -q anvil)" | cut -c1-23)"
+}
+
 anvil_fork_block() {
   curl -fsS -X POST -H 'content-type: application/json' \
     --data '{"jsonrpc":"2.0","id":1,"method":"anvil_nodeInfo","params":[]}' \
@@ -121,10 +162,10 @@ bigname_psql() {
 if docker image inspect "$BIGNAME_IMAGE" >/dev/null 2>&1; then
   echo ""
   echo "=== Starting bigname ==="
-  FORK_BLOCK=$(anvil_fork_block)
-  INDEXED_FORK=$(bigname_psql "SELECT fork_block FROM public.e2e_fork" 2>/dev/null || true)
-  if [[ "$INDEXED_FORK" != "$FORK_BLOCK" ]]; then
-    echo "  Anvil forked at $FORK_BLOCK (bigname indexed: ${INDEXED_FORK:-nothing})"
+  ANVIL_ID=$(anvil_identity)
+  INDEXED=$(bigname_psql "SELECT fork_block || '/' || coalesce(anvil_id, '') FROM public.e2e_fork" 2>/dev/null || true)
+  if [[ "$INDEXED" != "$ANVIL_ID" ]]; then
+    echo "  Anvil is $ANVIL_ID (bigname indexed: ${INDEXED:-nothing})"
     bash "$SCRIPT_DIR/reset-bigname.sh"
   else
     docker compose -f "$COMPOSE_FILE" --profile bigname up -d

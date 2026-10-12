@@ -56,6 +56,14 @@
 #      resolved version in the trailing comment so the pin stays legible.
 
 services:
+  # A new named volume is root-owned and Anvil runs as `foundry` (uid 1000),
+  # so without this its fork cache is never written — silently.
+  anvil-cache-init:
+    image: alpine:3.20
+    command: ["chown", "-R", "1000:1000", "/cache"]
+    volumes:
+      - anvil-fork-cache:/cache
+
   anvil:
     # anvil 1.7.1 (Commit SHA 4072e48705af9d93e3c0f6e29e93b5e9a40caed8).
     # Do not move this to `:latest` — see the note above.
@@ -66,10 +74,23 @@ services:
           - anvil
     # The Foundry image entrypoint is "/bin/sh -c" which swallows list-style
     # command args.  Override to call anvil directly so all flags are passed.
+    depends_on:
+      anvil-cache-init:
+        condition: service_completed_successfully
     entrypoint: ["anvil"]
     command:
+      # Pinned to SEPOLIA_FORK_BLOCK (start-local-env.sh reads it from
+      # infra/fork-block). A pinned fork caches every upstream read in
+      # ~/.foundry/cache/rpc/sepolia/<block>/storage.json, kept on the
+      # anvil-fork-cache volume, so after one warm-up run Anvil answers from
+      # disk; --fork-chain-id lets it start without asking the network.
       - --fork-url
       - ${SEPOLIA_FORK_URL:-https://lb.drpc.live/sepolia/AnmpasF2C0JBqeAEzxVO8aTDnH6wviUR8JD3QmlfqV1j}
+      # --fork-chain-id needs an explicit block; -1 (latest - 1) when unpinned.
+      - --fork-block-number
+      - "${SEPOLIA_FORK_BLOCK:--1}"
+      - --fork-chain-id
+      - "11155111"
       - --chain-id
       - "11155111"
       - --port
@@ -92,6 +113,12 @@ services:
       - '1024'
     ports:
       - "8545:8545"
+    volumes:
+      - anvil-fork-cache:/home/foundry/.foundry/cache
+    # Anvil writes the fork cache to disk on a clean shutdown; SIGINT is the
+    # signal it handles as one.
+    stop_signal: SIGINT
+    stop_grace_period: 30s
     healthcheck:
       # eth_chainId ensures RPC is ready for Alto; start_period gives fork time to init
       test: ["CMD", "cast", "rpc", "eth_chainId"]
@@ -365,8 +392,14 @@ services:
     command: ["node", "/fork-rpc.mjs"]
     volumes:
       - ./bigname/fork-rpc.mjs:/fork-rpc.mjs:ro
+      # Upstream answers for blocks at or below the fork never change; kept
+      # here they are served from disk on every later reset (fork-rpc.mjs).
+      - bigname-rpc-cache:/cache
     environment:
       - PORT=8547
+      - CACHE_DIR=/cache
+      # 1 = never contact the upstream; a cache miss is an error.
+      - FORK_RPC_OFFLINE=${FORK_RPC_OFFLINE:-0}
       - ANVIL_RPC_URL=http://anvil:8545
       # Its own override: bigname's startup check and backfill read old headers
       # (down to genesis), which a pruned provider that is fine for Anvil's
@@ -581,6 +614,10 @@ secrets:
     environment: GH_TOKEN
 
 volumes:
+  anvil-fork-cache:
+    driver: local
+  bigname-rpc-cache:
+    driver: local
   panoptes-data:
     driver: local
   bigname-data:

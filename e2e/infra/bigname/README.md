@@ -64,8 +64,46 @@ The runner reads the chain through `bigname-rpc`, not Anvil. A backfill asks
 for every header and log in its range; sent to Anvil, each is forwarded to the
 upstream RPC one by one, and Anvil stops answering anyone else (measured:
 `eth_blockNumber` timing out after 30s). Blocks at or below the fork block are
-identical upstream, so the router sends those reads straight there and the
-rest to Anvil.
+identical upstream, so the router sends those reads straight there (through
+its disk cache) and the rest to Anvil. Transaction lookups go to Anvil first:
+asking upstream first cost a public request per test transaction.
+
+## Running without a public RPC
+
+The fork is pinned (`e2e/infra/fork-block`, read by `start-local-env.sh`), and
+every read that has to leave the machine is cached on disk:
+
+- **Anvil** caches its fork reads in
+  `~/.foundry/cache/rpc/sepolia/<block>/storage.json` on the
+  `anvil-fork-cache` volume, written when Anvil stops (compose sends SIGINT).
+  `--fork-chain-id` lets it start without asking the network.
+- **bigname-rpc** caches every upstream answer (blocks, logs and
+  transactions at or below the fork, which never change) on the
+  `bigname-rpc-cache` volume.
+
+The first run against a new pin is online and slower; it warms both caches.
+After that the stack needs no public RPC for anything a previous run touched.
+To prove it, start with no reachable upstream and the router refusing to ask:
+
+```sh
+SEPOLIA_FORK_URL=http://127.0.0.1:9 BIGNAME_UPSTREAM_RPC_URL=http://127.0.0.1:9 \
+  FORK_RPC_OFFLINE=1 bash e2e/infra/scripts/start-local-env.sh
+docker compose -f e2e/infra/docker-compose.yml --profile bigname logs bigname-rpc | grep cache:
+```
+
+A miss then shows as an error rather than a request. Stop Anvil with
+`docker compose ... stop anvil` (not `kill`) or its new reads are not saved.
+
+**Moving the pin** (after an ENS redeploy on Sepolia, or when you need newer
+Sepolia state): write the new block to `e2e/infra/fork-block`, run online once
+to warm the caches, and commit the file. `SEPOLIA_FORK_BLOCK=latest` forks the
+tip for a one-off run.
+
+**Chain clock.** A pinned fork starts at its block's timestamp. On a fresh
+chain `start-local-env.sh` steps the clock forward to the wall clock (never
+back), because intents and sessions are dated by the wall clock. A restarted
+Anvil (new start time) also resets bigname, since the same fork block no longer
+identifies the chain.
 
 ## Limits
 

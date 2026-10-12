@@ -27,10 +27,13 @@ docker volume ls -q --filter label=com.docker.compose.volume=bigname-data |
 until "${COMPOSE[@]}" exec -T bigname-postgres pg_isready -U bigname -d bigname >/dev/null 2>&1; do
   sleep 1
 done
-# Which fork this database indexes; start-local-env.sh compares it with Anvil.
+# Which chain this database indexes — fork block and Anvil start time, since a
+# pinned fork reuses the block; start-local-env.sh compares it with Anvil.
+anvil_id=$(docker inspect -f '{{.State.StartedAt}}' "$("${COMPOSE[@]}" ps -q anvil)" | cut -c1-23)
 "${COMPOSE[@]}" exec -T bigname-postgres psql -U bigname -d bigname -qtAc \
-  "CREATE TABLE IF NOT EXISTS public.e2e_fork (fork_block bigint);
+  "CREATE TABLE IF NOT EXISTS public.e2e_fork (fork_block bigint, anvil_id text);
+   ALTER TABLE public.e2e_fork ADD COLUMN IF NOT EXISTS anvil_id text;
    DELETE FROM public.e2e_fork;
-   INSERT INTO public.e2e_fork VALUES ($fork_block)"
+   INSERT INTO public.e2e_fork VALUES ($fork_block, '$anvil_id')"
 
 bash "$SCRIPT_DIR/wait-for-bigname.sh" "${1:-900}"

@@ -9,13 +9,76 @@
 // (local blocks, the latest/safe/finalized tags, local transactions) to
 // Anvil.
 //
+// Every upstream answer it uses describes a block at or below the fork, which
+// never changes, so it is kept on disk (CACHE_DIR) and served from there on
+// every later reset. With a pinned fork block (start-local-env.sh) a warmed
+// cache makes the whole stack independent of the public RPC; set
+// FORK_RPC_OFFLINE=1 to make a cache miss an error rather than a request.
+//
 // Zero dependencies; node:22 runs it as is.
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import http from 'node:http'
+import path from 'node:path'
 
 const PORT = Number(process.env.PORT ?? 8547)
 const ANVIL = process.env.ANVIL_RPC_URL ?? 'http://anvil:8545'
 const UPSTREAM = process.env.UPSTREAM_RPC_URL
-if (!UPSTREAM) throw new Error('UPSTREAM_RPC_URL is required')
+const OFFLINE = process.env.FORK_RPC_OFFLINE === '1'
+if (!UPSTREAM && !OFFLINE)
+  throw new Error('UPSTREAM_RPC_URL is required (or FORK_RPC_OFFLINE=1)')
+const CACHE_DIR = process.env.CACHE_DIR
+if (CACHE_DIR) await mkdir(CACHE_DIR, { recursive: true })
+
+const stats = { hits: 0, misses: 0 }
+const cachePath = ({ method, params = [] }) =>
+  path.join(
+    CACHE_DIR,
+    `${createHash('sha256')
+      .update(`${method}:${JSON.stringify(params)}`)
+      .digest('hex')}.json`,
+  )
+
+/** The cached `result` for an upstream request, or undefined. */
+async function cached(request) {
+  if (!CACHE_DIR) return undefined
+  try {
+    const result = JSON.parse(await readFile(cachePath(request), 'utf8'))
+    stats.hits++
+    return result
+  } catch {
+    return undefined
+  }
+}
+
+async function store(request, reply) {
+  // Only a real answer is worth keeping: an error or a null (a hash upstream
+  // does not know) may change.
+  if (!CACHE_DIR || reply.error || reply.result == null) return
+  const file = cachePath(request)
+  const tmp = `${file}.${process.pid}.tmp`
+  await writeFile(tmp, JSON.stringify(reply.result))
+  await rename(tmp, file)
+}
+
+/** An upstream request, answered from the cache when it can be. */
+async function upstream(request) {
+  const hit = await cached(request)
+  if (hit !== undefined) return { jsonrpc: '2.0', id: request.id, result: hit }
+  stats.misses++
+  if (OFFLINE)
+    return {
+      jsonrpc: '2.0',
+      id: request.id,
+      error: {
+        code: -32603,
+        message: `fork-rpc offline: no cached answer for ${request.method}`,
+      },
+    }
+  const reply = await post(UPSTREAM, request)
+  await store(request, reply)
+  return reply
+}
 
 let forkBlock = null
 
@@ -69,13 +132,36 @@ async function post(url, body) {
   throw lastError
 }
 
-/** Upstream batches go out in chunks the public endpoint answers quickly. */
+/**
+ * Upstream batches: cached answers first, the rest out in chunks the public
+ * endpoint answers quickly.
+ */
 async function postUpstreamBatch(requests) {
+  const hits = await Promise.all(requests.map(cached))
+  const answered = []
+  const missing = []
+  requests.forEach((request, i) => {
+    if (hits[i] === undefined) missing.push(request)
+    else answered.push({ jsonrpc: '2.0', id: request.id, result: hits[i] })
+  })
+  if (missing.length === 0) return answered
+  stats.misses += missing.length
+  if (OFFLINE)
+    return [...answered, ...(await Promise.all(missing.map(upstream)))]
   const chunks = []
-  for (let i = 0; i < requests.length; i += UPSTREAM_CHUNK)
-    chunks.push(requests.slice(i, i + UPSTREAM_CHUNK))
-  const replies = await Promise.all(chunks.map((c) => post(UPSTREAM, c)))
-  return replies.flat()
+  for (let i = 0; i < missing.length; i += UPSTREAM_CHUNK)
+    chunks.push(missing.slice(i, i + UPSTREAM_CHUNK))
+  const replies = (
+    await Promise.all(chunks.map((c) => post(UPSTREAM, c)))
+  ).flat()
+  const byId = new Map(missing.map((r) => [r.id, r]))
+  await Promise.all(
+    replies.map((reply) => {
+      const request = byId.get(reply.id)
+      return request ? store(request, reply) : undefined
+    }),
+  )
+  return [...answered, ...replies]
 }
 
 async function refreshForkBlock() {
@@ -114,11 +200,12 @@ function route(request) {
         return 'split'
       return 'anvil'
     }
-    // Pre-fork transactions are found upstream; a local one is not, and
-    // falls back to Anvil (see `call`).
+    // Local transactions are Anvil's; only a hash Anvil does not know is
+    // looked up upstream (a pre-fork one). Asking upstream first cost a
+    // public request per test transaction and drew 429s that stalled bigname.
     case 'eth_getTransactionReceipt':
     case 'eth_getTransactionByHash':
-      return 'upstream-then-anvil'
+      return 'anvil-then-upstream'
     default:
       return 'anvil'
   }
@@ -127,15 +214,15 @@ function route(request) {
 async function call(request) {
   const target = route(request)
   if (target === 'anvil') return post(ANVIL, request)
-  if (target === 'upstream') return post(UPSTREAM, request)
-  if (target === 'upstream-then-anvil') {
-    const reply = await post(UPSTREAM, request)
-    return reply.result ? reply : post(ANVIL, request)
+  if (target === 'upstream') return upstream(request)
+  if (target === 'anvil-then-upstream') {
+    const reply = await post(ANVIL, request)
+    return reply.result ? reply : upstream(request)
   }
   // split
   const filter = request.params[0]
   const [below, above] = await Promise.all([
-    post(UPSTREAM, {
+    upstream({
       ...request,
       params: [{ ...filter, toBlock: hex(forkBlock) }],
     }),
@@ -200,6 +287,16 @@ const server = http.createServer(async (req, res) => {
 await refreshForkBlock()
 // Anvil may be recreated under us with a new fork block.
 setInterval(refreshForkBlock, 30_000)
+// One line a minute when the cache did anything: proof of offline readiness.
+setInterval(() => {
+  if (stats.hits + stats.misses === 0) return
+  console.log(`[fork-rpc] cache: ${stats.hits} hits, ${stats.misses} misses`)
+  stats.hits = 0
+  stats.misses = 0
+}, 60_000)
 server.listen(PORT, () =>
-  console.log(`[fork-rpc] :${PORT} fork block ${forkBlock} anvil ${ANVIL}`),
+  console.log(
+    `[fork-rpc] :${PORT} fork block ${forkBlock} anvil ${ANVIL}` +
+      `${CACHE_DIR ? ` cache ${CACHE_DIR}` : ''}${OFFLINE ? ' OFFLINE' : ''}`,
+  ),
 )
