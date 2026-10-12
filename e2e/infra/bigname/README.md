@@ -73,10 +73,14 @@ asking upstream first cost a public request per test transaction.
 The fork is pinned (`e2e/infra/fork-block`, read by `start-local-env.sh`), and
 every read that has to leave the machine is cached on disk:
 
-- **Anvil** caches its fork reads in
-  `~/.foundry/cache/rpc/sepolia/<block>/storage.json` on the
-  `anvil-fork-cache` volume, written when Anvil stops (compose sends SIGINT).
-  `--fork-chain-id` lets it start without asking the network.
+- **Anvil** forks through `upstream-cache` (`upstream-cache.mjs`), a caching
+  proxy in front of `SEPOLIA_FORK_URL`. At a pinned block every upstream read
+  names that block (the fork header, code, storage, balances), so each answer
+  is kept on the `anvil-upstream-cache` volume and never asked again; with
+  `--fork-chain-id` Anvil then starts and runs with the upstream unreachable.
+  Anvil's own `storage.json` cache (`anvil-fork-cache`, written on SIGINT) is
+  kept too, but on its own it cannot start Anvil offline: Anvil still fetches
+  the fork block's header.
 - **bigname-rpc** caches every upstream answer (blocks, logs and
   transactions at or below the fork, which never change) on the
   `bigname-rpc-cache` volume.
@@ -91,8 +95,9 @@ SEPOLIA_FORK_URL=http://127.0.0.1:9 BIGNAME_UPSTREAM_RPC_URL=http://127.0.0.1:9 
 docker compose -f e2e/infra/docker-compose.yml --profile bigname logs bigname-rpc | grep cache:
 ```
 
-A miss then shows as an error rather than a request. Stop Anvil with
-`docker compose ... stop anvil` (not `kill`) or its new reads are not saved.
+`FORK_RPC_OFFLINE=1` puts both caches in refuse mode: a miss is an error,
+visible in their logs (`[upstream-cache] … misses`, `[fork-rpc] cache: …`) and
+in Anvil's (`no cached answer for …`), rather than a request.
 
 **Moving the pin** (after an ENS redeploy on Sepolia, or when you need newer
 Sepolia state): write the new block to `e2e/infra/fork-block`, run online once

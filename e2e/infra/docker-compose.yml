@@ -56,6 +56,26 @@
 #      resolved version in the trailing comment so the pin stays legible.
 
 services:
+  # Anvil's fork upstream, cached on disk (bigname/upstream-cache.mjs). At a
+  # pinned fork every upstream read names that block, so once warm Anvil
+  # starts and runs with no public RPC; UPSTREAM_CACHE_OFFLINE=1 proves it.
+  upstream-cache:
+    image: node:22-alpine
+    networks:
+      e2e:
+        aliases:
+          - upstream-cache
+    command: ["node", "/upstream-cache.mjs"]
+    volumes:
+      - ./bigname/upstream-cache.mjs:/upstream-cache.mjs:ro
+      - anvil-upstream-cache:/cache
+    environment:
+      - PORT=8548
+      - CACHE_DIR=/cache
+      - UPSTREAM_RPC_URL=${SEPOLIA_FORK_URL:-https://lb.drpc.live/sepolia/AnmpasF2C0JBqeAEzxVO8aTDnH6wviUR8JD3QmlfqV1j}
+      - UPSTREAM_CACHE_OFFLINE=${FORK_RPC_OFFLINE:-0}
+    restart: on-failure
+
   # A new named volume is root-owned and Anvil runs as `foundry` (uid 1000),
   # so without this its fork cache is never written — silently.
   anvil-cache-init:
@@ -77,6 +97,8 @@ services:
     depends_on:
       anvil-cache-init:
         condition: service_completed_successfully
+      upstream-cache:
+        condition: service_started
     entrypoint: ["anvil"]
     command:
       # Pinned to SEPOLIA_FORK_BLOCK (start-local-env.sh reads it from
@@ -84,8 +106,10 @@ services:
       # ~/.foundry/cache/rpc/sepolia/<block>/storage.json, kept on the
       # anvil-fork-cache volume, so after one warm-up run Anvil answers from
       # disk; --fork-chain-id lets it start without asking the network.
+      # Through upstream-cache, which forwards to SEPOLIA_FORK_URL and keeps
+      # every answer at the pinned block on disk.
       - --fork-url
-      - ${SEPOLIA_FORK_URL:-https://lb.drpc.live/sepolia/AnmpasF2C0JBqeAEzxVO8aTDnH6wviUR8JD3QmlfqV1j}
+      - http://upstream-cache:8548
       # --fork-chain-id needs an explicit block; -1 (latest - 1) when unpinned.
       - --fork-block-number
       - "${SEPOLIA_FORK_BLOCK:--1}"
@@ -615,6 +639,8 @@ secrets:
 
 volumes:
   anvil-fork-cache:
+    driver: local
+  anvil-upstream-cache:
     driver: local
   bigname-rpc-cache:
     driver: local
