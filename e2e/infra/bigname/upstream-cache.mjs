@@ -37,7 +37,9 @@ const cacheable = ({ params = [] }) =>
 const cachePath = ({ method, params = [] }) =>
   path.join(
     CACHE_DIR,
-    `${createHash('sha256').update(`${method}:${JSON.stringify(params)}`).digest('hex')}.json`,
+    `${createHash('sha256')
+      .update(`${method}:${JSON.stringify(params)}`)
+      .digest('hex')}.json`,
   )
 
 async function cached(request) {
