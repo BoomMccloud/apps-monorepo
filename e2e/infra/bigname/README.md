@@ -1,5 +1,8 @@
 # Local bigname for the e2e stack
 
+> Overview of the whole local stack, and of mock vs real index and online vs
+> offline network: [`e2e/docs/local-e2e-stack.md`](../../docs/local-e2e-stack.md).
+
 The manager reads every name from [bigname](https://github.com/ensdomains/bigname)
 (#1324). bigname is hosted only, and the hosted Sepolia API cannot see anything
 the suite creates on the Anvil fork, so the stack runs its own bigname against

@@ -1,5 +1,9 @@
 # Handoff: the e2e stack now runs bigname (2026-10-10)
 
+> **Historical snapshot (2026-10-10).** For how the stack works now — the pinned
+> fork, the RPC caches, online and offline mode — see
+> [`local-e2e-stack.md`](./local-e2e-stack.md).
+
 For the session continuing e2e coverage and execution. Read this before the next
 `/e2e-goal` iteration: the manager no longer reads Panoptes, and the stack it runs
 on changed.
