@@ -6,10 +6,9 @@ offline network). For the bigname image and its runner details see
 [`../infra/bigname/README.md`](../infra/bigname/README.md); this page is the
 overview.
 
-_Status, 2026-10-13: the pinned fork, both caches and the hardened online mode
-are on `e2e-tests-coverage` and in use. Full offline mode is being verified
-(a run comparing an online and an offline pass of the suites); its section is
-marked below until the results are in._
+_Status, 2026-10-14: the pinned fork, both caches, online mode and full
+offline mode are on `e2e-tests-coverage`. Offline mode was verified against an
+online pass of the same suites (results below)._
 
 ---
 
@@ -123,10 +122,16 @@ bigname's router (the pre-fork blocks it indexes).
   transactions) on disk (`bigname-rpc-cache` volume). It looks transactions up
   on Anvil first: asking the public RPC first cost one request per test
   transaction and drew the rate limits that stalled bigname on 2026-10-12.
-- **Chain clock.** A pinned fork starts at its block's timestamp. On a fresh
-  chain `start-local-env.sh` steps the clock forward to now (never back):
-  intents and sessions are dated by the wall clock, and HCA registration fails
-  when the chain lags it.
+- **Chain clock and finality.** A pinned fork starts at its block's
+  timestamp, and Anvil reports `safe` and `finalized` 1,024 and 2,048 blocks
+  behind the head. bigname polls both, so for the first 2,048 blocks after a
+  restart they fall before the fork and Anvil fetches them from the network
+  (about 285 KB each), which stalls bigname offline. On a fresh fork
+  `start-local-env.sh` therefore mines 2,048 empty blocks one second apart,
+  ending at the wall clock: `safe`/`finalized` are local blocks from the start,
+  and the clock is at now (intents and sessions are dated by the wall clock;
+  HCA registration fails when the chain lags it). Later starts only step the
+  clock forward, never back.
 
 ### Online mode (default)
 
@@ -138,15 +143,18 @@ Measured on 2026-10-12/13:
 - Anvil asks the public RPC only for state it has not seen (about 130 requests
   a minute during a suite run, within free-tier limits).
 
-Set the upstreams when you start the stack; one needs genesis/old headers:
+Both upstreams must be **archive** nodes: Anvil's reads all name the pinned
+block, and bigname's router reads old headers. publicnode prunes Sepolia
+history (on 2026-10-13 its earliest block was 11898570, past the pin), so it
+cannot serve them; Tenderly, drpc and 1rpc can.
 
 ```sh
-SEPOLIA_FORK_URL=https://ethereum-sepolia-rpc.publicnode.com \
+SEPOLIA_FORK_URL=https://sepolia.gateway.tenderly.co \
 BIGNAME_UPSTREAM_RPC_URL=https://sepolia.gateway.tenderly.co \
   bash e2e/infra/scripts/start-local-env.sh
 ```
 
-### Offline mode — _being verified_
+### Offline mode
 
 `FORK_RPC_OFFLINE=1`, upstreams pointed nowhere. Nothing leaves the machine.
 
@@ -166,12 +174,34 @@ FORK_RPC_OFFLINE=1 bash e2e/infra/scripts/start-local-env.sh
   empty one it would have given offline and logs each difference
   (`non-empty first read: …`, and a count in its per-minute stats line). After
   a warm-up that count should stay at 0; if it does not, offline answers for
-  those reads would be wrong.
+  those reads would be wrong. The EIP-2935 block-hash contract
+  (`0x0000F908…2935`) is left out of the check: each new block makes Anvil
+  load the slot it is about to overwrite, which on Sepolia holds an older
+  hash, and nothing reads that old value back.
 - Logs show what happened: `docker compose -f e2e/infra/docker-compose.yml logs
   upstream-cache` (hits, misses, answered empty) and `… --profile bigname logs
   bigname-rpc` (cache hits and misses).
 
-_Results of the verification run go here._
+**Verification, 2026-10-13/14.** A fresh fork each time, the manager suites
+in real mode against 3012, first online (warm caches), then offline with both
+upstreams pointed at a dead port:
+
+| Suite | Online pass / fail / skip | Offline pass / fail / skip |
+| --- | --- | --- |
+| migration | 50 / 12 / 4 | 49 / 13 / 4 |
+| migration-time | 11 / 0 / 0 | 11 / 0 / 0 |
+| manager | 46 / 9 / 7 | 46 / 9 / 7 |
+
+- The failing tests are the same online and offline, except one: GA3
+  (`migration-approvals.spec.ts:265`), whose new name did not appear in the
+  upgrade list once. Rerun offline on its own it passed twice: a flake, not
+  offline mode.
+- Offline, `upstream-cache` answered 15–20 unseen reads a minute as empty and
+  bigname's router had no misses. bigname reached the head within seconds of
+  starting, offline, from its cache.
+- The online safety check found 11 non-empty first reads: 9 in the block-hash
+  contract (now left out, see above) and 2 for an account whose earlier read
+  had failed upstream (cached since). None of them affects offline answers.
 
 ### Moving the pin
 
@@ -212,6 +242,7 @@ Workers runtimes collide at startup.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `bigname did not publish block … within 60000ms` | router upstream rate-limited (429) | online: switch `BIGNAME_UPSTREAM_RPC_URL`; the cache prevents a repeat |
+| paymaster restarts with `pruned history unavailable` | the fork upstream is not an archive node (publicnode) | use Tenderly or drpc for `SEPOLIA_FORK_URL` |
 | every test times out, Anvil exited 133 | public RPC dropped a connection mid-read | restart the stack; offline mode avoids it |
 | suite-wide hangs after the laptop slept | Docker/OrbStack hang after sleep | `caffeinate -i` for long runs; restart OrbStack |
 | "Couldn't prepare your upgrade" for a moment after a migration | bigname has not indexed the parent's migration yet | wait a second; it clears |

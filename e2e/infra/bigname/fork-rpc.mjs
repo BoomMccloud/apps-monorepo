@@ -66,6 +66,14 @@ async function upstream(request) {
   const hit = await cached(request)
   if (hit !== undefined) return { jsonrpc: '2.0', id: request.id, result: hit }
   stats.misses++
+  // A hash Anvil does not know and the cache has never seen is not a
+  // pre-fork transaction we need: answer "not found" rather than fail.
+  if (
+    OFFLINE &&
+    (request.method === 'eth_getTransactionReceipt' ||
+      request.method === 'eth_getTransactionByHash')
+  )
+    return { jsonrpc: '2.0', id: request.id, result: null }
   if (OFFLINE)
     return {
       jsonrpc: '2.0',

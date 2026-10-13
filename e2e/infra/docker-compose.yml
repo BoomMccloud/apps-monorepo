@@ -9,7 +9,9 @@
 #   VITE_PIMLICO_BUNDLER_URL=http://localhost:3000/alto  (proxy avoids CORS; see vite.config.ts)
 #
 # Optional: override fork URL (e.g. for CI)
-#   SEPOLIA_FORK_URL=https://ethereum-sepolia-rpc.publicnode.com
+#   SEPOLIA_FORK_URL=https://sepolia.gateway.tenderly.co
+#   (an archive node: it must serve state at the pinned block in fork-block;
+#   publicnode prunes history and stops serving it within days)
 #
 # Paymaster is optional; host port 3002 to avoid clashing with app.
 #

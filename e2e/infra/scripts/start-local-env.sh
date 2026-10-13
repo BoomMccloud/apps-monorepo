@@ -114,25 +114,39 @@ check_running "v1-subgraph"
 # DQA overlay service (design-review comments). See e2e/docs/dqa-overlay.md.
 wait_for_service "dqa" 60
 
-# ---------- chain clock ----------
-# A pinned fork starts at its block's timestamp, which falls further behind the
-# wall clock every day; intents and sessions are dated by the wall clock, and
-# HCA registration fails when the chain lags it (memory: anvil clock drift).
-# Step a fresh chain forward to now. Never backwards: time tests warp ahead.
+# ---------- chain clock and finality ----------
+# Two things a fresh pinned fork gets wrong, fixed together:
+# 1. Its clock starts at the fork block's timestamp, which falls further behind
+#    the wall clock every day; intents and sessions are dated by the wall clock,
+#    and HCA registration fails when the chain lags it.
+# 2. Anvil runs with --slots-in-an-epoch 1024, so `safe` and `finalized` sit
+#    1,024 and 2,048 blocks below the head — below the fork for the first 2,048
+#    blocks. bigname polls both, so Anvil keeps fetching pre-fork headers (with
+#    full transactions) from the public RPC; offline those are missing and
+#    bigname stalls.
+# On a fresh chain, mine 2,048 empty blocks one second apart, ending now: the
+# clock is current and both tags are local blocks from the start. On a chain
+# that has moved on, only step the clock forward (never back: time tests warp
+# ahead).
+FINALITY_DEPTH=2048
+rpc() {
+  curl -fsS -X POST -H 'content-type: application/json' --data "$1" http://127.0.0.1:8545
+}
 sync_chain_clock() {
-  local chain_ts now
-  chain_ts=$(curl -fsS -X POST -H 'content-type: application/json' \
-    --data '{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]}' \
-    http://127.0.0.1:8545 | python3 -c "import sys,json; print(int(json.load(sys.stdin)['result']['timestamp'],16))")
+  local head chain_ts now fork
+  read -r head chain_ts < <(rpc '{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]}' |
+    python3 -c "import sys,json; b=json.load(sys.stdin)['result']; print(int(b['number'],16), int(b['timestamp'],16))")
+  fork=$(rpc '{"jsonrpc":"2.0","id":1,"method":"anvil_nodeInfo","params":[]}' |
+    python3 -c "import sys,json; print(json.load(sys.stdin)['result']['forkConfig']['forkBlockNumber'])")
   now=$(date +%s)
-  if (( chain_ts < now - 60 )); then
+  if (( head < fork + FINALITY_DEPTH )) && (( chain_ts < now - FINALITY_DEPTH )); then
+    echo "  Fresh fork: mining $FINALITY_DEPTH blocks up to now (clock $(( (now - chain_ts) / 3600 ))h behind)"
+    rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$(( now - FINALITY_DEPTH + 1 ))]}" >/dev/null
+    rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"anvil_mine\",\"params\":[\"0x$(printf '%x' $FINALITY_DEPTH)\",\"0x1\"]}" >/dev/null
+  elif (( chain_ts < now - 60 )); then
     echo "  Chain clock $(( (now - chain_ts) / 3600 ))h behind; stepping it to now"
-    curl -fsS -X POST -H 'content-type: application/json' \
-      --data "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$now]}" \
-      http://127.0.0.1:8545 >/dev/null
-    curl -fsS -X POST -H 'content-type: application/json' \
-      --data '{"jsonrpc":"2.0","id":1,"method":"evm_mine","params":[]}' \
-      http://127.0.0.1:8545 >/dev/null
+    rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$now]}" >/dev/null
+    rpc '{"jsonrpc":"2.0","id":1,"method":"evm_mine","params":[]}' >/dev/null
   fi
 }
 sync_chain_clock
