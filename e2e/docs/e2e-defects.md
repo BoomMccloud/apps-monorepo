@@ -78,32 +78,6 @@ that's worth a second look.
 | E2E-002 | F5 | portal | S1 | Transfer to a non-receiver contract detaches the resolver irreversibly, then hangs — token never moves, no error shown | `buildTransferPlan` must not execute `detach-resolver` before a `transfer-token` that cannot succeed; `test_safeTransferFrom_invalidReceiver` must surface as an error, not a stall (plan §5.F F5, and the S1 rule in e2e-goal.md) | `pnpm e2e:portal --grep "@scenario:F5"` | _pending_ | open |
 | E2E-001 | F1 | portal | S1 | Migrated locked V1 name offered a `detach-registry` step its owner cannot execute — `detach-resolver` had already run irreversibly | Owner lacks `ROLE_SET_SUBREGISTRY` on the locked name's `WrapperRegistry`, so `buildTransferPlan` must not offer the step. Measured in [`transfer-web446-test-plan.md`](./transfer-web446-test-plan.md) §2 finding F1 | `pnpm e2e:portal --grep "without offering the registry detach it cannot perform"` | _pending_ | **verified** |
 
-### E2E-009's evidence, and why it still says `fixed` rather than `verified`
-
-The regression test has been observed green **three times** (4.1m, 3.7m, and a
-third run) against a fully synced Panoptes, and — the check that matters — it
-**fails** against a tree without the fix. Two failures along the way were both
-environmental and both are accounted for: the 30s assertion timeout it
-inherited (see SUB-F1 in the WEB-128 plan; the panel now takes ~29s on a local
-fork) and one transient `waitForIndexedRoles` miss while Panoptes was still
-chewing through the flood's own events.
-
-It is not marked `verified` because this register reserves that for a run
-recorded by `pnpm e2e:coverage --results`, and **there is currently no way to
-produce that file locally**: `playwright.config.base.ts` pins
-`reporter: process.env.CI ? 'github' : 'list'`, and passing `--reporter=json`
-(with or without `PLAYWRIGHT_JSON_OUTPUT_NAME`) does not displace it — the run
-still emits the list reporter and writes no file. `coverage/reconcile.ts` only
-uses `--reporter=json` together with `--list`, which is enumeration, not
-results. Worth fixing separately; until then `verified` is unreachable by the
-documented route for any defect, not just this one.
-
-Status legend for the row above: **fixed** = the code fix landed
-(`f524d71b3`, `dab56ec16` — role validation in `useTransferDetachTargets`) and
-the regression test is committed (`ff2d85b30`), but this register will not say
-`verified` until that test is observed green in a run recorded by
-`pnpm e2e:coverage --results`.
-
 ### E2E-007 is a display bug, not a protocol violation — scope confirmed on-chain
 
 A natural follow-up to E2E-007: once two names share a registry, is it even
@@ -162,7 +136,17 @@ terminal state, so they are tracked here until fixed.
 
 ### Live Sepolia removed two controllers on 2026-10-01, breaking V1 renewal and HCA primary names
 
-The e2e stack forks live Sepolia at its current head, so it inherits these.
+**Status at the pinned fork (block 11898020, re-measured 2026-10-14):** the
+renewer half is resolved — `BaseRegistrar.controllers(ETHRenewerV1)` is `true`
+again, so V1 renewal works and `expectFailureWhileRenewerDeauthorised()` no
+longer marks the grace-period tests. The reverse-registrar half still applies:
+`DefaultReverseRegistrar.controllers(ensDefaultReverseRegistrarAdapter)` is
+`false` (ensjs now names the adapter `0x36f97328…4066`, not the `0x4F32…a6f5`
+below), so `primaryName.spec.ts` still fails. The stack now forks the pinned
+block in `e2e/infra/fork-block`, not the live head, so a later change on
+Sepolia only arrives when the pin moves.
+
+The original finding, when the stack still forked live Sepolia at its head.
 Both came from the BaseRegistrar / DefaultReverseRegistrar owner
 `0x0F32b753aFc8ABad9Ca6fE589F707755f4df2353`, within a minute:
 
@@ -177,7 +161,69 @@ Both came from the BaseRegistrar / DefaultReverseRegistrar owner
 
 **Proof it's the chain, not the code:** on a fresh fork, `main` (`89caa2429`) and #1274's head give identical manager shard 1 results (4 failed, 1 flaky, 2 passed). On a fork taken before 11:53 UTC, the same #1274 head passes (6 passed, 1 flaky).
 
-**Unblock:** either Sepolia's owner restores both controllers, or the app moves to whatever replaced them. `--fork-block-number 11821650` pins the fork from just before the change; that's a stopgap that hides the next live change.
+**Unblock (reverse registrar):** either Sepolia's owner restores the adapter as a controller, or the app moves to whatever replaced it.
+
+### Real mode: the test account's own earlier names push a new name off page 1 (blocks 7 grace-period tests)
+
+Measured 2026-10-14 against the local bigname (manager on bigname, real mode).
+All seven `migration-grace.spec.ts` tests fail by not finding their name, not
+by anything the app does wrong with it. Rerun alone, `a grace-period name is
+offered for renewal…`: bigname lists the name as in grace (`status:
+"expired"`, owner = the wallet, `grace_ends_at` set) and the dashboard shows
+the grace banner. But the connected wallet (Anvil account 0) is shared by every
+test on the chain, and by then it held **34 names**, so My Names (sorted by
+name, paged) put the new one off the first page, and `getByText(name)` in
+`main` never saw it. In mock mode `serveV1Names` serves only the test's own
+names, which is why the specs were written that way.
+
+**Fix (test side):** find the name by searching/filtering the list, or give
+each grace test its own fresh wallet, rather than assuming the first page.
+
+### Local bigname cannot name registry-only V1 subnames (blocks GS4, GS14, GS16)
+
+A V1 registry subname created with `setSubnodeOwner` puts only the label
+**hash** on chain, and the local bigname has no other source for the label
+(how the hosted one fills such labels was not checked), so it lists the name as
+`[16670ca6…].migbadres-….eth` and the app shows exactly that. GS4, GS14 and
+GS16 look up their child by its real name (`getByTitle('sub.…eth')`) and time
+out. Wrapped subnames are unaffected (the NameWrapper emits the full name).
+Measured 2026-10-14 on the snapshot of a failing run.
+
+**Fix:** teach the local stack the labels the fixtures create (seed bigname's
+label table from `makeV1RegistrySubname`), or have these tests locate the row
+by labelhash.
+
+### Test account `user2` has EIP-7702 code on Sepolia (blocks GS18)
+
+Anvil account 1 (`0x70997970…79C8`, the fixtures' `user2`) carries
+`0xef0100ca11bde0…ca11` at the pinned block — a real 7702 delegation to
+Multicall3 that someone set on Sepolia. A safe ERC-1155 transfer to it calls
+`onERC1155Received` on Multicall3 and reverts ("ERC1155: transfer to non
+ERC1155Receiver implementer"), so GS18's fixture fails before the app is
+involved. The manager fixture already clears the same kind of leftover code
+for `user` (`playwright.manager.fixture.ts`, `setCode(… '0x')`) but not for
+`user2`. Account 4 (`0x15d34AAf…6A65`) has a 7702 delegation too.
+
+**Fix:** clear the code for every account the fixtures hand tokens to.
+
+### Test faults found 2026-10-14 (not app defects)
+
+Failing in real-mode runs and marked PASS in `e2e-coverage.md`; diagnosed as
+faults in the test, not the app:
+
+| Scenario | Test | What goes wrong | Fix |
+|---|---|---|---|
+| GS9 | `migration-subname.spec.ts` "does not offer a subname whose parent is not being migrated" | The parent is registered to the connected wallet itself (`makeV1Name` with `user` = Anvil account 0 = the headless wallet). In mock mode the injection leaves the parent out; in real mode bigname lists it, so offering the child is correct. | Register the parent to another account (`user2`/`user3`), so the wallet holds only the subname |
+| B5 | `profile.spec.ts` "never offers a renewal date before the current expiry" | Picks the **wall-clock** year in the calendar. After the time-travel suite the shared chain sits in July 2028, the year list starts at 2028, and `selectOption('2026')` waits for an option that never appears. The app's boundary holds. | Use the chain's time (or the first option offered) |
+| B2 | `profile.spec.ts` "extend unowned name by 28 days" | Timed out mid-flow once in the full suite; passes alone. | Flake — watch |
+| GA3 | `migration-approvals.spec.ts` "operator approvals already held…" | Name not listed once in the offline run; passes alone (twice). | Flake — watch |
+
+Also seen, not yet diagnosed: in the same real-mode run the dashboard's grace
+banner read "Your expired name is now in its 28-day grace period. **Renew by
+—**" — the end date unformattable (`formatDashboardDate` returns `—` for an
+invalid date). The banner skips V1 names, so it came from a V2 name the
+account holds in grace; the app reckons grace from the wall clock while the
+chain is years ahead. Needs a repro before it gets a row.
 
 ### A chain-snapshot revert permanently breaks Panoptes for every later run
 
@@ -331,10 +377,13 @@ the point an unpaginated full-history scan can read in one call. Verified
 independent of every local change: `git stash` (reverting to the untouched
 `roles.spec.ts`) and re-running C1 alone reproduces the identical error.
 
-This is a **standing, calendar-time-dependent flake**, not a one-off: since
-`SEPOLIA_FORK_URL` has no pinned block, every fresh fork inherits however much
-history real Sepolia has accumulated *as of whenever the container starts*,
-and that number only grows.
+This was a **calendar-time-dependent flake** while the stack forked live
+Sepolia: every fresh fork inherited however much history had accumulated by
+then. The stack now forks a pinned block (`e2e/infra/fork-block`, since
+2026-10-13), so the history stops growing until the pin moves — but it was
+already past the cap at the pin, so this still blocks the scenarios below
+until the oracle is resource-scoped. Not re-measured at the pin (portal e2e is
+parked).
 
 **Still reproduces after the merge with main (re-measured 2026-09-09** on a
 fresh `down`/`up` with the Panoptes volume wiped, fork head `11668103`**).**
