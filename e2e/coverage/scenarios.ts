@@ -1326,6 +1326,23 @@ const migrationGS: Scenario[] = suite('G.GS', 'migration', 'manager', 'P3', [
     'Copy child owned by a different address than the migrating parent',
     'not offered — classification keys the registry-child branch on `domain.owner.id` matching the connected wallet',
   ],
+  // GS19-GS21: registry-only subnames by parent kind. The shape under a
+  // wrapped parent exists only when the subname predates the wrap.
+  [
+    'GS19',
+    'Registry-only subname under an UNLOCKED wrapped 2LD (created before the wrap)',
+    '`copy`/`registry-child` — re-created in the parent UserRegistry with expiry MAX_UINT64, as under an unwrapped parent',
+  ],
+  [
+    'GS20',
+    'Registry-only subname under a LOCKED 2LD (created before the wrap)',
+    'cannot be copied (the locked parent takes the WrapperRegistry token route) — classified `missing-parent`, which must be shown with its reason, not dropped (INV3)',
+  ],
+  [
+    'GS21',
+    'Registry-only subname whose label the index does not know (`[labelhash].parent.eth`)',
+    'ineligible `unknown-label` before anything is sent — the copy must pass the label — and shown with its reason, not dropped (INV3)',
+  ],
   [
     'GS11',
     'Mixed batch: 7 unwrapped + 8 unlocked + 9 locked',

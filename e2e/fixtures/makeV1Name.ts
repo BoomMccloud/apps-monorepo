@@ -226,6 +226,13 @@ export type V1NameConfig = {
    * controllers cannot claim (GA12).
    */
   reserveInV2?: boolean
+  /**
+   * Runs after registration, while the name is still unwrapped and its
+   * registry owner is still the owner's EOA — the only moment a registry-only
+   * subname can be created under a name that ends up wrapped. Ignored for
+   * `unwrapped`.
+   */
+  beforeWrap?: (ethName: string) => Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -466,6 +473,7 @@ export function createMakeV1Name(deps: MakeV1NameDependencies = {}) {
     // ── 6. Wrap if requested ────────────────────────────────────────
     const nameType = config.type ?? 'unwrapped'
     if (nameType === 'wrapped' || nameType === 'locked') {
+      await config.beforeWrap?.(`${uniqueLabel}.eth`)
       await wrapName(
         uniqueLabel,
         ownerAddress,

@@ -39,6 +39,7 @@ import {
 import type { privateKeyToAccount } from 'viem/accounts'
 
 import { publicClient, walletClient } from '../helpers/anvil-client.js'
+import { seedBignameLabels } from '../helpers/bigname-labels.js'
 import { V1_ENS_REGISTRY } from './makeV1Name.js'
 
 const REGISTRY_ABI = parseAbi([
@@ -56,6 +57,12 @@ export type V1RegistrySubnameConfig = {
   parentOwnerAccount: ReturnType<typeof privateKeyToAccount>
   /** Omit for the eligible case. See the note above before setting this. */
   resolver?: Address
+  /**
+   * Give the local bigname the child's label (default true). `NewOwner`
+   * carries only the labelhash, so without this bigname lists the child as
+   * `[labelhash].parent.eth`. Pass false to test a label nobody revealed.
+   */
+  seedLabel?: boolean
 }
 
 async function waitForTx(hash: Hash, what: string) {
@@ -69,8 +76,14 @@ async function waitForTx(hash: Hash, what: string) {
 export async function makeV1RegistrySubname(
   config: V1RegistrySubnameConfig,
 ): Promise<string> {
-  const { parentName, childLabel, ownerAddress, parentOwnerAccount, resolver } =
-    config
+  const {
+    parentName,
+    childLabel,
+    ownerAddress,
+    parentOwnerAccount,
+    resolver,
+    seedLabel = true,
+  } = config
 
   const parentNode = namehash(`${parentName}.eth`)
   const childName = `${childLabel}.${parentName}.eth`
@@ -119,6 +132,8 @@ export async function makeV1RegistrySubname(
         `a WRAPPED parent is owned by the NameWrapper and this call cannot work.`,
     )
   }
+
+  if (seedLabel) await seedBignameLabels([childLabel])
 
   console.log(
     `[makeV1RegistrySubname] ✅ ${childName} (registry owner: ${ownerAddress})`,

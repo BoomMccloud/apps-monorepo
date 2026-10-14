@@ -71,12 +71,31 @@ export function anyRow(page: Page, fullName: string) {
  * the shared test wallet keeps every name it migrates, so after the first
  * migration the banner never shows again and every later test would stall on
  * it. Tests about the banner itself assert it on purpose.
+ *
+ * The route's `beforeLoad` asks PostHog for the `migration` flag with a 1 s
+ * timeout and sends the page to /dashboard when the answer is late. PostHog
+ * sometimes takes several seconds, so a bounce to /dashboard is retried a few
+ * times before it counts.
  */
 export async function openMigrationFlow(page: Page): Promise<void> {
-  await page.goto(`${MANAGER_APP_URL}/upgrade`)
-  await page
-    .getByRole('heading', { name: /ready to upgrade/i })
-    .waitFor({ state: 'visible', timeout: 60_000 })
+  const heading = page.getByRole('heading', { name: /ready to upgrade/i })
+  for (let attempt = 1; ; attempt++) {
+    await page.goto(`${MANAGER_APP_URL}/upgrade`)
+    const landed = await Promise.race([
+      heading.waitFor({ state: 'visible', timeout: 60_000 }).then(() => true),
+      page
+        .waitForURL(/\/dashboard(\?|$)/, { timeout: 60_000 })
+        .then(() => false),
+    ])
+    if (landed) return
+    if (attempt >= 4)
+      throw new Error(
+        '/upgrade kept redirecting to /dashboard: the PostHog `migration` flag check did not answer in time',
+      )
+    console.log(
+      `[migration-flow] /upgrade bounced to /dashboard (PostHog flag check), retry ${attempt}`,
+    )
+  }
 }
 
 /**

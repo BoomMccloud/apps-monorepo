@@ -59,7 +59,10 @@ import {
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
 import { setV1RecordsOn, type V1Records } from '../../../fixtures/v1-records.js'
 import { publicClient, testClient } from '../../../helpers/anvil-client.js'
-import { waitForBignameBlock } from '../../../helpers/bigname-sync.js'
+import {
+  isRealBigname,
+  waitForBignameBlock,
+} from '../../../helpers/bigname-sync.js'
 import {
   assertCopyExpiry,
   assertCopyRegistered,
@@ -84,6 +87,7 @@ import {
   selectOnlyRoots,
 } from '../../../helpers/migration-flow.js'
 import type { MockV1Tree } from '../../../helpers/mock-v1-subgraph.js'
+import type { PortalAccounts } from '../../../helpers/portal-auth.js'
 import {
   expectRecordsResolve,
   resolverFor,
@@ -376,14 +380,20 @@ test.describe('ENS V1 → V2 subname migration', () => {
   }, async ({ migrationConnectedPage: page, accounts }) => {
     const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
     const makeV1Name = createMakeV1Name({ userAccount })
+    // The parent belongs to another account, so the wallet holds the subname
+    // alone. Registered to the wallet, a real index lists the parent too and
+    // offering the child would be right.
+    const parentOwner = privateKeyToAccount(accounts.getPrivateKey('user3'))
 
-    const parent = await makeV1Name({ label: 'migorphan' })
+    const parent = await createMakeV1Name({ userAccount: parentOwner })({
+      label: 'migorphan',
+    })
     const control = await makeV1Name({ label: 'migorphan-control' })
     const child = await makeV1RegistrySubname({
       parentName: parent.replace(/\.eth$/, ''),
       childLabel: 'sub',
       ownerAddress: HEADLESS_USER_ADDRESS,
-      parentOwnerAccount: userAccount,
+      parentOwnerAccount: parentOwner,
     })
 
     // The child is injected as a ROOT hanging off its real parent, but that
@@ -1402,5 +1412,179 @@ test.describe('ENS V1 → V2 migration — subname edge cases (§G.GS)', () => {
       await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
       await expectRecordsResolve(child, records)
     }
+  })
+})
+
+/**
+ * Registry-only subnames (created with `ENSRegistry.setSubnodeOwner`, no
+ * NameWrapper token) under each kind of parent. GS4/GS14 cover the unwrapped
+ * parent; these cover a parent that was wrapped AFTER the subname existed —
+ * the only way the shape arises, since a wrapped parent's registry owner is
+ * the NameWrapper — and a label the index cannot name.
+ *
+ * Subname trees cannot be expressed in the CI bigname mock, so these run
+ * against the local bigname and skip in mock mode (`serveV1Names`).
+ */
+test.describe('ENS V1 → V2 migration — registry-only subnames by parent kind', () => {
+  test.describe.configure({ timeout: 300_000 })
+
+  /** A 2LD of `type` with a registry-only `sub` created before the wrap. */
+  async function seedParentWithRegistryChild(
+    accounts: PortalAccounts,
+    label: string,
+    type: 'wrapped' | 'locked' | 'unwrapped',
+    options: { seedLabel?: boolean; childLabel?: string } = {},
+  ) {
+    const childLabel = options.childLabel ?? 'sub'
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    let child = ''
+    const createChild = async (ethName: string) => {
+      child = await makeV1RegistrySubname({
+        parentName: ethName.replace(/\.eth$/, ''),
+        childLabel,
+        ownerAddress: HEADLESS_USER_ADDRESS,
+        parentOwnerAccount: userAccount,
+        seedLabel: options.seedLabel,
+      })
+    }
+    const parent = await createMakeV1Name({ userAccount })({
+      label,
+      type,
+      beforeWrap: createChild,
+    })
+    if (type === 'unwrapped') await createChild(parent)
+    return { parent, child, userAccount }
+  }
+
+  test('copies a registry-only subname under an UNLOCKED wrapped 2LD', {
+    tag: ['@scenario:GS19'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const { parent, child } = await seedParentWithRegistryChild(
+      accounts,
+      'migwrapreg',
+      'wrapped',
+    )
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          children: [{ kind: 'registry-child', label: 'sub' }],
+        },
+      ],
+    })
+
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 30_000 })
+    await expect(nestedRow(page, child)).toBeVisible()
+
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    // The wrapped parent's token migrates through the unlocked controller…
+    await assertV2Registered(labelOf(parent))
+    // …and the registry-only child is re-created in its UserRegistry, with the
+    // registry-child sentinel expiry, exactly as under an unwrapped parent.
+    await assertUserRegistryAttached(parent)
+    await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
+    await assertCopyExpiry(child, MAX_UINT64)
+  })
+
+  test('shows a registry-only subname under a LOCKED 2LD as not upgradable', {
+    tag: ['@scenario:GS20'],
+  }, async ({ migrationConnectedPage: page, accounts }) => {
+    // A locked 2LD migrates as a token into a WrapperRegistry; a registry-only
+    // child has no token to follow it, and the copy route needs an unwrapped or
+    // unlocked parent. Classification rejects it as `missing-parent` — correct —
+    // but the upgrade list renders only `missing-registration` and
+    // `not-reserved`, so the owner never sees it.
+    const { parent, child } = await seedParentWithRegistryChild(
+      accounts,
+      'miglockreg',
+      'locked',
+    )
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [{ kind: 'registry-child', label: 'sub' }],
+        },
+      ],
+    })
+
+    await openMigrationFlow(page)
+    // Precondition: the parent itself is offered, so the page has the data.
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 30_000 })
+    await expect(
+      page.getByRole('button', { name: child, exact: true }),
+      `${child} cannot be copied under a locked parent and must not be selectable`,
+    ).toHaveCount(0)
+
+    test.fail(
+      true,
+      'E2E-031: a registry-only subname under a locked 2LD is silently left off the upgrade list',
+    )
+    await expect(
+      page.getByText(child, { exact: true }),
+      `${child} is silently dropped instead of being shown as not upgradable`,
+    ).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('shows a registry-only subname the index cannot name as not upgradable', {
+    tag: ['@scenario:GS21'],
+  }, async ({ migrationConnectedPage: page, accounts }) => {
+    test.skip(
+      !isRealBigname,
+      'needs a real index that lacks the label; the mock always serves full names',
+    )
+    // `setSubnodeOwner` puts only the labelhash on chain. Without a rainbow
+    // entry the index lists the child as `[labelhash].parent.eth`;
+    // classification rejects it as `unknown-label` before anything is sent —
+    // correct, since the copy must pass the label — but the upgrade list does
+    // not render that reason, so the owner never learns the subname exists.
+    // A label of its own: labels are global per hash, so one any other test
+    // seeds (`sub`) is known to the index for good.
+    const childLabel = `hidden${Date.now().toString(36)}`
+    const { parent, child } = await seedParentWithRegistryChild(
+      accounts,
+      'migunknown',
+      'unwrapped',
+      { seedLabel: false, childLabel },
+    )
+    const placeholder = `[${labelhash(childLabel).slice(2)}].${parent}`
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          children: [{ kind: 'registry-child', label: childLabel }],
+        },
+      ],
+    })
+
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 30_000 })
+    // Precondition: the label really is unknown to the index (the app would
+    // otherwise show `child` and offer the copy).
+    await expect(nestedRow(page, child)).toHaveCount(0)
+
+    test.fail(
+      true,
+      'E2E-032: a registry-only subname whose label the index does not know is silently left off the upgrade list',
+    )
+    await expect(
+      page
+        .getByText(placeholder, { exact: true })
+        .or(page.getByText(child, { exact: true })),
+      `${child} is silently dropped instead of being shown as not upgradable`,
+    ).toBeVisible({ timeout: 15_000 })
   })
 })

@@ -16,6 +16,8 @@ with its original, unweakened assertion).
 
 | ID | Scenario | App | Sev | Summary | Expected (oracle) | Repro | Issue | Status |
 |---|---|---|---|---|---|---|---|---|
+| E2E-032 | GS21 | manager | S3 | A V1 **registry-only subname whose label the index does not know** is **silently left off** the upgrade list, and its parent migrates without it. `setSubnodeOwner` puts only the labelhash on chain (`NewOwner`), so bigname lists such a child as `[labelhash].parent.eth` unless its label reached it another way (an event carrying the name, or a rainbow-table import). Classification rejects it as `unknown-label` before anything is sent (`packages/migration/src/service/classifyNames.ts` `UNKNOWN_LABEL_PATTERN`, `classifyName`) — correct, since the copy must pass the label to `UserRegistry.register` — but `getUnavailableNames` renders only `missing-registration` and `not-reserved` (`useEligibleV1Names.helpers.ts`), so the owner never learns the subname exists or why it was not carried. Measured on the local bigname with a never-seeded label (2026-10-14): the parent is listed and offered, the child appears nowhere. How often production hits it depends on which labels the hosted bigname can name (its rainbow coverage was not checked); what happens to the left-behind subname's resolution once its parent is in V2 was not measured. Same rendering gap as E2E-020 and E2E-031, different reason. | Every input lands in a visible bucket (INV3): the subname is shown as not upgradable, saying its name could not be read | `pnpm e2e:manager-migration --grep "@scenario:GS21"` (real mode; `test.fail()` until fixed) | — | open |
+| E2E-031 | GS20 | manager | S3 | A V1 **registry-only subname under a locked 2LD** (created before the parent was wrapped and locked) is **silently left off** the upgrade list, and the parent migrates without it. A locked 2LD takes the WrapperRegistry token route and a registry-only child has no token to follow it, while the copy route needs an unwrapped or unlocked parent, so `hasCompleteCopyRoute` demotes it to `missing-parent` — correct — but that reason is not rendered (`getUnavailableNames` shows only `missing-registration` and `not-reserved`). Measured 2026-10-14 on the local bigname, label known: the locked parent is listed and offered, the child appears nowhere. The same shape under an **unlocked** wrapped 2LD is copied correctly (GS19). Same rendering gap as E2E-020. | The subname is shown as not upgradable, naming its locked parent as the reason (INV3) | `pnpm e2e:manager-migration --grep "@scenario:GS20"` (real mode; `test.fail()` until fixed) | — | open |
 | E2E-030 | A22 | manager | S3 | When a label is registered by someone else while this tab is mid-checkout (pricing loaded, USDC chosen), pressing **Register name** runs on for about a minute (through the commitment wait) and then shows **"Error loading name: Try again"**. It never says the name was taken. "Try again" navigates to `/<name>`, which still renders the registration presets with prices stuck on "…". The tab is not stuck, and the name is not falsely reported as won, but the user cannot tell what happened. Same in mock and real mode. Reproduced by registering the exact label from another account (`makeV2Name({ exactLabel: true, owner: 'other' })`) between choosing USDC and confirming. | The losing tab says the name was just registered and is no longer available (and leads to its profile), without a generic error | `pnpm e2e:manager --grep "@scenario:A22"` (`test.fail()` until fixed) | — | open |
 | E2E-029 | B4 | manager | S3 | `/renew/$name` for an ENSv2 name **past its 28-day grace** renders the whole renewal page — duration presets (prices stuck on "…"), "Renew to date", and an enabled **"Pay with stablecoins"** — although the name cannot be renewed: on chain it is AVAILABLE and `ETHRegistrar.getRenewPrice` reverts. The name is open to anyone to register (with a decaying premium), which is what the owner needs to know. Contrast B11: the same deep link for a never-registered name redirects to `/register/$name`. Same in mock and real mode. | Renewal is not offered; the page redirects to registration or says the name's grace has ended and it is available | `pnpm e2e:manager-migration --project=manager-migration-time --grep "@scenario:B4"` (`test.fail()` until fixed) | — | open |
 | E2E-028 | GA10 | manager | S3 | When a selected name's token **changes owner** between selection and confirmation, the upgrade stops with **"A permission is missing. Try again."** — the wrong reason, and an instruction that cannot work: the wallet no longer holds the name, so no retry or approval will migrate it. Likely mechanism: the transfer leaves the MigrationHelper unapproved for the new holder's token, so the simulation reverts `ERC721InsufficientApproval` before any owner check, and `decodeMigrationError` maps that to `permission-missing`. The app has the right copy ("One of your names changed owners. Refresh and select it again.", `token-owner-changed`) and does not reach it. Nothing moves on chain (the token stays with the new holder, V2 stays RESERVED). For contrast, an operator approval revoked behind the page ends correctly on "Your permissions changed. Go back to check the updated estimate." (unwrapped and wrapped). | The upgrade stops and names the owner change (`token-owner-changed`) | `pnpm e2e:manager-migration --grep "@scenario:GA10"` — the token-moved test is `test.fail()` until fixed | — | open |
@@ -189,9 +191,13 @@ GS16 look up their child by its real name (`getByTitle('sub.…eth')`) and time
 out. Wrapped subnames are unaffected (the NameWrapper emits the full name).
 Measured 2026-10-14 on the snapshot of a failing run.
 
-**Fix:** teach the local stack the labels the fixtures create (seed bigname's
-label table from `makeV1RegistrySubname`), or have these tests locate the row
-by labelhash.
+**Fixed 2026-10-14 (test side):** `makeV1RegistrySubname` now writes the
+child's label into the local bigname's `label_preimages` table
+(`helpers/bigname-labels.ts`); names render from it at read time, with no
+reindex. GS4, GS14 and GS16 pass in real mode. `seedLabel: false` leaves a
+label unknown on purpose (GS21 → E2E-032). Labels are global per hash: once
+any test seeds `sub`, every `sub.*` is named, so a test that needs an unknown
+label must use one of its own.
 
 ### Test account `user2` has EIP-7702 code on Sepolia (blocks GS18)
 
@@ -213,10 +219,19 @@ faults in the test, not the app:
 
 | Scenario | Test | What goes wrong | Fix |
 |---|---|---|---|
-| GS9 | `migration-subname.spec.ts` "does not offer a subname whose parent is not being migrated" | The parent is registered to the connected wallet itself (`makeV1Name` with `user` = Anvil account 0 = the headless wallet). In mock mode the injection leaves the parent out; in real mode bigname lists it, so offering the child is correct. | Register the parent to another account (`user2`/`user3`), so the wallet holds only the subname |
+| GS9 | `migration-subname.spec.ts` "does not offer a subname whose parent is not being migrated" | The parent is registered to the connected wallet itself (`makeV1Name` with `user` = Anvil account 0 = the headless wallet). In mock mode the injection leaves the parent out; in real mode bigname lists it, so offering the child is correct. | **Fixed 2026-10-14**: the parent is registered to `user3`; passes in real mode |
 | B5 | `profile.spec.ts` "never offers a renewal date before the current expiry" | Picks the **wall-clock** year in the calendar. After the time-travel suite the shared chain sits in July 2028, the year list starts at 2028, and `selectOption('2026')` waits for an option that never appears. The app's boundary holds. | Use the chain's time (or the first option offered) |
 | B2 | `profile.spec.ts` "extend unowned name by 28 days" | Timed out mid-flow once in the full suite; passes alone. | Flake — watch |
 | GA3 | `migration-approvals.spec.ts` "operator approvals already held…" | Name not listed once in the offline run; passes alone (twice). | Flake — watch |
+
+**PostHog redirects `/upgrade` under load.** The route's `beforeLoad` asks
+PostHog for the `migration` flag with a 1 s timeout (`get-feature-flag.ts`,
+since #970) and sends the page to /dashboard when the answer is late. On
+2026-10-14 PostHog took 0.4–7.3 s, and every test that opened /upgrade
+stalled on "Ready to upgrade". `openMigrationFlow` now retries a bounce up to
+four times. For a real user the same slowness means /upgrade silently drops
+them on the dashboard; worth a product ruling on whether a late flag should
+fail open, fail closed with a message, or wait longer.
 
 Also seen, not yet diagnosed: in the same real-mode run the dashboard's grace
 banner read "Your expired name is now in its 28-day grace period. **Renew by

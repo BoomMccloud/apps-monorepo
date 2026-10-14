@@ -323,6 +323,9 @@ write a scenario for it.
 | GS16 | copy child on an unrecognised V1 resolver | ineligible `unsupported-resolver`; the parent still migrates |
 | GS17 | copy re-run against a dirty deterministic registry slot | fails closed: `subregistry-conflict` / `v2-name-history` / `uncertified-registry` |
 | GS18 | copy child owned by a different address than its parent | not offered |
+| GS19 | registry-only subname under an **unlocked wrapped** 2LD (created before the wrap) | **`copy`/`registry-child`**, as under an unwrapped parent |
+| GS20 | registry-only subname under a **locked** 2LD (created before the wrap) | not copyable — `missing-parent`, shown with its reason (INV3) |
+| GS21 | registry-only subname whose label the index does not know | `unknown-label`, shown with its reason (INV3); nothing sent |
 
 **GS3, GS4 and GS10 were rewritten** when subname migration landed. All three
 previously described the name as rejected; all three are now the copy route.
