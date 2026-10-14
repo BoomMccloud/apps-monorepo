@@ -326,6 +326,8 @@ write a scenario for it.
 | GS19 | registry-only subname under an **unlocked wrapped** 2LD (created before the wrap) | **`copy`/`registry-child`**, as under an unwrapped parent |
 | GS20 | registry-only subname under a **locked** 2LD (created before the wrap) | not copyable — `missing-parent`, shown with its reason (INV3) |
 | GS21 | registry-only subname whose label the index does not know | `unknown-label`, shown with its reason (INV3); nothing sent |
+| GS22 | GS20's subname, wrapped and emancipated before the upgrade | `detached-child` into the parent's `WrapperRegistry` — the way out of GS20 |
+| GS23 | GS20's subname with records, when only the parent migrates | still resolves afterwards, or the owner is warned before confirming |
 
 **GS3, GS4 and GS10 were rewritten** when subname migration landed. All three
 previously described the name as rejected; all three are now the copy route.

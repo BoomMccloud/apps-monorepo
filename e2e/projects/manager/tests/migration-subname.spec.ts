@@ -54,6 +54,7 @@ import {
   CHILD_FUSES,
   makeV1Subname,
   readWrapperExpiry,
+  wrapAndEmancipateRegistryChild,
   wrapV1SubnameOfUnwrapped,
 } from '../../../fixtures/makeV1Subname.js'
 import { expect, test } from '../../../fixtures/playwright.manager.fixture.js'
@@ -1586,5 +1587,96 @@ test.describe('ENS V1 → V2 migration — registry-only subnames by parent kind
         .or(page.getByText(child, { exact: true })),
       `${child} is silently dropped instead of being shown as not upgradable`,
     ).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('a registry-only subname of a LOCKED 2LD, wrapped and emancipated first, migrates with it', {
+    tag: ['@scenario:GS22'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    // The way out of E2E-031: the owner wraps the subname and burns
+    // PARENT_CANNOT_CONTROL on it before upgrading. It is then an emancipated
+    // child (`detached-child`), which follows its locked parent into the
+    // parent's WrapperRegistry exactly like GS2.
+    const { parent, child, userAccount } = await seedParentWithRegistryChild(
+      accounts,
+      'migfreereg',
+      'locked',
+    )
+    await wrapAndEmancipateRegistryChild({
+      parentName: parent,
+      childLabel: 'sub',
+      parentOwnerAccount: userAccount,
+      ownerAccount: userAccount,
+    })
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'sub',
+              fuses: CHILD_FUSES.EMANCIPATED,
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await expect(nestedRow(page, child)).toBeVisible()
+
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+
+    await assertLockedMigration(labelOf(parent))
+    await assertWrappedChildMigrated(child, HEADLESS_USER_ADDRESS, {
+      locked: false,
+    })
+  })
+
+  test('migrating a LOCKED 2LD leaves its registry-only subname resolving', {
+    tag: ['@scenario:GS23'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    // What E2E-031 costs: the subname is not offered, but its parent is. After
+    // the parent moves to V2, does the left-behind subname still resolve?
+    const { parent, child, userAccount } = await seedParentWithRegistryChild(
+      accounts,
+      'migstrand',
+      'locked',
+    )
+    const records: V1Records = {
+      texts: [{ key: 'description', value: 'left behind in V1' }],
+      addresses: [{ coinType: 60, value: accounts.getAddress('user3') as Hex }],
+    }
+    await setV1RecordsOn(child, userAccount, false, records)
+    // Precondition: it resolves before anything moves.
+    await expectRecordsResolve(child, records)
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [{ kind: 'registry-child', label: 'sub' }],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(rootRow(page, parent)).toBeVisible({ timeout: 60_000 })
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+    await assertLockedMigration(labelOf(parent))
+
+    // Measured 2026-10-14: it does not — resolution now walks the parent's
+    // V2 WrapperRegistry, which never received the subname.
+    test.fail(
+      true,
+      'E2E-031: migrating a locked 2LD silently stops its registry-only subname resolving',
+    )
+    await expectRecordsResolve(child, records)
   })
 })

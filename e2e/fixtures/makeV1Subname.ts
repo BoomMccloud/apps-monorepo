@@ -49,6 +49,7 @@ const NAME_WRAPPER_ABI = parseAbi([
   'function setSubnodeOwner(bytes32 parentNode, string label, address owner, uint32 fuses, uint64 expiry) returns (bytes32)',
   'function getData(uint256 tokenId) view returns (address owner, uint32 fuses, uint64 expiry)',
   'function wrap(bytes name, address wrappedOwner, address resolver)',
+  'function setChildFuses(bytes32 parentNode, bytes32 labelhash, uint32 fuses, uint64 expiry)',
 ])
 
 const ENS_REGISTRY_ABI = parseAbi([
@@ -294,6 +295,91 @@ export async function wrapV1SubnameOfUnwrapped(config: {
     )
   console.log(
     `[wrapV1SubnameOfUnwrapped] ✅ ${childName} (fuses 0x${fuses.toString(16)}, expiry ${expiry})`,
+  )
+  return childName
+}
+
+/**
+ * Turn an existing registry-only subname of a LOCKED 2LD into an emancipated
+ * wrapped child — the way out for a subname that cannot follow a locked parent
+ * into V2 (E2E-031). The child's owner wraps it (`NameWrapper.wrap`, keeping
+ * its resolver), then the parent's owner burns PARENT_CANNOT_CONTROL on it
+ * with the parent's own wrapper expiry. Burning that fuse needs the parent to
+ * have CANNOT_UNWRAP, which a locked parent does.
+ */
+export async function wrapAndEmancipateRegistryChild(config: {
+  /** The locked parent, with `.eth`. */
+  readonly parentName: string
+  readonly childLabel: string
+  readonly parentOwnerAccount: ReturnType<typeof privateKeyToAccount>
+  readonly ownerAccount: ReturnType<typeof privateKeyToAccount>
+}): Promise<string> {
+  const { parentName, childLabel, parentOwnerAccount, ownerAccount } = config
+  const childName = `${childLabel}.${parentName}`
+
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: ownerAccount,
+      to: V1_ENS_REGISTRY,
+      data: encodeFunctionData({
+        abi: ENS_REGISTRY_ABI,
+        functionName: 'setApprovalForAll',
+        args: [V1_NAME_WRAPPER, true],
+      }),
+    }),
+    'registry setApprovalForAll(NameWrapper)',
+  )
+  const bytes: number[] = []
+  for (const label of childName.split('.')) {
+    const encoded = stringToBytes(label)
+    bytes.push(encoded.length, ...encoded)
+  }
+  bytes.push(0)
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: ownerAccount,
+      to: V1_NAME_WRAPPER,
+      data: encodeFunctionData({
+        abi: NAME_WRAPPER_ABI,
+        functionName: 'wrap',
+        args: [toHex(new Uint8Array(bytes)), ownerAccount.address, zeroAddress],
+      }),
+    }),
+    `NameWrapper.wrap(${childName})`,
+  )
+  await waitForTx(
+    await walletClient.sendTransaction({
+      account: parentOwnerAccount,
+      to: V1_NAME_WRAPPER,
+      data: encodeFunctionData({
+        abi: NAME_WRAPPER_ABI,
+        functionName: 'setChildFuses',
+        args: [
+          namehash(parentName),
+          labelhash(childLabel),
+          PARENT_CANNOT_CONTROL,
+          await readWrapperExpiry(parentName),
+        ],
+      }),
+    }),
+    `NameWrapper.setChildFuses(${childName}, PARENT_CANNOT_CONTROL)`,
+  )
+
+  const [owner, fuses] = await publicClient.readContract({
+    address: V1_NAME_WRAPPER,
+    abi: NAME_WRAPPER_ABI,
+    functionName: 'getData',
+    args: [BigInt(namehash(childName))],
+  })
+  if (
+    owner.toLowerCase() !== ownerAccount.address.toLowerCase() ||
+    (fuses & PARENT_CANNOT_CONTROL) === 0
+  )
+    throw new Error(
+      `[wrapAndEmancipateRegistryChild] ${childName}: owner ${owner}, fuses 0x${fuses.toString(16)}`,
+    )
+  console.log(
+    `[wrapAndEmancipateRegistryChild] ✅ ${childName} (fuses 0x${fuses.toString(16)})`,
   )
   return childName
 }

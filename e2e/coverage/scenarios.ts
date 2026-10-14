@@ -1344,6 +1344,16 @@ const migrationGS: Scenario[] = suite('G.GS', 'migration', 'manager', 'P3', [
     'ineligible `unknown-label` before anything is sent — the copy must pass the label — and shown with its reason, not dropped (INV3)',
   ],
   [
+    'GS22',
+    'Registry-only subname under a LOCKED 2LD, wrapped and emancipated (PARENT_CANNOT_CONTROL) before the upgrade',
+    '`detached-child` — follows its locked parent into the parent WrapperRegistry, unwrapped (the way out of E2E-031)',
+  ],
+  [
+    'GS23',
+    'Registry-only subname under a LOCKED 2LD, with records, when only the parent migrates',
+    'the subname keeps resolving its records after the parent moves to V2, or the owner is told before confirming that it will not',
+  ],
+  [
     'GS11',
     'Mixed batch: 7 unwrapped + 8 unlocked + 9 locked',
     'test_migrate_7unwrapped_8unlocked_9locked — all 24 in one flow, each landing in its own controller',
