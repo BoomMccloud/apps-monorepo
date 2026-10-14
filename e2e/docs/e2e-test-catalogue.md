@@ -3,6 +3,10 @@
 The complete scenario space for **manager**, **portal**, and **cross-app**. This
 is the *what*; [`e2e-build-goal.md`](./e2e-build-goal.md) is the *how*.
 
+> Read [`e2e-gap-analysis.md`](./e2e-gap-analysis.md) first (2026-10-15): why
+> manual testing found manager bugs this catalogue missed, and the observer
+> matrix (action × actor × view) that extends it.
+
 Supersedes §5–§6 of `e2e-master-test-plan.md`. Areas **A–L** and **X** keep their
 existing IDs, because ~180 of them are already registered in
 `e2e/coverage/scenarios.ts` and tagged in specs — renumbering would orphan that.
