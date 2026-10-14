@@ -1680,3 +1680,170 @@ test.describe('ENS V1 → V2 migration — registry-only subnames by parent kind
     await expectRecordsResolve(child, records)
   })
 })
+
+/**
+ * After a subname migrates, its manager profile shows the records it carried
+ * (e2e-gap-analysis.md §1, Bug 2). The record tests above prove the records
+ * resolve on chain; these open the page a user actually reads.
+ */
+const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
+
+test.describe('ENS V1 → V2 migration — the manager profile after a subname copy', () => {
+  test.describe.configure({ timeout: 300_000 })
+
+  const RECORDS = (what: string): V1Records => ({
+    texts: [{ key: 'description', value: `${what} carried over` }],
+  })
+
+  async function expectProfileShows(
+    page: import('@playwright/test').Page,
+    name: string,
+    text: string,
+  ) {
+    await page.goto(`${MANAGER_APP_URL}/${name}`)
+    await expect(page.getByRole('heading', { name })).toBeVisible({
+      timeout: 60_000,
+    })
+    await expect(
+      page.getByText(text, { exact: true }),
+      `${name}'s profile does not show the record that resolves on chain`,
+    ).toBeVisible({ timeout: 30_000 })
+  }
+
+  test('a copied registry-only subname shows its records on its profile', {
+    tag: ['@scenario:GR2'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gr2-reg-profile',
+    })
+    const child = await makeV1RegistrySubname({
+      parentName: labelOf(parent),
+      childLabel: 'sub',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+    })
+    const records = RECORDS('registry child')
+    await setV1RecordsOn(child, userAccount, false, records)
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          children: [
+            {
+              kind: 'registry-child',
+              label: 'sub',
+              records: { texts: records.texts?.map((t) => ({ ...t })) },
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(nestedRow(page, child)).toBeVisible({ timeout: 60_000 })
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+    await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
+    // Precondition: on chain the record made it across.
+    await expectRecordsResolve(child, records)
+    await waitForBignameBlock()
+
+    await expectProfileShows(page, child, 'registry child carried over')
+  })
+
+  test('a copied wrapped subname shows its records on its profile', {
+    tag: ['@scenario:GR2'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gr2-wrap-profile',
+      type: 'wrapped',
+    })
+    const child = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'sub',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      fuses: CHILD_FUSES.UNLOCKED_CHILD,
+    })
+    const records = RECORDS('wrapped child')
+    await setV1RecordsOn(child, userAccount, true, records)
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'wrapped',
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'sub',
+              fuses: CHILD_FUSES.UNLOCKED_CHILD,
+              records: { texts: records.texts?.map((t) => ({ ...t })) },
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(nestedRow(page, child)).toBeVisible({ timeout: 60_000 })
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+    await assertCopyRegistered(child, HEADLESS_USER_ADDRESS)
+    await expectRecordsResolve(child, records)
+    await waitForBignameBlock()
+
+    await expectProfileShows(page, child, 'wrapped child carried over')
+  })
+
+  test('a migrated locked child shows its records on its profile', {
+    tag: ['@scenario:GR2'],
+  }, async ({ migrationConnectedPage: page, wallet, accounts }) => {
+    const userAccount = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const parent = await createMakeV1Name({ userAccount })({
+      label: 'gr2-lock-profile',
+      type: 'locked',
+    })
+    const child = await makeV1Subname({
+      parentName: labelOf(parent),
+      childLabel: 'sub',
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      parentOwnerAccount: userAccount,
+      fuses: CHILD_FUSES.LOCKED_CHILD,
+    })
+    const records = RECORDS('locked child')
+    await setV1RecordsOn(child, userAccount, true, records)
+
+    await serveV1Names(page, {
+      ownerAddress: HEADLESS_USER_ADDRESS,
+      roots: [
+        {
+          kind: 'registration',
+          label: labelOf(parent),
+          type: 'locked',
+          children: [
+            {
+              kind: 'wrapped-child',
+              label: 'sub',
+              fuses: CHILD_FUSES.LOCKED_CHILD,
+              records: { texts: records.texts?.map((t) => ({ ...t })) },
+            },
+          ],
+        },
+      ],
+    })
+    await openMigrationFlow(page)
+    await expect(nestedRow(page, child)).toBeVisible({ timeout: 60_000 })
+    await runMigrationFlow(page, wallet, { roots: [parent] })
+    await assertWrappedChildMigrated(child, HEADLESS_USER_ADDRESS, {
+      locked: true,
+    })
+    await expectRecordsResolve(child, records)
+    await waitForBignameBlock()
+
+    await expectProfileShows(page, child, 'locked child carried over')
+  })
+})

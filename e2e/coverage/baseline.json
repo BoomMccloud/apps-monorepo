@@ -6,10 +6,10 @@
     "R0": 168,
     "R1": 25,
     "R2": 100,
-    "R3": 162,
+    "R3": 164,
     "R4": 1
   },
-  "totalTerminal": 464,
+  "totalTerminal": 466,
   "invariantSitesChecked": 0,
   "phasesLegacy": {
     "P0": 4,
