@@ -20,6 +20,17 @@
 
 import type { Address } from 'viem'
 import { publicClient } from './anvil-client.js'
+import { waitForBignameBlock, waitForBignameName } from './bigname-sync.js'
+
+/**
+ * Whether the explorer reads bigname rather than Panoptes (#1354). Then every
+ * wait below follows bigname, which is what the page under test reads; the
+ * Panoptes waits stay for an explorer built before that PR.
+ */
+export const explorerReadsBigname =
+  process.env.E2E_EXPLORER_INDEXER === 'bigname'
+
+const BIGNAME_URL = process.env.E2E_BIGNAME_URL ?? 'http://127.0.0.1:5660'
 
 const INDEXER_URL =
   process.env.E2E_INDEXER_GRAPHQL_URL ?? 'http://127.0.0.1:5655/graphql'
@@ -64,6 +75,7 @@ export async function waitForIndexedBlock(
   minBlock?: bigint,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
+  if (explorerReadsBigname) return waitForBignameBlock(minBlock, timeoutMs)
   const target = minBlock ?? (await publicClient.getBlockNumber())
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -95,6 +107,8 @@ export async function waitForIndexedRoles(
   accounts: Address[] = [],
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
+  // bigname indexes a block whole, so a grant is listed once its block is.
+  if (explorerReadsBigname) return waitForBignameBlock(undefined, timeoutMs)
   const wanted = `0x${resource.toString(16).padStart(64, '0')}`.toLowerCase()
   const required = accounts.map((a) => a.toLowerCase())
   const deadline = Date.now() + timeoutMs
@@ -150,6 +164,7 @@ export async function waitForIndexedRegistry(
   address: Address,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
+  if (explorerReadsBigname) return waitForBignameRegistry(address, timeoutMs)
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const data = await query<{ registry: { labelCount: number } | null }>(
@@ -180,6 +195,10 @@ export async function waitForIndexedName(
   name: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
+  if (explorerReadsBigname) {
+    await waitForBignameName(name, () => true, timeoutMs)
+    return
+  }
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const data = await query<{ domains: { name: string }[] }>(
@@ -210,6 +229,7 @@ export async function waitForRoleHolder(
   account: Address,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
+  if (explorerReadsBigname) return waitForBignameBlock(undefined, timeoutMs)
   const resourceHex = `0x${resource.toString(16).padStart(64, '0')}`
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -249,4 +269,21 @@ export async function explorerCanReadRootHolders(
     `{ roleConnection(contract: "${registryAddress.toLowerCase()}", resource: "0x${'0'.repeat(64)}", first: 1000) { pageInfo { hasNextPage } } }`,
   )
   return data?.roleConnection?.pageInfo.hasNextPage === false
+}
+
+/** Wait until bigname serves the registry at `address` (its detail route). */
+async function waitForBignameRegistry(
+  address: Address,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  const url = `${BIGNAME_URL}/v1/registries/${publicClient.chain?.id ?? 11155111}/${address.toLowerCase()}`
+  while (Date.now() < deadline) {
+    const res = await fetch(url).catch(() => null)
+    if (res?.ok) return
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+  throw new Error(
+    `bigname has not indexed registry ${address} after ${timeoutMs}ms`,
+  )
 }
