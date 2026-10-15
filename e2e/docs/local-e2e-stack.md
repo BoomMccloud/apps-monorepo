@@ -59,7 +59,7 @@ online pass of the same suites (results below)._
 | `alto`, `paymaster` | 4337, 3002 | bundler and paymaster for the HCA path |
 | `panoptes-*`, `v1-subgraph` | 5655, 5656 | the portal's indexers |
 | `anvil-mainnet` | 8546 | mainnet fork, used only by the metadata service |
-| dev servers | 3000/3001 (yours), 3010/3011, 3012 | manager and portal under test |
+| dev servers | 3000/3001 (yours); 3010 manager + 3011 explorer with the mock wallet (manual testing); 3012 manager + 3013 explorer without it (Playwright) | all from this checkout |
 
 Start everything with `bash e2e/infra/scripts/start-local-env.sh`; stop with
 `--down`.
@@ -254,7 +254,10 @@ Workers runtimes collide at startup.
 
 ## History
 
-The stack was assembled on 2026-10-10 on the branch `e2e/bigname-harness`
+#1324 merged to `main` on 2026-10-14 and `main` was merged here on 2026-10-15
+(`5af31ea36`); the harness worktree is retired and the apps under test run
+from this checkout. The stack was assembled on 2026-10-10 on the branch
+`e2e/bigname-harness`
 (local), merged into `e2e-tests-coverage`; see
 [`bigname-harness-handoff.md`](./bigname-harness-handoff.md) for that snapshot.
 The pinned fork, the caches and offline mode were added on 2026-10-12/13.
