@@ -143,6 +143,12 @@ sync_chain_clock() {
     echo "  Fresh fork: mining $FINALITY_DEPTH blocks up to now (clock $(( (now - chain_ts) / 3600 ))h behind)"
     rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$(( now - FINALITY_DEPTH + 1 ))]}" >/dev/null
     rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"anvil_mine\",\"params\":[\"0x$(printf '%x' $FINALITY_DEPTH)\",\"0x1\"]}" >/dev/null
+    # mockestrator keeps per-chain state (its relayer's view of the chain); a
+    # copy left over from the previous fork fails smart-account fills with an
+    # on-chain revert (HTTP 500 to the app) until it is restarted.
+    echo "  Restarting mockestrator for the new chain"
+    docker compose -f "$COMPOSE_FILE" restart mockestrator >/dev/null
+    wait_for_service "mockestrator" 60
   elif (( chain_ts < now - 60 )); then
     echo "  Chain clock $(( (now - chain_ts) / 3600 ))h behind; stepping it to now"
     rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"evm_setNextBlockTimestamp\",\"params\":[$now]}" >/dev/null

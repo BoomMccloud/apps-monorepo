@@ -111,7 +111,9 @@ bigname's router (the pre-fork blocks it indexes).
 ### The pinned fork and the caches
 
 - **Pinned fork.** Anvil forks the block in [`../infra/fork-block`](../infra/fork-block)
-  (11898020), not the latest one. Everything at or below that block never
+  (11898021 since 2026-10-15; it was 11898020, one block before Sepolia
+  restored the reverse-registrar adapter), not the latest one. Everything at
+  or below that block never
   changes, so every answer about it can be kept.
 - **`upstream-cache`** sits between Anvil and the public RPC and keeps every
   answer at the pinned block on disk (`anvil-upstream-cache` volume). Anvil's
@@ -245,6 +247,7 @@ Workers runtimes collide at startup.
 | paymaster restarts with `pruned history unavailable` | the fork upstream is not an archive node (publicnode) | use Tenderly or drpc for `SEPOLIA_FORK_URL` |
 | every test times out, Anvil exited 133 | public RPC dropped a connection mid-read | restart the stack; offline mode avoids it |
 | suite-wide hangs after the laptop slept | Docker/OrbStack hang after sleep | `caffeinate -i` for long runs; restart OrbStack |
+| setting a primary name (or any smart-account step) fails with "Internal Server Error" from `/orchestrator` | mockestrator still holds the previous fork's state, or the chain clock is far from the wall clock | `start-local-env.sh` restarts mockestrator on a fresh fork; otherwise `docker compose … restart mockestrator`, and step the clock to now (`evm_setNextBlockTimestamp` + `evm_mine`) |
 | "Couldn't prepare your upgrade" for a moment after a migration | bigname has not indexed the parent's migration yet | wait a second; it clears |
 | `/upgrade` bounces to the dashboard | dead PostHog host | start the server with `VITE_PUBLIC_POSTHOG_HOST=https://edge.ens.domains` |
 | a wallet with no USDC still shows $10,000 | the dev build mints USDC to the owner on every load | block `/rpc` `mint` and `/wallet/fund` in the test (see B12) |

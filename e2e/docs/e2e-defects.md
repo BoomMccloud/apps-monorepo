@@ -141,7 +141,12 @@ terminal state, so they are tracked here until fixed.
 
 ### Live Sepolia removed two controllers on 2026-10-01, breaking V1 renewal and HCA primary names
 
-**Status at the pinned fork (block 11898020, re-measured 2026-10-14):** the
+**Resolved for the stack, 2026-10-15:** Sepolia restored the adapter as a
+`DefaultReverseRegistrar` controller in block 11898021 — one block after the
+old pin. The pin is now 11898021, so smart-account primary names work on the
+fork (X8 sets one end to end).
+
+**Status at the old pinned fork (block 11898020, re-measured 2026-10-14):** the
 renewer half is resolved — `BaseRegistrar.controllers(ETHRenewerV1)` is `true`
 again, so V1 renewal works and `expectFailureWhileRenewerDeauthorised()` no
 longer marks the grace-period tests. The reverse-registrar half still applies:
