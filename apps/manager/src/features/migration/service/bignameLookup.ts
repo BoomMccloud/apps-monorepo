@@ -4,12 +4,13 @@ import {
   isStale,
   type LookupRecord,
   type LookupResponse,
+  type LookupResult,
+  retryStale,
 } from '@ens-apps/indexer/bigname'
 import { ResultFn, TaggedError } from '@ens-apps/utils/neverthrow'
 import { err, ok, type Result } from 'neverthrow'
 
 const LOOKUP_BATCH_SIZE = 250
-const MAX_STALE_ATTEMPTS = 3
 
 export class BignameLookupError extends TaggedError('BignameLookupError')<{
   cause: BignameError | Error
@@ -30,22 +31,28 @@ export const checkNotAborted = <E>(
   )
 }
 
-/** bigname's snapshot can move under a long read; a stale answer is retried from the start. */
-export const retryOnStale = async <T, E>(
-  read: () => PromiseLike<Result<T, E>>,
-  isStaleError: (error: E) => boolean,
-  attemptsLeft = MAX_STALE_ATTEMPTS,
-): Promise<Result<T, E>> => {
-  const result = await read()
-  return result.isErr() && attemptsLeft > 1 && isStaleError(result.error)
-    ? retryOnStale(read, isStaleError, attemptsLeft - 1)
-    : result
-}
-
 const toError = (cause: BignameError | Error) =>
   new BignameLookupError({ cause })
 
-/** Detail records for every name; any answer that is not `ok` fails the read rather than leaving a gap. */
+/** The one `ok` record answering each input, or the first input without one. */
+const recordsInOrder = (
+  batch: readonly string[],
+  results: readonly LookupResult[],
+): Result<LookupRecord[], string> => {
+  const records: LookupRecord[] = []
+  for (const [index, name] of batch.entries()) {
+    const answers = results.filter(
+      ({ input }) => 'name' in input && input.id === String(index),
+    )
+    const record = answers[0]?.status === 'ok' ? answers[0].record : undefined
+    if (answers.length !== 1 || !record)
+      return err(`${name}: ${answers[0]?.status ?? 'no answer'}`)
+    records.push(record)
+  }
+  return ok(records)
+}
+
+/** Detail records for every name, in order; a missing, repeated or failed answer fails the read rather than leaving a gap. */
 export const lookupNames = ResultFn(async function* (
   lookup: BignameClient['lookup'],
   names: readonly string[],
@@ -55,29 +62,23 @@ export const lookupNames = ResultFn(async function* (
   for (let start = 0; start < names.length; start += LOOKUP_BATCH_SIZE) {
     yield* checkNotAborted(options.signal, toError)
     const batch = names.slice(start, start + LOOKUP_BATCH_SIZE)
-    const response: LookupResponse = yield* (
-      await retryOnStale(
-        () =>
-          lookup({
+    const response: LookupResponse = yield* retryStale(
+      (signal) =>
+        lookup(
+          {
             namespace: 'ens',
             profile: 'detail',
-            inputs: batch.map((name) => ({ name })),
-          }),
-        isStale,
-      )
+            inputs: batch.map((name, index) => ({ id: String(index), name })),
+          },
+          { signal },
+        ),
+      isStale,
+      { signal: options.signal },
     ).mapErr(toError)
-    const failed = response.data.find(
-      (result) => result.status !== 'ok' || !result.record,
+    const batchRecords = yield* recordsInOrder(batch, response.data).mapErr(
+      (failure) => toError(new Error(`bigname lookup failed for ${failure}`)),
     )
-    if (failed) {
-      return yield* err(
-        toError(new Error(`bigname lookup returned ${failed.status}`)),
-      )
-    }
-    records = [
-      ...records,
-      ...response.data.flatMap((result) => result.record ?? []),
-    ]
+    records = [...records, ...batchRecords]
   }
   return ok(records)
 })

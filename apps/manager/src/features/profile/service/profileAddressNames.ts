@@ -5,6 +5,7 @@ import type {
   NamesForAddressQuery,
   ReadNamesForAddress,
 } from '@ens-apps/indexer/reads'
+import { readNamesPage } from '@ens-apps/indexer/reads'
 import { ResultFn, TaggedError } from '@ens-apps/utils/neverthrow'
 import {
   resultInfiniteQueryOptions,
@@ -15,7 +16,6 @@ import { skipToken } from '@tanstack/react-query'
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 import type { Address } from 'viem'
 import type { SortDir, SortField } from '@/features/dashboard/mergedNames'
-import { readNamesPage } from '@/features/shared/service/readNamePages'
 import { bigname } from '@/lib/bigname'
 import {
   type ProfileAddressName,
@@ -139,7 +139,7 @@ export const readProfileNamesChunk = ResultFn(async function* (
   return ok(chunk)
 })
 
-export const profileNamesInfiniteQueryOptions = (query: ProfileNamesQuery) =>
+export const getProfileNamesInfiniteQueryOptions = (query: ProfileNamesQuery) =>
   resultInfiniteQueryOptions({
     queryKey: qk('profile', 'address_names', {
       address: query.address.toLowerCase(),
@@ -195,7 +195,9 @@ export const getProfileNameCounts = (
     )
     .mapErr((error) => new GetProfileAddressNamesError({ cause: error }))
 
-export const profileNameCountsQueryOptions = (address: Address | undefined) =>
+export const getProfileNameCountsQueryOptions = (
+  address: Address | undefined,
+) =>
   resultQueryOptions({
     queryKey: qk('profile', 'address_name_counts', {
       address: address?.toLowerCase() ?? null,

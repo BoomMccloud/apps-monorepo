@@ -18,7 +18,7 @@ export { WALLETCONNECT_PROJECT_ID }
 
 // Failover across the app's attributed primary and the network's shared
 // public endpoints.
-export const sepoliaFallbackTransport = fallback(
+export const fallbackTransport = fallback(
   envConfig.rpcUrls.map((url) =>
     http(url, {
       retryCount: 2,
@@ -33,7 +33,8 @@ export const sepoliaFallbackTransport = fallback(
 )
 
 /**
- * The V1 subgraph endpoint, overridable for local work.
+ * The build's network, mainnet or Sepolia, with its ENS contracts — and its
+ * V1 subgraph endpoint overridable for local work.
  *
  * The override has to happen *after* `envConfig.chain` is built (which calls
  * ensjs's `extendChainWithEns` internally), not by passing a URL further
@@ -50,7 +51,7 @@ export const sepoliaFallbackTransport = fallback(
  * Unset in production, where this is exactly the public endpoint `envConfig`
  * already resolved for the build's network.
  */
-export const sepoliaWithEns = {
+export const ensChain = {
   ...envConfig.chain,
   subgraphs: {
     ...envConfig.chain.subgraphs,
@@ -74,7 +75,7 @@ export const wagmiConfig = createConfig({
   syncConnectedChain: false,
   ssr: false,
   multiInjectedProviderDiscovery: true,
-  chains: [sepoliaWithEns],
+  chains: [ensChain],
   connectors: [
     walletConnect({
       projectId: WALLETCONNECT_PROJECT_ID,
@@ -88,6 +89,6 @@ export const wagmiConfig = createConfig({
   client: ({ chain }) =>
     createClient({
       chain,
-      transport: sepoliaFallbackTransport,
+      transport: fallbackTransport,
     }),
 })
