@@ -257,6 +257,33 @@ invalid date). The banner skips V1 names, so it came from a V2 name the
 account holds in grace; the app reckons grace from the wall clock while the
 chain is years ahead. Needs a repro before it gets a row.
 
+### Local Panoptes root role holders: the explorer refuses every V2 transfer (blocks explorer-driven X4, X14)
+
+Measured 2026-10-15. The explorer's transfer page cross-checks role holders
+before it lets a name be sent (`features/transfer/hooks/useTransferRoleRevocations.ts`),
+including the holders at the `.eth` registry **root**, read from Panoptes in
+one page of 1000 (`lib/roles/roleHolders.ts`; a longer list is `truncated`).
+The local Panoptes answers that root query with 1000+ rows (886 distinct
+accounts; one account 29 times); the hosted one
+(`https://staging-graphql.ens.dev/`) returns 5. On chain a role allows at most
+15 holders, so the local list is wrong. The page then shows "Couldn't check
+who else holds permissions on this name… Refresh and try again" and keeps
+**Transfer name** disabled — for every V2 name, including the explorer's own
+`portal/tests/transfer.spec.ts` "transfers a name to wallet B with the
+resolver detached".
+
+A second, smaller timing issue: the explorer's per-name holder table
+(`roleConnection`) fills after Panoptes' event log, so reading it right after
+registration fails as `registry-mismatch`. `helpers/indexer-sync.ts`
+`waitForRoleHolder` waits for it; the cross-app fixture uses it.
+
+**Effect:** `projects/cross-app/tests/transfer-in-explorer.spec.ts` skips
+itself while `explorerCanReadRootHolders` is false. The same observations run
+from an on-chain transfer in `manager/tests/transfer-observers.spec.ts` (X4,
+X14). **Fix:** re-index the local Panoptes from the V2 deployment block, or
+move it to the image the hosted one runs, then check the root query returns
+a handful of holders. (Portal e2e is parked until the portal reads bigname.)
+
 ### A chain-snapshot revert permanently breaks Panoptes for every later run
 
 `withChainSnapshot` (`fixtures/chain-snapshot.ts`) wraps a test in

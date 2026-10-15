@@ -194,3 +194,59 @@ export async function waitForIndexedName(
       `not been discovered and backfilled yet.`,
   )
 }
+
+/**
+ * Wait until Panoptes' role-holder table (`roleConnection`, the query the
+ * explorer's transfer and roles pages read) lists `account` on `resource`.
+ *
+ * Distinct from `waitForIndexedRoles`, which reads the event log: the event
+ * lands first and the holder table catches up later. The explorer cross-checks
+ * the holder table against the registry (`useNameRoleAccounts`), so reading it
+ * early fails as `registry-mismatch` and the transfer page refuses to send.
+ */
+export async function waitForRoleHolder(
+  registryAddress: Address,
+  resource: bigint,
+  account: Address,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<void> {
+  const resourceHex = `0x${resource.toString(16).padStart(64, '0')}`
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const data = await query<{
+      roleConnection: { edges: { node: { account: string } }[] } | null
+    }>(
+      `{ roleConnection(contract: "${registryAddress.toLowerCase()}", resource: "${resourceHex}", first: 50) { edges { node { account } } } }`,
+    )
+    const holders = data?.roleConnection?.edges ?? []
+    if (
+      holders.some(
+        (edge) => edge.node.account.toLowerCase() === account.toLowerCase(),
+      )
+    )
+      return
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+  throw new Error(
+    `Panoptes' role-holder table does not list ${account} on ${resourceHex} after ${timeoutMs}ms`,
+  )
+}
+
+/**
+ * Whether Panoptes' root role-holder list for `registryAddress` fits in the
+ * one page the explorer reads (`lib/roles/roleHolders.ts`, 1000 rows). When it
+ * does not, the explorer marks the list truncated and refuses every transfer
+ * ("Couldn't check who else holds permissions on this name"). The local
+ * Panoptes lists ~900 root holders where the hosted one lists 5
+ * (e2e-defects.md, "Local Panoptes root role holders").
+ */
+export async function explorerCanReadRootHolders(
+  registryAddress: Address,
+): Promise<boolean> {
+  const data = await query<{
+    roleConnection: { pageInfo: { hasNextPage: boolean } } | null
+  }>(
+    `{ roleConnection(contract: "${registryAddress.toLowerCase()}", resource: "0x${'0'.repeat(64)}", first: 1000) { pageInfo { hasNextPage } } }`,
+  )
+  return data?.roleConnection?.pageInfo.hasNextPage === false
+}

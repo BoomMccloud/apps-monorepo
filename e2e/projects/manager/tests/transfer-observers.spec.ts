@@ -225,4 +225,41 @@ test.describe('After a V2 transfer, the previous owner in the manager', () => {
       `${name} resolves to A, so A can set it as primary`,
     ).toBeVisible({ timeout: 15_000 })
   })
+
+  test('a resolver detached by the transfer takes its records off the manager profile', {
+    tag: ['@scenario:X14'],
+  }, async ({ profileConnectedPage: page, makeV2Name, accounts }) => {
+    const a = privateKeyToAccount(accounts.getPrivateKey('user'))
+    const b = accounts.getAddress('user3') as Address
+    const description = `x14 record ${Date.now().toString(36)}`
+    const name = await makeV2Name({
+      label: 'x14-detach',
+      records: [{ key: 'description', value: description }],
+    })
+
+    // Before: the manager has the profile, record and all, loaded — a stale
+    // cache would keep showing it.
+    await page.goto(`${MANAGER_APP_URL}/${name}`)
+    await expect(page.getByText(description)).toBeVisible({ timeout: 30_000 })
+
+    await transferV2Name({
+      label: labelOf(name),
+      from: a,
+      to: b,
+      detachResolver: true,
+    })
+    expect((await readV2Holding(labelOf(name), a.address)).resolver).toBe(
+      zeroAddress,
+    )
+    await waitForBignameBlock()
+
+    await page.reload()
+    await expect(page.getByRole('heading', { name })).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(
+      page.getByText(description),
+      'the name has no resolver now, so it has no records',
+    ).toHaveCount(0, { timeout: 30_000 })
+  })
 })

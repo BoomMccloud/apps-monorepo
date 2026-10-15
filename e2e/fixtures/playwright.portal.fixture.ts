@@ -137,7 +137,7 @@ async function waitForTx(hash: Hash) {
 // transfer.spec.ts sending to `user2`). Wiping the code restores a plain EOA
 // on the fork. Clear it for every test account, since any of them can end up
 // as a transfer recipient or registration owner.
-async function clearAnvilSquattedCode(address: Address) {
+export async function clearAnvilSquattedCode(address: Address) {
   await testClient.setCode({ address, bytecode: '0x' })
 }
 
