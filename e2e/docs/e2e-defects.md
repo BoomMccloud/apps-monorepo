@@ -284,9 +284,12 @@ re-index from block 11820291 reproduces the list (852 accounts). Sampled
 "root holders" show bitmap `0x1111…` — exactly the full role set a
 PermissionedResolver grants its admin on `initialize` — while the registry
 answers `roles(0, account) = 0` for every one: the image files resolver
-`EACRolesChanged` events under the registry. Pulling a newer image fails
-(`denied` from ghcr.io: the package is private now), so the fix needs
-someone with access to the image.
+`EACRolesChanged` events under the registry. There is no newer image to
+pull: the ghcr package is public and its newest version, `v0.2.1` =
+`latest`, is this same digest (a `denied` on pull comes from a stale ghcr
+login in the Docker keychain, not from the package). The hosted Panoptes
+therefore runs a build that is not published; the fix needs that build (or
+a fixed release) from the Panoptes maintainer.
 
 **Effect:** `projects/cross-app/tests/transfer-in-explorer.spec.ts` skips
 itself while `explorerCanReadRootHolders` is false. The same observations run
