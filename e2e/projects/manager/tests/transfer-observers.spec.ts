@@ -29,6 +29,7 @@ import {
   isRealBigname,
   waitForBignameBlock,
 } from '../../../helpers/bigname-sync.js'
+import { openPrimaryNamePicker } from '../../../helpers/primary-name.js'
 import { expectRecordsResolve } from '../../../helpers/resolve-records.js'
 import { readV2Holding, transferV2Name } from '../../../helpers/v2-transfer.js'
 
@@ -45,12 +46,8 @@ async function dashboardRow(page: Page, name: string) {
 }
 
 /** The primary-name picker, searched for `name`. */
-async function primaryPicker(page: Page, name: string) {
-  await page.goto(`${MANAGER_APP_URL}/dashboard`)
-  await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: /set primary name/i }).click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
+async function primaryPicker(page: Page, owner: Address, name: string) {
+  const dialog = await openPrimaryNamePicker(page, owner)
   await dialog.getByPlaceholder('Search names').fill(labelOf(name))
   return dialog
 }
@@ -210,7 +207,7 @@ test.describe('After a V2 transfer, the previous owner in the manager', () => {
     await waitForBignameBlock()
 
     // Control: a name A owns is offered.
-    const dialog = await primaryPicker(page, control)
+    const dialog = await primaryPicker(page, a.address, control)
     await expect(
       dialog.getByRole('button', { name: `Select ${control} as primary name` }),
     ).toBeVisible({ timeout: 30_000 })

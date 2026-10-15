@@ -20,6 +20,7 @@ import {
 import { publicClient } from '../../../helpers/anvil-client.js'
 import { waitForBignameBlock } from '../../../helpers/bigname-sync.js'
 import { authorizeTransaction } from '../../../helpers/manager-auth.js'
+import { openPrimaryNamePicker } from '../../../helpers/primary-name.js'
 import {
   saveProfileChanges,
   waitForProfileUpdated,
@@ -124,13 +125,7 @@ test.describe('A primary name set in the manager, seen in the explorer', () => {
     const name = await makeV2Name({ label: 'x8-primary' })
 
     const { page } = manager
-    await page.goto(`${MANAGER_APP_URL}/dashboard`)
-    await page.waitForLoadState('networkidle')
-    await page
-      .getByRole('button', { name: /set primary name/i })
-      .first()
-      .click()
-    const dialog = page.getByRole('dialog')
+    const dialog = await openPrimaryNamePicker(page, address)
     await dialog
       .getByPlaceholder('Search names')
       .fill(name.replace(/\.eth$/, ''))
