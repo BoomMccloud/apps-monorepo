@@ -116,6 +116,13 @@ export interface AnalyticsClient {
     readonly persistence_name?: string
   }
   get_explicit_consent_status(): AnalyticsConsent
+  get_distinct_id(): string
+  identify(
+    distinctId: string,
+    userPropertiesToSet: Readonly<Record<string, unknown>>,
+    userPropertiesToSetOnce: Readonly<Record<string, unknown>>,
+  ): void
+  register(properties: Readonly<Record<string, unknown>>): void
   opt_in_capturing(options: { captureEventName: false }): void
   opt_out_capturing(): void
   reset(): void
@@ -227,6 +234,36 @@ export const startAnalyticsChoice = (
     forgetTabSession(client)
   }
   return consent
+}
+
+export type ConnectedWallet = {
+  readonly address: string
+  readonly chainId: number | undefined
+  readonly connectorName: string | undefined
+}
+
+/**
+ * After Accept, the visitor is their wallet: their visitor id becomes the
+ * address and their events carry the wallet's details. Does nothing before
+ * Accept, when the SDK would hold the address in memory only to drop it.
+ */
+export const identifyWallet = (
+  client: AnalyticsClient,
+  wallet: ConnectedWallet,
+): void => {
+  if (client.get_explicit_consent_status() !== 'granted') return
+  if (client.get_distinct_id() !== wallet.address) {
+    client.identify(
+      wallet.address,
+      { address: wallet.address },
+      { initial_address: wallet.address },
+    )
+  }
+  client.register({
+    wallet_address: wallet.address,
+    chain_id: wallet.chainId,
+    wallet_connector: wallet.connectorName,
+  })
 }
 
 // ---------------------------------------------------------------------------

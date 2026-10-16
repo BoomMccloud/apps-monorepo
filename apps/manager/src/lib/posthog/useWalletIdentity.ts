@@ -1,6 +1,10 @@
+import {
+  type ConnectedWallet,
+  identifyWallet,
+} from '@ens-apps/utils/analytics-consent'
 import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import posthog from 'posthog-js/dist/module.full.no-external'
 import { useEffect } from 'react'
-import { type ConnectedWallet, identifyWallet } from './identity'
 
 /**
  * After Accept, the visitor is identified by their wallet, whether it was
@@ -15,6 +19,6 @@ export const useWalletIdentity = (
   const connectorName = wallet?.connectorName
   useEffect(() => {
     if (consent !== 'granted' || !address) return
-    identifyWallet({ address, chainId, connectorName })
+    identifyWallet(posthog, { address, chainId, connectorName })
   }, [consent, address, chainId, connectorName])
 }

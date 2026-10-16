@@ -1,6 +1,7 @@
 import {
   acceptAnalytics,
   declineAnalytics,
+  identifyWallet,
   resetVisitor,
 } from '@ens-apps/utils/analytics-consent'
 import {
@@ -21,7 +22,6 @@ import { useState } from 'react'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { track } from './events'
 import { featureSwitchesQuery } from './featureSwitches.query'
-import { identifyWallet } from './identity'
 import { linkSupportChat } from './supportChat'
 import {
   pushFeatureSwitches,
@@ -61,7 +61,7 @@ export const PHProvider = ({
     onConnect(data) {
       // Analytics are non-critical; never let them crash the app.
       try {
-        identifyWallet({
+        identifyWallet(posthog, {
           address: data.address,
           chainId: data.chainId,
           connectorName: data.connector.name,
