@@ -205,7 +205,9 @@ const checkedClients = new WeakSet<AnalyticsClient>()
  * Check the choice at every send. The SDK checks it only when it captures,
  * then sends its batches, retries and beacons without looking, so a batch on
  * its way at Decline that fails, or one left in another tab's queue, would
- * leave after the visitor declined.
+ * leave after the visitor declined. Only a visitor who has accepted is sent
+ * for: one who has not chosen, or whose choice was removed, counts as
+ * declined.
  */
 const checkChoiceAtSend = (client: AnalyticsClient): void => {
   if (checkedClients.has(client)) return
@@ -214,7 +216,7 @@ const checkChoiceAtSend = (client: AnalyticsClient): void => {
   // no-mutation: the SDK has no setting for this, so its one sending method
   // is wrapped in place.
   client._send_request = (request) => {
-    if (client.get_explicit_consent_status() === 'denied') {
+    if (client.get_explicit_consent_status() !== 'granted') {
       // Dropped the way the SDK drops a request it cannot send.
       if (request.fireCallbackOnDrop) request.callback?.({ statusCode: 0 })
       return
@@ -263,6 +265,12 @@ const dropPendingRequests = (queue: unknown): void => {
   }
 }
 
+/** Forget what was captured and is waiting to be sent or tried again. */
+const dropQueuedRequests = (client: AnalyticsClient): void => {
+  dropPendingRequests(client._requestQueue)
+  dropPendingRequests(client._retryQueue)
+}
+
 /**
  * Decline: collection stops at once, and nothing captured before it is sent
  * after it. The SDK keeps the visitor id in memory after an opt-out, and
@@ -275,8 +283,7 @@ export const declineAnalytics = (client: AnalyticsClient): void => {
   appliedChoice.set(client, 'denied')
   client.set_config(COLLECTION_OFF)
   client.opt_out_capturing()
-  dropPendingRequests(client._requestQueue)
-  dropPendingRequests(client._retryQueue)
+  dropQueuedRequests(client)
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)
@@ -334,10 +341,12 @@ const FOLLOW_STORED_CHOICE: Readonly<
     void acceptAnalytics(client, options)
   },
   denied: (client) => declineAnalytics(client),
-  // The choice was removed elsewhere: nothing is collected until one is made.
+  // The choice was removed elsewhere: nothing is collected until one is made,
+  // and what was captured under the old one is not sent.
   pending: (client) => {
     appliedChoice.set(client, 'pending')
     client.set_config(COLLECTION_OFF)
+    dropQueuedRequests(client)
     forgetTabSession(client)
   },
 }

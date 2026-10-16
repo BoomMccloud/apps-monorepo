@@ -425,6 +425,63 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     stopFollowing()
   })
 
+  it('sends nothing queued before the choice was removed in another tab, though it counts as declined', async () => {
+    const thisTab = startClient()
+    startAnalyticsChoice(thisTab.client, { isDev: true, fetchSettings })
+    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
+    thisTab.client.identify(WALLET, { address: WALLET })
+    await flush()
+    const onChange = vi.fn()
+    const stopFollowing = followStoredChoice(thisTab.client, {
+      isDev: true,
+      fetchSettings,
+      onChange,
+    })
+    const sentBeforeRemoval = thisTab.sent.length
+
+    // Waiting for the next batch when the visitor clears this site's data in
+    // another tab: the choice is gone, and so is the visitor's cookie.
+    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
+    clearCookies()
+    expect(thisTab.client.get_explicit_consent_status()).toBe('pending')
+    thisTab.client.capture('name:search', { name: 'vitalik.eth' })
+    await vi.advanceTimersByTimeAsync(STORED_CHOICE_CHECK_MS)
+    await flush()
+
+    expect(onChange).toHaveBeenCalledWith('pending')
+    expect(eventsIn(thisTab.sent.slice(sentBeforeRemoval))).toEqual([])
+    stopFollowing()
+  })
+
+  it('forgets what was queued before the choice was removed, if the visitor accepts again', async () => {
+    const thisTab = startClient()
+    startAnalyticsChoice(thisTab.client, { isDev: true, fetchSettings })
+    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
+    thisTab.client.identify(WALLET, { address: WALLET })
+    await flush()
+    const stopFollowing = followStoredChoice(thisTab.client, {
+      isDev: true,
+      fetchSettings,
+      onChange: vi.fn(),
+    })
+    const sentBeforeRemoval = thisTab.sent.length
+
+    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
+    clearCookies()
+    // The page notices the removal when it comes back into view, before the
+    // batch is due.
+    window.dispatchEvent(new Event('focus'))
+    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
+    await flush()
+
+    expect(
+      eventsIn(thisTab.sent.slice(sentBeforeRemoval)).map(
+        (event) => event.event,
+      ),
+    ).not.toContain('wallet:connect')
+    stopFollowing()
+  })
+
   it("takes the visitor id another app's reset left in the shared cookie over this app's own", async () => {
     const first = startClient()
     await acceptAnalytics(first.client, { isDev: true, fetchSettings })

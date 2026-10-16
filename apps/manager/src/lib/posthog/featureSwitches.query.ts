@@ -1,6 +1,7 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
+import type { QueryClient } from '@tanstack/react-query'
 import { fromPromise } from 'neverthrow'
 import { getFeatureSwitches } from './getFeatureSwitches'
 
@@ -24,3 +25,9 @@ export const getFeatureSwitchesQueryOptions = (wallet: string | null) =>
     queryFn: ({ queryKey: [{ wallet }] }) => fetchFeatureSwitches(wallet),
     staleTime: FEATURE_SWITCHES_STALE_TIME_MS,
   })
+
+/** The answers this page already holds for a wallet, or for none. */
+export const getKnownFeatureSwitches = (
+  queryClient: QueryClient,
+  wallet: string | null,
+) => queryClient.getQueryData(getFeatureSwitchesQueryOptions(wallet).queryKey)

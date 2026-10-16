@@ -19,6 +19,7 @@ import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
 const WALLET = '0x1111111111111111111111111111111111111111'
+const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
 const SERVER_SWITCHES = { i18n: true, migration: false, 'migration-nft': false }
 const WALLET_SWITCHES = { i18n: true, migration: true, 'migration-nft': false }
 
@@ -90,13 +91,18 @@ const renderProvider = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return render(
+  // A new element each time: React skips one it has already rendered, and the
+  // mocked connection cannot ask for a render itself.
+  const tree = () => (
     <QueryClientProvider client={queryClient}>
       <PHProvider>
         <ConsentProbe />
       </PHProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree())
+  // The same query client again, after the wallet connection moved.
+  return { ...view, rerenderProvider: () => view.rerender(tree()) }
 }
 
 const connectionCallbacks = () => {
@@ -311,6 +317,77 @@ describe('PHProvider', () => {
     )
     expect(getFeatureSwitches).toHaveBeenCalledWith({
       data: { wallet: WALLET },
+    })
+  })
+
+  describe('when the connected wallet changes', () => {
+    const answersWaiting = () => new Promise<never>(() => {})
+
+    it("puts no switch in the SDK for the next wallet until the server has answered for it, and not the last wallet's", async () => {
+      connected(WALLET)
+      const { rerenderProvider } = renderProvider()
+      await vi.waitFor(() =>
+        expect(posthog.updateFlags).toHaveBeenCalledWith(
+          WALLET_SWITCHES,
+          undefined,
+          { merge: false },
+        ),
+      )
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      // The server has not answered for the next wallet, or never does.
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+      connected(OTHER_WALLET)
+      rerenderProvider()
+
+      expect(posthog.updateFlags).toHaveBeenCalledWith(
+        ALL_SWITCHES_OFF,
+        undefined,
+        { merge: false },
+      )
+    })
+
+    it('puts back the answers already held for a wallet the visitor returns to', async () => {
+      connected(WALLET)
+      const { rerenderProvider } = renderProvider()
+      await vi.waitFor(() =>
+        expect(posthog.updateFlags).toHaveBeenCalledWith(
+          WALLET_SWITCHES,
+          undefined,
+          { merge: false },
+        ),
+      )
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+      connected(OTHER_WALLET)
+      rerenderProvider()
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      connected(WALLET)
+      rerenderProvider()
+
+      expect(posthog.updateFlags).toHaveBeenCalledWith(
+        WALLET_SWITCHES,
+        undefined,
+        { merge: false },
+      )
+      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
+        ALL_SWITCHES_OFF,
+        undefined,
+        { merge: false },
+      )
+    })
+
+    it('keeps the answers a visitor without a wallet holds while the first wallet connects', async () => {
+      connected(undefined)
+      const { rerenderProvider } = renderProvider()
+      await vi.waitFor(() => expect(posthog.updateFlags).toHaveBeenCalled())
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+      connected(WALLET)
+      rerenderProvider()
+
+      expect(posthog.updateFlags).not.toHaveBeenCalled()
     })
   })
 

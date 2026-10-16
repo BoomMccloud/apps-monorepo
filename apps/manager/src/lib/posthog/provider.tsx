@@ -24,7 +24,7 @@ import { useState } from 'react'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { track } from './events'
 import { ALL_SWITCHES_OFF } from './feature-flags'
-import { getFeatureSwitchesQueryOptions } from './featureSwitches.query'
+import { getKnownFeatureSwitches } from './featureSwitches.query'
 import { linkSupportChat } from './supportChat'
 import {
   pushFeatureSwitches,
@@ -50,7 +50,7 @@ export const PHProvider = ({
   const wallet = address ?? null
   // The server's answers this page already holds for a wallet, or for none.
   const knownSwitches = (forWallet: string | null) =>
-    queryClient.getQueryData(getFeatureSwitchesQueryOptions(forWallet).queryKey)
+    getKnownFeatureSwitches(queryClient, forWallet)
 
   usePostHogStart(isHydrated, switches, setConsent)
   useFollowedChoice(
