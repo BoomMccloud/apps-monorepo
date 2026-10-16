@@ -34,6 +34,8 @@ const COLLECTED = [
 export const FLUSH_TIMEOUT = 30_000
 /** How long a check of "nothing was sent" waits for a batch that never comes. */
 export const QUIET_PERIOD = 8_000
+/** How far from the screen's edges a card in a bottom corner may sit. */
+const CORNER_GAP_PX = 64
 
 export const consentBanner = (page: Page): Locator =>
   page.getByRole('region', { name: BANNER_HEADING })
@@ -170,7 +172,12 @@ export const expectEqualButtons = async (page: Page): Promise<void> => {
   expect(await computedStyle(accept)).toEqual(await computedStyle(decline))
 }
 
-type Box = { x: number; y: number; width: number; height: number }
+type Box = {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
 
 const intersects = (a: Box, b: Box): boolean =>
   a.x < b.x + b.width &&
@@ -244,16 +251,15 @@ export const expectCardInBottomCorner = async (
   const cardBox = await card.boundingBox()
   expect(cardBox).not.toBeNull()
   if (!cardBox || !viewport) return
-  const gap = 64
   expect(viewport.height - (cardBox.y + cardBox.height)).toBeLessThanOrEqual(
-    gap,
+    CORNER_GAP_PX,
   )
   expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(viewport.height)
   if (corner === 'left') {
-    expect(cardBox.x).toBeLessThanOrEqual(gap)
+    expect(cardBox.x).toBeLessThanOrEqual(CORNER_GAP_PX)
   } else {
     expect(viewport.width - (cardBox.x + cardBox.width)).toBeLessThanOrEqual(
-      gap,
+      CORNER_GAP_PX,
     )
   }
   expect(cardBox.width).toBeLessThan(viewport.width / 2)

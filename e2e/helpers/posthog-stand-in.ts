@@ -38,13 +38,13 @@ export type RecordedRequest = {
   readonly body: string
   /** The PostHog events the body carries, if it carries any. */
   readonly events: readonly CapturedEvent[]
-  readonly fromBrowser: boolean
+  readonly isFromBrowser: boolean
   /**
    * From neither app: no `Origin`, and no PostHog project named. Every call
    * the apps make to PostHog carries the project's key (`phc_…`) in its
    * path, query or body, or the project's secret key as `Authorization`.
    */
-  readonly fromElsewhere: boolean
+  readonly isFromElsewhere: boolean
   readonly receivedAt: number
 }
 
@@ -207,8 +207,8 @@ export const startPostHogStandIn = async (
       const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
       const body = decodeBody(raw)
       const headers = flatHeaders(request)
-      const fromBrowser = headers.origin !== undefined
-      const namesProject =
+      const isFromBrowser = headers.origin !== undefined
+      const hasProjectKey =
         PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
         headers.authorization !== undefined
       recorded.push({
@@ -218,8 +218,8 @@ export const startPostHogStandIn = async (
         headers,
         body,
         events: eventsIn(body),
-        fromBrowser,
-        fromElsewhere: !fromBrowser && !namesProject,
+        isFromBrowser,
+        isFromElsewhere: !isFromBrowser && !hasProjectKey,
         receivedAt: Date.now(),
       })
 
@@ -240,14 +240,16 @@ export const startPostHogStandIn = async (
   })
   const { port } = server.address() as AddressInfo
 
-  const browserRequests = () => recorded.filter((entry) => entry.fromBrowser)
+  const browserRequests = () => recorded.filter((entry) => entry.isFromBrowser)
 
   return {
     url: `http://127.0.0.1:${port}`,
     requests: () => [...recorded],
     browserRequests,
     serverRequests: () =>
-      recorded.filter((entry) => !entry.fromBrowser && !entry.fromElsewhere),
+      recorded.filter(
+        (entry) => !entry.isFromBrowser && !entry.isFromElsewhere,
+      ),
     browserEvents: () => browserRequests().flatMap((entry) => entry.events),
     reset: () => {
       recorded.length = 0
