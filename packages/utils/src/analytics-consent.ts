@@ -110,7 +110,11 @@ export const collectionOn = ({
 
 /** The part of the PostHog browser SDK the choice uses. */
 export interface AnalyticsClient {
-  readonly config: { readonly token: string; readonly api_host: string }
+  readonly config: {
+    readonly token: string
+    readonly api_host: string
+    readonly persistence_name?: string
+  }
   get_explicit_consent_status(): AnalyticsConsent
   opt_in_capturing(options: { captureEventName: false }): void
   opt_out_capturing(): void
@@ -162,6 +166,21 @@ export const acceptAnalytics = (
 }
 
 /**
+ * The SDK keeps the tab's window id in session storage, outside the storage
+ * its opt-out clears, and leaves it there after a visitor declines.
+ */
+const forgetTabSession = (client: AnalyticsClient): void => {
+  const name = client.config.persistence_name || client.config.token
+  try {
+    for (const entry of ['window_id', 'primary_window_exists']) {
+      globalThis.sessionStorage?.removeItem(`ph_${name}_${entry}`)
+    }
+  } catch {
+    // Storage the browser refuses to open holds nothing to forget.
+  }
+}
+
+/**
  * Decline: collection stops at once. The SDK keeps the visitor id in memory
  * after an opt-out, and only a reset clears it; the reset erases the choice
  * too, so the choice is put back.
@@ -171,6 +190,7 @@ export const declineAnalytics = (client: AnalyticsClient): void => {
   client.opt_out_capturing()
   client.reset()
   client.opt_out_capturing()
+  forgetTabSession(client)
 }
 
 const RESTORE_CONSENT: Readonly<
@@ -200,7 +220,12 @@ export const startAnalyticsChoice = (
   options: { readonly isDev: boolean; readonly fetchSettings?: typeof fetch },
 ): AnalyticsConsent => {
   const consent = client.get_explicit_consent_status()
-  if (consent === 'granted') void acceptAnalytics(client, options)
+  if (consent === 'granted') {
+    void acceptAnalytics(client, options)
+  } else {
+    // A decline made in another tab or app leaves this tab's window id.
+    forgetTabSession(client)
+  }
   return consent
 }
 
