@@ -31,6 +31,7 @@ import {
   connectWithHeadlessWallet,
   type PortalAccounts,
 } from '../helpers/portal-auth.js'
+import { storeDeclinedAnalytics } from '../helpers/stored-analytics-choice.js'
 import { createMakeName } from './makeName.js'
 import { createTime, type Time } from './time.js'
 
@@ -194,6 +195,16 @@ type PortalFixtures = {
 }
 
 export const test = base.extend<PortalFixtures>({
+  // Every page starts with analytics declined, so the banner never covers
+  // the page under test (see the helper).
+  page: async ({ page }, use) => {
+    await storeDeclinedAnalytics(
+      page.context(),
+      process.env.PORTAL_APP_URL ?? 'http://localhost:3001',
+    )
+    await use(page)
+  },
+
   accounts: async ({}, use) => {
     await use(createAccounts())
   },

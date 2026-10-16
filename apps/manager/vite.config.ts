@@ -11,6 +11,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   server: {
     port: 3000,
+    // The cross-app browser tests serve both apps under one parent domain,
+    // as production does, to share the analytics choice (e2e/projects/
+    // cross-app). `.test` never resolves on the public internet.
+    allowedHosts: ['.ens.test'],
     proxy: {
       '/api': {
         target: 'http://localhost:2999',

@@ -107,6 +107,20 @@ Currently skipped (`test.describe.skip`). Two tests:
 
 ---
 
+## Test Suite: Analytics Choice
+
+**Files**: `projects/manager/tests/analytics-consent.spec.ts`, `projects/portal/tests/analytics-consent.spec.ts`, `projects/cross-app/tests/analytics-consent.spec.ts`
+
+The analytics banner, the privacy notice and what reaches PostHog before and after a visitor chooses (WEB-1741).
+
+- Each spec starts a stand-in for the PostHog host (`helpers/posthog-stand-in.ts`) on `POSTHOG_STAND_IN_PORT` (default 4973). It records every request, serves the Manager's switch rules and the project's settings, and tells the browser's requests (they carry an `Origin`) from the Manager server's rules download. The apps run with `VITE_PUBLIC_POSTHOG_HOST=http://127.0.0.1:4973`, which both `.env.ci` files set, and the Manager's Worker needs a project secret key for the rules download: `.env.ci` holds a dummy one for CI, and a local server takes it with `CLOUDFLARE_INCLUDE_PROCESS_ENV=true POSTHOG_PROJECT_SECRET_API_KEY=phs_e2e_stand_in`.
+- Every other spec starts with analytics declined (`helpers/stored-analytics-choice.ts`), so the banner never covers the page under test; the consent specs clear that choice first.
+- The cross-app spec serves the two apps on `manager.ens.test` and `explorer.ens.test`, which the browser maps to this machine, and uses the Explorer on `localhost` as the unrelated hostname. `MANAGER_APP_URL` and `PORTAL_APP_URL` may name those hostnames, or point at `localhost`, whose port the spec keeps.
+- Recordings are checked on a production build; a dev server keeps them off, as before the launch pause, and the spec records them as not covered there.
+- Screenshots of the banner at 360 and 1280 px wide (the Explorer also in dark mode) are kept with the test results for a person to judge.
+
+---
+
 ## Playwright Agents (Dev-Time AI Tooling)
 
 Playwright Agents are dev-time tools for AI-assisted test authoring. They generate standard `@playwright/test` code — they are NOT used at runtime.

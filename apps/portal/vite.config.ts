@@ -17,6 +17,10 @@ const locales = dirname(
 export default defineConfig(({ mode }) => ({
   server: {
     port: 3001,
+    // The cross-app browser tests serve both apps under one parent domain,
+    // as production does, to share the analytics choice (e2e/projects/
+    // cross-app). `.test` never resolves on the public internet.
+    allowedHosts: ['.ens.test'],
     proxy: {
       // Local E2E: proxy RPC to Anvil fork
       '/rpc': {

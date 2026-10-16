@@ -24,6 +24,7 @@ import {
 } from '../helpers/manager-auth.js'
 import { createIndexerMock, type MockDomain } from '../helpers/mock-indexer.js'
 import type { PortalAccounts } from '../helpers/portal-auth.js'
+import { storeDeclinedAnalytics } from '../helpers/stored-analytics-choice.js'
 import { createMakeName } from './makeName.js'
 import { createMakeV2Name, type V2NameConfig } from './makeV2Name.js'
 import { createTime, type Time } from './time.js'
@@ -228,7 +229,12 @@ async function connectHeadless(
 export const test = base.extend<ManagerFixtures>({
   // Install mock indexer on every page when E2E_MOCK_INDEXER=true.
   // This prevents connection-refused errors in CI where Panoptes isn't running.
+  // Every page also starts with analytics declined (see the helper).
   page: async ({ page }, use) => {
+    await storeDeclinedAnalytics(
+      page.context(),
+      process.env.MANAGER_APP_URL ?? 'http://localhost:3000',
+    )
     await indexerMock.installIfEnabled(page)
     await use(page)
   },

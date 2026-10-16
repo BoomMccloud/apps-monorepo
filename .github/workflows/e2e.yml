@@ -64,15 +64,30 @@ jobs:
               - "e2e/.env.ci"
               - "apps/portal/**"
               - "e2e/projects/portal/**"
+            cross_app:
+              - ".github/workflows/e2e.yml"
+              - "packages/**"
+              - "pnpm-lock.yaml"
+              - "e2e/fixtures/**"
+              - "e2e/helpers/**"
+              - "e2e/infra/**"
+              - "e2e/playwright.config.base.ts"
+              - "e2e/package.json"
+              - "e2e/.env.ci"
+              - "apps/manager/**"
+              - "apps/portal/**"
+              - "e2e/projects/cross-app/**"
       - id: build-matrix
         env:
           MANAGER_CHANGED: ${{ steps.filter.outputs.manager }}
           PORTAL_CHANGED: ${{ steps.filter.outputs.portal }}
+          CROSS_APP_CHANGED: ${{ steps.filter.outputs.cross_app }}
         run: |
           # Emit a flat array of {project, shardIndex, shardTotal} objects so
           # each project gets the right number of shards:
           #   manager — 5 active test files → 3 shards
           #   portal  — 2 active test files → 2 shards
+          #   cross-app — both apps on one parent domain → 1 shard
           #   (temporaryPremium skipped until snapshot is rebuilt)
           configs=()
           if [[ "$MANAGER_CHANGED" == "true" ]]; then
@@ -84,6 +99,9 @@ jobs:
             for i in 1 2; do
               configs+=("{\"project\":\"portal\",\"shardIndex\":$i,\"shardTotal\":2}")
             done
+          fi
+          if [[ "$CROSS_APP_CHANGED" == "true" ]]; then
+            configs+=("{\"project\":\"cross-app\",\"shardIndex\":1,\"shardTotal\":1}")
           fi
           if [[ ${#configs[@]} -eq 0 ]]; then
             echo "configs=[]" >> "$GITHUB_OUTPUT"
@@ -107,8 +125,7 @@ jobs:
       fail-fast: false
       matrix:
         # Each entry is {project, shardIndex, shardTotal} — emitted by the
-        # `changes` job with per-project shard counts. cross-app can be added
-        # once tests exist.
+        # `changes` job with per-project shard counts.
         config: ${{ fromJSON(needs.changes.outputs.configs) }}
 
     steps:
@@ -249,20 +266,29 @@ jobs:
       # ── run e2e tests ─────────────────────────────────────────────
       - name: Run E2E tests (${{ matrix.config.project }})
         run: |
-          # Resolve the app filter and port (manager-premium reuses the manager app)
+          # Resolve the apps and ports (manager-premium reuses the manager app).
+          # cross-app serves both apps on one parent domain, as production
+          # does; the browser maps *.ens.test to this machine.
           if [[ "${{ matrix.config.project }}" == "portal" ]]; then
-            APP_FILTER=portal
-            APP_PORT=3001
+            APPS="portal:3001"
+          elif [[ "${{ matrix.config.project }}" == "cross-app" ]]; then
+            APPS="manager:3000 portal:3001"
+            export MANAGER_APP_URL=http://manager.ens.test:3000
+            export PORTAL_APP_URL=http://explorer.ens.test:3001
           else
-            APP_FILTER=manager
-            APP_PORT=3000
+            APPS="manager:3000"
           fi
 
-          # Enable Vite dep optimization logging to catch late-discovered deps
-          DEBUG=vite:deps pnpm --filter "$APP_FILTER" dev -- --port ${APP_PORT} > /tmp/app-dev.log 2>&1 &
-          APP_PID=$!
-          timeout 60 bash -c "until curl -sf http://localhost:${APP_PORT} > /dev/null 2>&1; do sleep 2; done"
-          echo "✅ ${APP_FILTER} dev server on :${APP_PORT} (PID $APP_PID)"
+          APP_PIDS=""
+          for APP in $APPS; do
+            APP_FILTER=${APP%%:*}
+            APP_PORT=${APP##*:}
+            # Enable Vite dep optimization logging to catch late-discovered deps
+            DEBUG=vite:deps pnpm --filter "$APP_FILTER" dev -- --port ${APP_PORT} >> /tmp/app-dev.log 2>&1 &
+            APP_PIDS="$APP_PIDS $!"
+            timeout 60 bash -c "until curl -sf http://localhost:${APP_PORT} > /dev/null 2>&1; do sleep 2; done"
+            echo "✅ ${APP_FILTER} dev server on :${APP_PORT}"
+          done
 
           # Verify Anvil is still reachable and the app's env is correct
           echo "Verifying Anvil RPC..."
@@ -280,6 +306,8 @@ jobs:
             PLAYWRIGHT_CONFIG="projects/manager/playwright.premium.config.ts"
           elif [[ "${{ matrix.config.project }}" == "portal" ]]; then
             PLAYWRIGHT_CONFIG="projects/portal/playwright.config.ts"
+          elif [[ "${{ matrix.config.project }}" == "cross-app" ]]; then
+            PLAYWRIGHT_CONFIG="projects/cross-app/playwright.config.ts"
           else
             PLAYWRIGHT_CONFIG="projects/manager/playwright.config.ts"
           fi
@@ -288,7 +316,7 @@ jobs:
             --config=${PLAYWRIGHT_CONFIG} \
             --shard=${{ matrix.config.shardIndex }}/${{ matrix.config.shardTotal }}
           TEST_EXIT=$?
-          kill $APP_PID 2>/dev/null || true
+          kill $APP_PIDS 2>/dev/null || true
           exit $TEST_EXIT
         env:
           CI: "true"
