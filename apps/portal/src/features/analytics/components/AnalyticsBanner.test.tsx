@@ -19,6 +19,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
       {children}
     </a>
   ),
+  useLocation: () => '/',
 }))
 
 const renderBanner = (consent: AnalyticsConsentState) => {

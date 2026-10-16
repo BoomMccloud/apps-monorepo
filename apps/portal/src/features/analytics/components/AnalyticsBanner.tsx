@@ -1,30 +1,34 @@
 import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import { ANALYTICS_BANNER } from '@ens-apps/utils/analyticsConsentWording'
 import { Link } from '@tanstack/react-router'
-import { useId } from 'react'
+import { type CSSProperties, useId } from 'react'
 import { Button } from '@/components/ui/button'
+import { useTopUnderAppHeader } from '@/features/analytics/hooks/useTopUnderAppHeader'
 import { cn } from '@/lib/utils'
 
 /**
  * The analytics banner: a card floating over the page until the visitor
  * chooses, in either ENS app. On a phone it sits at the top, under the
- * header; from the `sm` width, in the bottom-right corner, away from the
- * sidebar's Help and Settings menus on the left. It stays under every
+ * app's header; from the `sm` width, in the bottom-right corner, away from
+ * the sidebar's Help and Settings menus on the left. It stays under every
  * dialog, the wallet modal included.
  */
 export const AnalyticsBanner = () => {
   const { consent, accept, decline } = useAnalyticsConsent()
   const headingId = useId()
+  const isShown = consent === 'pending'
+  const phoneTop = useTopUnderAppHeader(isShown)
 
-  if (consent !== 'pending') return null
+  if (!isShown) return null
 
   return (
     <section
       aria-labelledby={headingId}
       className={cn(
-        'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl border border-border bg-background p-4 text-foreground shadow-lg',
+        'fixed inset-x-2.5 top-(--phone-top) z-40 flex flex-col gap-3 rounded-xl border border-border bg-background p-4 text-foreground shadow-lg',
         'sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-6 sm:w-80',
       )}
+      style={{ '--phone-top': `${phoneTop}px` } as CSSProperties}
     >
       <h2 className="font-medium text-h3" id={headingId}>
         {ANALYTICS_BANNER.heading}
