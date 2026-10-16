@@ -50,6 +50,25 @@ export const analyticsNotice = (page: Page): Locator =>
 export const analyticsSwitch = (page: Page): Locator =>
   analyticsNotice(page).getByRole('switch', { name: 'Allow analytics' })
 
+/**
+ * Show the walk's browser to PostHog as a visitor's. The SDK drops every
+ * event from a browser it takes for a bot, and an automated Chromium says it
+ * is one (`navigator.webdriver`, a HeadlessChrome user agent), so without
+ * this no event could follow Accept, and the silence before it would prove
+ * nothing about events. It runs before any page script.
+ */
+export const presentAsVisitorBrowser = (
+  context: BrowserContext,
+): Promise<void> =>
+  context.addInitScript(() => {
+    const userAgent = navigator.userAgent.replace(/HeadlessChrome/g, 'Chrome')
+    Object.defineProperties(Navigator.prototype, {
+      webdriver: { configurable: true, get: () => false },
+      userAgent: { configurable: true, get: () => userAgent },
+      userAgentData: { configurable: true, get: () => undefined },
+    })
+  })
+
 /** Forget any choice the fixtures stored, so the visitor has not chosen. */
 export const forgetConsent = async (context: BrowserContext): Promise<void> => {
   await context.clearCookies({ name: CONSENT_COOKIE_NAME })

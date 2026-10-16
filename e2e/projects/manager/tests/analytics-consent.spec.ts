@@ -26,6 +26,7 @@ import {
   keepScreenshot,
   pageDistinctId,
   pageSwitch,
+  presentAsVisitorBrowser,
   QUIET_PERIOD,
   requestText,
   storedConsent,
@@ -76,8 +77,9 @@ test.afterAll(async () => {
   await standIn?.close()
 })
 
-test.beforeEach(() => {
+test.beforeEach(async ({ context }) => {
   standIn.reset()
+  await presentAsVisitorBrowser(context)
 })
 
 /** The header's own controls: the first navigation landmark is the header's. */

@@ -80,13 +80,16 @@ const open = async (page: Page, url: string): Promise<void> => {
   await waitForAnalyticsReady(page)
 }
 
-/** The choice the app's notice reports: its switch, and its words. */
+/** The choice the app's notice reports once reloaded: its switch, and its words. */
 const expectNoticeReports = async (
   page: Page,
   url: string,
   choice: 'accepted' | 'declined',
 ): Promise<void> => {
-  await open(page, url)
+  await page.goto(url)
+  // A tab already on the notice only moves to its fragment: load it again.
+  await page.reload()
+  await waitForAnalyticsReady(page)
   await expect(analyticsNotice(page)).toContainText(new RegExp(choice, 'i'))
   if (choice === 'accepted') {
     await expect(analyticsSwitch(page)).toBeChecked()

@@ -15,7 +15,9 @@ import { gunzipSync } from 'node:zlib'
  * instead of PostHog. Browser requests are cross-origin (the apps run on their
  * own ports), so every one of them carries an `Origin` header; the Manager's
  * server fetches the switch rules with none. That is how a recorded request is
- * attributed to the browser or the server.
+ * attributed to the browser or the server. Other programs on the machine may
+ * call the port too (a remote-session tool sends `GET /` to each new local
+ * port): a request that names no PostHog project is from neither app.
  */
 
 export const POSTHOG_STAND_IN_PORT = Number(
@@ -37,6 +39,12 @@ export type RecordedRequest = {
   /** The PostHog events the body carries, if it carries any. */
   readonly events: readonly CapturedEvent[]
   readonly fromBrowser: boolean
+  /**
+   * From neither app: no `Origin`, and no PostHog project named. Every call
+   * the apps make to PostHog carries the project's key (`phc_…`) in its
+   * path, query or body, or the project's secret key as `Authorization`.
+   */
+  readonly fromElsewhere: boolean
   readonly receivedAt: number
 }
 
@@ -68,6 +76,8 @@ type StandInOptions = {
 }
 
 const GZIP_MAGIC = [0x1f, 0x8b] as const
+/** A PostHog project's public key, as each app and the SDK send it. */
+const PROJECT_KEY = /phc_[A-Za-z0-9]+/
 
 const decodeBody = (raw: Buffer): string => {
   if (raw.length === 0) return ''
@@ -197,6 +207,10 @@ export const startPostHogStandIn = async (
       const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
       const body = decodeBody(raw)
       const headers = flatHeaders(request)
+      const fromBrowser = headers.origin !== undefined
+      const namesProject =
+        PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
+        headers.authorization !== undefined
       recorded.push({
         method: request.method ?? 'GET',
         path: url.pathname,
@@ -204,7 +218,8 @@ export const startPostHogStandIn = async (
         headers,
         body,
         events: eventsIn(body),
-        fromBrowser: headers.origin !== undefined,
+        fromBrowser,
+        fromElsewhere: !fromBrowser && !namesProject,
         receivedAt: Date.now(),
       })
 
@@ -231,7 +246,8 @@ export const startPostHogStandIn = async (
     url: `http://127.0.0.1:${port}`,
     requests: () => [...recorded],
     browserRequests,
-    serverRequests: () => recorded.filter((entry) => !entry.fromBrowser),
+    serverRequests: () =>
+      recorded.filter((entry) => !entry.fromBrowser && !entry.fromElsewhere),
     browserEvents: () => browserRequests().flatMap((entry) => entry.events),
     reset: () => {
       recorded.length = 0

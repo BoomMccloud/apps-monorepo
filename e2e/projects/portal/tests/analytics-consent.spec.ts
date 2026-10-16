@@ -29,6 +29,7 @@ import {
   identifiesWallet,
   keepScreenshot,
   pageDistinctId,
+  presentAsVisitorBrowser,
   QUIET_PERIOD,
   requestText,
   storedConsent,
@@ -74,8 +75,9 @@ test.afterAll(async () => {
   await standIn?.close()
 })
 
-test.beforeEach(() => {
+test.beforeEach(async ({ context }) => {
   standIn.reset()
+  await presentAsVisitorBrowser(context)
 })
 
 const openFresh = async (page: Page, path = '/'): Promise<void> => {
