@@ -11,6 +11,7 @@ import { Toaster } from 'sonner'
 import { usePublicClient, WagmiProvider } from 'wagmi'
 import { NotFoundMessage } from '@/components/NotFoundMessage'
 import { isSepoliaBuild } from '@/config'
+import { AnalyticsBanner } from '@/features/analytics/components/AnalyticsBanner'
 import { useTransactionManagerAccount } from '@/features/transaction-manager/hooks/useTransactionManagerAccount'
 import { useTransactionModalRouteReset } from '@/features/transaction-manager/hooks/useTransactionModal'
 import { ConnectModalProvider } from '@/features/wallet/ConnectModalProvider'
@@ -89,6 +90,7 @@ export const Route = createRootRoute({
               <TransactionManagerSetup>
                 <PHProvider>
                   <Outlet />
+                  <AnalyticsBanner />
                 </PHProvider>
               </TransactionManagerSetup>
             </ConnectModalProvider>

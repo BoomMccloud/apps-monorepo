@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NameRouteImport } from './routes/$name'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as NameIndexRouteImport } from './routes/$name/index'
 import { Route as NameAddressRouteImport } from './routes/$name/address'
 import { Route as NameChangeResolverRouteImport } from './routes/$name/change-resolver'
@@ -59,6 +60,11 @@ const IndexRoute = IndexRouteImport.update({
 const NameRoute = NameRouteImport.update({
   id: '/$name',
   path: '/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NameIndexRoute = NameIndexRouteImport.update({
@@ -263,6 +269,7 @@ const ResolverAddressRolesIndexRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$name': typeof NameRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/$name/address': typeof NameAddressRoute
   '/$name/change-resolver': typeof NameChangeResolverRoute
   '/$name/create-subname': typeof NameCreateSubnameRoute
@@ -305,6 +312,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/privacy': typeof PrivacyRoute
   '/$name/address': typeof NameAddressRoute
   '/$name/change-resolver': typeof NameChangeResolverRoute
   '/$name/create-subname': typeof NameCreateSubnameRoute
@@ -345,6 +353,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$name': typeof NameRouteWithChildren
+  '/privacy': typeof PrivacyRoute
   '/$name/address': typeof NameAddressRoute
   '/$name/change-resolver': typeof NameChangeResolverRoute
   '/$name/create-subname': typeof NameCreateSubnameRoute
@@ -390,6 +399,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$name'
+    | '/privacy'
     | '/$name/address'
     | '/$name/change-resolver'
     | '/$name/create-subname'
@@ -432,6 +442,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/privacy'
     | '/$name/address'
     | '/$name/change-resolver'
     | '/$name/create-subname'
@@ -471,6 +482,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$name'
+    | '/privacy'
     | '/$name/address'
     | '/$name/change-resolver'
     | '/$name/create-subname'
@@ -515,6 +527,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NameRoute: typeof NameRouteWithChildren
+  PrivacyRoute: typeof PrivacyRoute
   AddrAddrRoute: typeof AddrAddrRouteWithChildren
   ImportNameRoute: typeof ImportNameRoute
   RegistryAddressRoute: typeof RegistryAddressRouteWithChildren
@@ -537,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/$name'
       fullPath: '/$name'
       preLoaderRoute: typeof NameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$name/': {
@@ -931,6 +951,7 @@ const TldTldRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NameRoute: NameRouteWithChildren,
+  PrivacyRoute: PrivacyRoute,
   AddrAddrRoute: AddrAddrRouteWithChildren,
   ImportNameRoute: ImportNameRoute,
   RegistryAddressRoute: RegistryAddressRouteWithChildren,

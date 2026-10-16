@@ -220,7 +220,11 @@ const BASE_DIRECTIVES = [
   'upgrade-insecure-requests',
 ] as const
 
-// POSTHOG_LAUNCH_PAUSE: CSP reporting paused while PostHog is used only for flags. Restore endpoint, directives, and Reporting-Endpoints together; enforcement is unchanged.
+// CSP reports stay off: a browser sends violation reports to this endpoint
+// from the response headers without asking, so they cannot wait for the
+// visitor's analytics choice. The endpoint, the directives and the
+// Reporting-Endpoints header (withSecurityHeaders) go back together;
+// enforcement is unchanged.
 // PostHog CSP-violation reporting endpoint, visualized by PostHog's "CSP
 // violations" dashboard template. Points directly at PostHog's EU cloud, not our
 // edge.ens.domains analytics proxy — that proxy can't serve /report/ (confirmed
@@ -233,7 +237,7 @@ const BASE_DIRECTIVES = [
 // frame-ancestors is invalid there.
 const HEADER_ONLY_DIRECTIVES = [
   "frame-ancestors 'none'",
-  // POSTHOG_LAUNCH_PAUSE: reporting destination paused; restore with endpoint and withSecurityHeaders below.
+  // Reports stay off; see the endpoint above.
   // 'report-to posthog',
   // `report-uri ${POSTHOG_CSP_REPORT_ENDPOINT}`,
 ] as const
@@ -253,7 +257,7 @@ export function withSecurityHeaders(response: Response): Response {
   // headers are mutable (HTMLRewriter / `new Response` results pass through too).
   const result = new Response(response.body, response)
   result.headers.set('Content-Security-Policy', cspWithFrameAncestors)
-  // POSTHOG_LAUNCH_PAUSE: reporting header paused; restore with the endpoint and report directives above.
+  // Reports stay off; see the endpoint above.
   // result.headers.set(
   //   'Reporting-Endpoints',
   //   `posthog="${POSTHOG_CSP_REPORT_ENDPOINT}"`,

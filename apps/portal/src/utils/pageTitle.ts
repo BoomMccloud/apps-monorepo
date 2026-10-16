@@ -67,6 +67,15 @@ const registerTitle = (
   return name ? withSuffix(decodeURIComponent(name)) : null
 }
 
+const PAGE_TITLES: Readonly<Record<string, string>> = {
+  '/privacy': 'Privacy notice',
+}
+
+const appPageTitle = (pathname: string): string | null => {
+  const title = PAGE_TITLES[pathname]
+  return title ? withSuffix(title) : null
+}
+
 const tldTitle = (pathname: string): string | null => {
   if (!isTldRoute(pathname)) return null
 
@@ -93,6 +102,7 @@ const tldTitle = (pathname: string): string | null => {
  */
 export function getPageTitle(pathname: string, registerName?: string): string {
   return (
+    appPageTitle(pathname) ??
     addressTitle(pathname) ??
     contractTitle(pathname) ??
     nameTitle(pathname) ??

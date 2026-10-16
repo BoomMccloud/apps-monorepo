@@ -45,6 +45,10 @@ describe('getPageTitle', () => {
     expect(getPageTitle('/tld/eth')).toBe('eth — ENS Explorer App')
   })
 
+  it('titles the privacy notice, which is no ENS name', () => {
+    expect(getPageTitle('/privacy')).toBe('Privacy notice — ENS Explorer App')
+  })
+
   it('falls back to the bare app name', () => {
     expect(getPageTitle('/')).toBe('ENS Explorer App')
   })

@@ -1,100 +1,221 @@
-import { boot, trackEvent } from '@intercom/messenger-js-sdk'
-import { render } from '@testing-library/react'
+import {
+  acceptAnalytics,
+  declineAnalytics,
+  resetVisitor,
+  startAnalyticsChoice,
+} from '@ens-apps/utils/analytics-consent'
+import { useAnalyticsConsent } from '@ens-apps/utils/analytics-consent-context'
+import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
+import { act, render, screen } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useConnectionEffect } from 'wagmi'
+import { useConnection, useConnectionEffect } from 'wagmi'
 import { INTERCOM_APP_ID } from '@/lib/intercom'
-import { FEATURE_FLAGS_ONLY_CONFIG } from './config'
 import { PHProvider } from './provider'
 
-vi.mock('@tanstack/react-router', () => ({ useHydrated: () => true }))
+const WALLET = '0x1111111111111111111111111111111111111111'
+
 vi.mock('@intercom/messenger-js-sdk', () => ({
   boot: vi.fn(),
+  getVisitorId: vi.fn(() => 'intercom-visitor'),
   trackEvent: vi.fn(),
+  update: vi.fn(),
 }))
 vi.mock('@posthog/react', () => ({
-  PostHogProvider: ({ children }: { children: unknown }) => children,
+  PostHogProvider: ({ children }: { children: ReactNode }) => children,
 }))
 vi.mock('posthog-js/dist/module.full.no-external', () => ({
   default: {
+    __loaded: true,
     init: vi.fn(),
     identify: vi.fn(),
     register: vi.fn(),
     capture: vi.fn(),
-    reset: vi.fn(),
+    get_distinct_id: vi.fn(() => 'anonymous-visitor'),
+    get_session_replay_url: vi.fn(() => 'https://replay.example/1'),
+    get_explicit_consent_status: vi.fn(() => 'pending'),
   },
 }))
-vi.mock('wagmi', () => ({ useConnectionEffect: vi.fn() }))
-vi.mock('@ens-apps/transaction-manager', () => ({
-  transactionManager: {
-    onFailedRunTelemetry: vi.fn(() => vi.fn()),
-    onRunTelemetryEvent: vi.fn(() => vi.fn()),
-  },
+vi.mock('@ens-apps/utils/analytics-consent', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@ens-apps/utils/analytics-consent')
+  >()),
+  acceptAnalytics: vi.fn(async () => {}),
+  declineAnalytics: vi.fn(),
+  resetVisitor: vi.fn(),
+  startAnalyticsChoice: vi.fn(() => 'pending'),
+}))
+vi.mock('wagmi', () => ({
+  useConnection: vi.fn(),
+  useConnectionEffect: vi.fn(),
 }))
 
-describe('launch PostHog provider', () => {
+const ConsentProbe = () => {
+  const { consent, accept, decline } = useAnalyticsConsent()
+  return (
+    <div>
+      <output>{consent}</output>
+      <button onClick={accept} type="button">
+        accept
+      </button>
+      <button onClick={decline} type="button">
+        decline
+      </button>
+    </div>
+  )
+}
+
+const renderProvider = () =>
+  render(
+    <PHProvider>
+      <ConsentProbe />
+    </PHProvider>,
+  )
+
+const connectionCallbacks = () => {
+  const callbacks = vi.mocked(useConnectionEffect).mock.calls.at(-1)?.[0]
+  if (!callbacks)
+    throw new Error('PHProvider registered no connection callbacks')
+  return callbacks
+}
+
+const connected = (address: string | undefined) => {
+  vi.mocked(useConnection).mockReturnValue({
+    address,
+    chainId: 1,
+    connector: { name: 'test-wallet' },
+  } as unknown as ReturnType<typeof useConnection>)
+}
+
+describe('PHProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('VITE_PUBLIC_POSTHOG_KEY', 'test-key')
+    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('pending')
+    vi.mocked(startAnalyticsChoice).mockReturnValue('pending')
+    connected(undefined)
   })
+
   afterEach(() => {
     vi.unstubAllEnvs()
-    vi.restoreAllMocks()
   })
 
-  it('initializes flags with collection disabled and boots Intercom without analytics metadata', () => {
-    render(
-      <PHProvider>
-        <div>child</div>
-      </PHProvider>,
-    )
+  it('starts PostHog silent, with no switch requests, and reports the starting choice', () => {
+    renderProvider()
+
     expect(posthog.init).toHaveBeenCalledWith(
       'test-key',
-      expect.objectContaining(FEATURE_FLAGS_ONLY_CONFIG),
+      expect.objectContaining({
+        advanced_disable_flags: true,
+        opt_out_capturing_by_default: true,
+        opt_out_persistence_by_default: true,
+      }),
     )
-    expect(boot).toHaveBeenCalledWith({ app_id: INTERCOM_APP_ID })
-    expect(posthog.capture).not.toHaveBeenCalled()
+    expect(vi.mocked(posthog.init).mock.calls[0]?.[1]).not.toHaveProperty(
+      'bootstrap',
+    )
+    expect(screen.getByText('pending')).toBeInTheDocument()
   })
 
-  it('keeps wallet targeting and Intercom operational without analytics properties', () => {
-    render(
-      <PHProvider>
-        <div>child</div>
-      </PHProvider>,
+  it('skips PostHog without a key, and then shows no choice to make', () => {
+    vi.stubEnv('VITE_PUBLIC_POSTHOG_KEY', '')
+    renderProvider()
+
+    expect(posthog.init).not.toHaveBeenCalled()
+    expect(screen.getByText('unknown')).toBeInTheDocument()
+    expect(boot).toHaveBeenCalledWith({ app_id: INTERCOM_APP_ID })
+  })
+
+  it('boots the support chat without the analytics link before Accept, and links it on Accept', async () => {
+    renderProvider()
+    expect(boot).toHaveBeenCalledWith({ app_id: INTERCOM_APP_ID })
+
+    await act(async () =>
+      screen.getByRole('button', { name: 'accept' }).click(),
     )
-    const wallet = {
-      address: '0x1111111111111111111111111111111111111111',
+
+    expect(acceptAnalytics).toHaveBeenCalledWith(posthog, { isDev: true })
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: 'anonymous-visitor',
+      recent_replay: 'https://replay.example/1',
+    })
+    expect(screen.getByText('granted')).toBeInTheDocument()
+  })
+
+  it('stops analytics on Decline', async () => {
+    renderProvider()
+
+    await act(async () =>
+      screen.getByRole('button', { name: 'decline' }).click(),
+    )
+
+    expect(declineAnalytics).toHaveBeenCalledWith(posthog)
+    expect(screen.getByText('denied')).toBeInTheDocument()
+  })
+
+  it('does not identify a connecting wallet before Accept', () => {
+    renderProvider()
+
+    connectionCallbacks().onConnect?.({
+      address: WALLET,
       chainId: 1,
       connector: { name: 'test-wallet' },
-    }
-    const callbacks = vi.mocked(useConnectionEffect).mock.calls[0]?.[0]
-    callbacks?.onConnect?.(
-      wallet as Parameters<NonNullable<typeof callbacks.onConnect>>[0],
-    )
-    expect(posthog.identify).toHaveBeenCalledWith(
-      wallet.address,
-      { address: wallet.address },
-      { initial_address: wallet.address },
-    )
-    expect(posthog.register).not.toHaveBeenCalled()
-    expect(posthog.capture).not.toHaveBeenCalled()
+    } as never)
+
+    expect(posthog.identify).not.toHaveBeenCalled()
     expect(trackEvent).toHaveBeenCalledWith('wallet:connect', {
-      wallet_address: wallet.address,
+      wallet_address: WALLET,
       chain_id: 1,
       wallet_connector: 'test-wallet',
     })
   })
 
-  it('boots Intercom even when PostHog initialization fails', () => {
-    vi.mocked(posthog.init).mockImplementationOnce(() => {
-      throw new Error('blocked')
-    })
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    render(
-      <PHProvider>
-        <div>child</div>
-      </PHProvider>,
+  it('identifies a wallet that connects after Accept, then records the connect', () => {
+    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
+    renderProvider()
+
+    connectionCallbacks().onConnect?.({
+      address: WALLET,
+      chainId: 1,
+      connector: { name: 'test-wallet' },
+    } as never)
+
+    expect(posthog.identify).toHaveBeenCalledWith(
+      WALLET,
+      { address: WALLET },
+      { initial_address: WALLET },
     )
-    expect(boot).toHaveBeenCalledWith({ app_id: INTERCOM_APP_ID })
+    expect(posthog.capture).toHaveBeenCalledWith('wallet:connect', {
+      wallet_address: WALLET,
+      chain_id: 1,
+      wallet_connector: 'test-wallet',
+    })
+  })
+
+  it('identifies the wallet already connected when the visitor accepts', async () => {
+    connected(WALLET)
+    renderProvider()
+    expect(posthog.identify).not.toHaveBeenCalled()
+
+    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
+    await act(async () =>
+      screen.getByRole('button', { name: 'accept' }).click(),
+    )
+
+    expect(posthog.identify).toHaveBeenCalledWith(
+      WALLET,
+      { address: WALLET },
+      { initial_address: WALLET },
+    )
+  })
+
+  it('on disconnect, records it, then forgets the visitor and keeps the choice', () => {
+    renderProvider()
+
+    connectionCallbacks().onDisconnect?.()
+
+    expect(posthog.capture).toHaveBeenCalledWith('wallet:disconnect', undefined)
+    expect(resetVisitor).toHaveBeenCalledWith(posthog)
   })
 })

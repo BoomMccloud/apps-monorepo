@@ -273,6 +273,11 @@ describe('routing', () => {
       expect(RESERVED_ROUTE_SEGMENTS).toContain('registry')
       expect(RESERVED_ROUTE_SEGMENTS).toContain('resolver')
       expect(RESERVED_ROUTE_SEGMENTS).toContain('tld')
+      expect(RESERVED_ROUTE_SEGMENTS).toContain('privacy')
+    })
+
+    it('never reads the privacy notice as an ENS name', () => {
+      expect(extractNameFromPath('/privacy')).toBeNull()
     })
   })
 
