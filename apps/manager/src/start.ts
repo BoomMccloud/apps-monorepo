@@ -39,7 +39,9 @@ const securityHeadersMiddleware = createMiddleware().server(
 
     // Report-Only until the build sets VITE_CSP_ENFORCE=1 (see csp.ts).
     setResponseHeader(CSP_HEADER_NAME, buildCsp(cspNonce))
-    // POSTHOG_LAUNCH_PAUSE: reporting paused. Restore POSTHOG_CSP_REPORT_ENDPOINT import and the endpoint/directives in server/csp.ts together.
+    // CSP reports stay off: the browser sends them on its own, before any
+    // analytics choice. The header goes back together with the endpoint and
+    // the directives in server/csp.ts.
     // setResponseHeader(
     //   'Reporting-Endpoints',
     //   `posthog="${POSTHOG_CSP_REPORT_ENDPOINT}"`,

@@ -115,7 +115,11 @@ const FRAME_HOSTS = [
   COMMEMORATIVE_RENDERER_ORIGIN,
 ]
 
-// POSTHOG_LAUNCH_PAUSE: CSP reporting paused while PostHog is used only for flags. Restore endpoint, directives, and Reporting-Endpoints together; enforcement is unchanged.
+// CSP reports stay off: a browser sends violation reports to this endpoint
+// from the response headers without asking, so they cannot wait for the
+// visitor's analytics choice. The endpoint, the directives and the
+// Reporting-Endpoints header (start.ts) go back together; enforcement is
+// unchanged.
 // PostHog CSP-violation reporting endpoint. Points at PostHog EU cloud (the
 // edge.ens.domains analytics proxy can't serve /report/). Trailing slash is
 // required; token is the public client key.
@@ -165,7 +169,7 @@ export function buildCsp(nonce: string): string {
     "form-action 'self'",
     'upgrade-insecure-requests',
     "frame-ancestors 'none'",
-    // POSTHOG_LAUNCH_PAUSE: reporting destination paused; restore with the endpoint and src/start.ts header.
+    // Reports stay off; see the endpoint above.
     // 'report-to posthog',
     // `report-uri ${POSTHOG_CSP_REPORT_ENDPOINT}`,
   ].join('; ')};`

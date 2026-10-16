@@ -10,11 +10,13 @@ import { lazy, Suspense } from 'react'
 import { Toaster } from 'sonner'
 import { Layout } from '@/components/Layout'
 import { MATERIAL_SYMBOLS_URL, MSymbol } from '@/components/ui/material-symbol'
+import { AnalyticsBanner } from '@/features/analytics/components/AnalyticsBanner'
 import { NotFoundPage } from '@/features/not-found/pages/NotFoundPage'
 // Deep import, NOT the feature barrel: the barrel re-exports the whole
 // register workflow (steps, machines, transaction-manager deps), which would
 // end up in the chunk every route loads.
 import { useOrphanRegistrationCleanup } from '@/features/register-v2/state/useOrphanRegistrationCleanup'
+import { getFeatureSwitches } from '@/lib/posthog/get-feature-switches'
 import { RootProviders } from '@/lib/RootProviders'
 import appCss from '@/styles/index.css?url'
 import { DEBUG_FEATURES_ENABLED } from '@/utils/debug-features'
@@ -36,6 +38,11 @@ const toastIconClassName =
   'ens-sonner-icon ms-fill ms-opsz-24 ms-wght-400 size-6 text-2xl leading-none'
 
 export const Route = createRootRouteWithContext<RootRouterContext>()({
+  // The feature switches the server decided for the wallet in the connection
+  // cookie, carried with the server-rendered page so the browser never asks
+  // PostHog. Later changes of wallet ask the server again (PHProvider).
+  loader: () => getFeatureSwitches({ data: {} }),
+  shouldReload: false,
   head: () => ({
     meta: [
       {
@@ -94,6 +101,7 @@ function RootComponent() {
           <Layout>
             <Outlet />
           </Layout>
+          <AnalyticsBanner />
           <Toaster
             icons={{
               error: (

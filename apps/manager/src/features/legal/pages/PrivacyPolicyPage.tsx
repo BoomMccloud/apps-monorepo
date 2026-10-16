@@ -1,3 +1,5 @@
+import { AnalyticsNotice } from '@/features/analytics/components/AnalyticsNotice'
+
 export const PrivacyPolicyPage = () => {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
@@ -8,6 +10,8 @@ export const PrivacyPolicyPage = () => {
         <p className="mb-8 text-gray-500 text-sm">
           Last modified: November 11, 2022
         </p>
+
+        <AnalyticsNotice />
 
         <section className="mb-8">
           <h2 className="font-semibold text-ens-blue-dark text-xl">
