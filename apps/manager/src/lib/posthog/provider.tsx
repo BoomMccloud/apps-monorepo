@@ -7,6 +7,7 @@ import {
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
+  useWalletIdentity,
 } from '@ens-apps/utils/analytics-consent-context'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { PostHogProvider } from '@posthog/react'
@@ -28,7 +29,6 @@ import {
   useFeatureSwitchSync,
 } from './useFeatureSwitchSync'
 import { usePostHogStart } from './usePostHogStart'
-import { useWalletIdentity } from './useWalletIdentity'
 
 /**
  * PostHog for the Manager: analytics only after the visitor accepts, feature
@@ -49,6 +49,7 @@ export const PHProvider = ({
 
   usePostHogStart(isHydrated, switches, setConsent)
   useWalletIdentity(
+    posthog,
     consent,
     address ? { address, chainId, connectorName: connector?.name } : null,
   )

@@ -1,5 +1,10 @@
-import { createContext, useContext } from 'react'
-import type { AnalyticsConsent } from './analytics-consent'
+import { createContext, useContext, useEffect } from 'react'
+import {
+  type AnalyticsClient,
+  type AnalyticsConsent,
+  type ConnectedWallet,
+  identifyWallet,
+} from './analytics-consent'
 
 /** The choice as the page knows it; `unknown` until the SDK has started. */
 export type AnalyticsConsentState = AnalyticsConsent | 'unknown'
@@ -22,3 +27,21 @@ export const AnalyticsConsentContext = createContext<AnalyticsConsentValue>({
 
 export const useAnalyticsConsent = (): AnalyticsConsentValue =>
   useContext(AnalyticsConsentContext)
+
+/**
+ * After Accept, the visitor is identified by their wallet, whether it was
+ * connected before the press, connected later, or restored on a later visit.
+ */
+export const useWalletIdentity = (
+  client: AnalyticsClient,
+  consent: AnalyticsConsentState,
+  wallet: ConnectedWallet | null,
+): void => {
+  const address = wallet?.address
+  const chainId = wallet?.chainId
+  const connectorName = wallet?.connectorName
+  useEffect(() => {
+    if (consent !== 'granted' || !address) return
+    identifyWallet(client, { address, chainId, connectorName })
+  }, [client, consent, address, chainId, connectorName])
+}
