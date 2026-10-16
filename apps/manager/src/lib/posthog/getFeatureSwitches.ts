@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { isAddress } from 'viem'
 import { getConnectionCookie } from '@/lib/connection-cookie'
 import { decideFeatureSwitches } from './decideFeatureSwitches'
-import type { FeatureSwitches } from './feature-flags'
+import type { DecidedFeatureSwitches } from './feature-flags'
 
 export type FeatureSwitchesInput = {
   /**
@@ -26,17 +26,17 @@ const validateFeatureSwitchesInput = (input: unknown): FeatureSwitchesInput => {
 }
 
 /**
- * Every feature switch, decided on the server for one visitor. POST, so a
- * wallet passed in rides in the body and never in a logged address.
+ * Every feature switch, decided on the server for one visitor, with the
+ * wallet it decided for (null for none), so the page knows whose answers they
+ * are. POST, so a wallet passed in rides in the body and never in a logged
+ * address.
  */
 export const getFeatureSwitches = createServerFn({ method: 'POST' })
   .validator(validateFeatureSwitchesInput)
-  .handler(async ({ data }): Promise<FeatureSwitches> => {
-    const wallet =
+  .handler(async ({ data }): Promise<DecidedFeatureSwitches> => {
+    const requested =
       data.wallet === undefined ? getConnectionCookie() : data.wallet
+    const wallet = requested && isAddress(requested) ? requested : null
     const { env } = await import('cloudflare:workers')
-    return decideFeatureSwitches(
-      env,
-      wallet && isAddress(wallet) ? wallet : null,
-    )
+    return { wallet, switches: await decideFeatureSwitches(env, wallet) }
   })

@@ -12,7 +12,6 @@ import {
 } from '@ens-apps/utils/analyticsConsentContext'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { PostHogProvider } from '@posthog/react'
-import { useQueryClient } from '@tanstack/react-query'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 // @posthog/react types its `client` prop with the `PostHog` type from the
 // default `posthog-js` build, which is a *nominally* distinct declaration from
@@ -23,13 +22,9 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { track } from './events'
-import { ALL_SWITCHES_OFF } from './feature-flags'
-import { getKnownFeatureSwitches } from './featureSwitches.query'
 import { linkSupportChat } from './supportChat'
-import {
-  pushFeatureSwitches,
-  useFeatureSwitchSync,
-} from './useFeatureSwitchSync'
+import { useFeatureSwitchSync } from './useFeatureSwitchSync'
+import { useIsConnectionSettled } from './useIsConnectionSettled'
 import { usePostHogStart } from './usePostHogStart'
 
 /**
@@ -43,16 +38,15 @@ export const PHProvider = ({
   readonly children: React.ReactNode
 }): React.ReactNode => {
   const isHydrated = useHydrated()
-  const switches = useLoaderData({ from: rootRouteId })
-  const { address, chainId, connector, status } = useConnection()
-  const queryClient = useQueryClient()
+  const pageStart = useLoaderData({ from: rootRouteId })
+  const { address, chainId, connector } = useConnection()
+  const isConnectionSettled = useIsConnectionSettled()
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
-  const wallet = address ?? null
-  // The server's answers this page already holds for a wallet, or for none.
-  const knownSwitches = (forWallet: string | null) =>
-    getKnownFeatureSwitches(queryClient, forWallet)
+  // Each reset empties the SDK's switches; the sync hook writes them again.
+  const [resetCount, setResetCount] = useState(0)
+  const recordReset = () => setResetCount((count) => count + 1)
 
-  usePostHogStart(isHydrated, switches, setConsent)
+  usePostHogStart(isHydrated, pageStart.switches, setConsent)
   useFollowedChoice(
     posthog,
     consent !== 'unknown',
@@ -60,10 +54,8 @@ export const PHProvider = ({
     (followed) => {
       setConsent(followed)
       if (followed === 'granted') linkSupportChat()
-      // The decline followed here reset the SDK, which empties the switches.
-      if (followed === 'denied') {
-        pushFeatureSwitches(knownSwitches(wallet) ?? switches)
-      }
+      // The Decline followed here reset the SDK.
+      if (followed === 'denied') recordReset()
     },
   )
   useWalletIdentity(
@@ -71,10 +63,12 @@ export const PHProvider = ({
     consent,
     address ? { address, chainId, connectorName: connector?.name } : null,
   )
-  useFeatureSwitchSync(
-    wallet,
-    status === 'connected' || status === 'disconnected',
-  )
+  useFeatureSwitchSync({
+    wallet: address ?? null,
+    isConnectionSettled,
+    pageStart,
+    resetCount,
+  })
 
   useConnectionEffect({
     onConnect(data) {
@@ -106,14 +100,12 @@ export const PHProvider = ({
     },
     onDisconnect() {
       // A new visitor id for whoever uses the browser next; the choice stays.
-      // The reset empties the switches, and the page would then show those it
-      // started with, decided for the wallet that just left: the answers for
-      // a visitor with no wallet go in at once, or all off until the server
-      // has given them.
+      // The reset empties the SDK's switches; the sync hook writes the answers
+      // for a visitor with no wallet, or every switch off until it has them.
       try {
         track('wallet:disconnect')
         resetVisitor(posthog)
-        pushFeatureSwitches(knownSwitches(null) ?? ALL_SWITCHES_OFF)
+        recordReset()
       } catch (error) {
         console.warn('[posthog] reset on disconnect failed', error)
       }
@@ -129,7 +121,7 @@ export const PHProvider = ({
   const decline = () => {
     declineAnalytics(posthog)
     // The reset that clears the visitor id also empties the switches.
-    pushFeatureSwitches(knownSwitches(wallet) ?? switches)
+    recordReset()
     setConsent('denied')
   }
 

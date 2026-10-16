@@ -39,8 +39,9 @@ const toastIconClassName =
 
 export const Route = createRootRouteWithContext<RootRouterContext>()({
   // The feature switches the server decided for the wallet in the connection
-  // cookie, carried with the server-rendered page so the browser never asks
-  // PostHog. Later changes of wallet ask the server again (PHProvider).
+  // cookie, with that wallet, carried with the server-rendered page so the
+  // browser never asks PostHog. The page keeps them as the answers known for
+  // that wallet; any other wallet asks the server (useFeatureSwitchSync).
   loader: () => getFeatureSwitches({ data: {} }),
   shouldReload: false,
   head: () => ({

@@ -14,19 +14,35 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
-import { ALL_SWITCHES_OFF } from './feature-flags'
+import {
+  ALL_SWITCHES_OFF,
+  type DecidedFeatureSwitches,
+  type FeatureSwitches,
+} from './feature-flags'
 import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
 const WALLET = '0x1111111111111111111111111111111111111111'
 const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
-const SERVER_SWITCHES = { i18n: true, migration: false, 'migration-nft': false }
-const WALLET_SWITCHES = { i18n: true, migration: true, 'migration-nft': false }
+const SERVER_SWITCHES: FeatureSwitches = {
+  i18n: true,
+  migration: false,
+  'migration-nft': false,
+}
+const WALLET_SWITCHES: FeatureSwitches = {
+  i18n: true,
+  migration: true,
+  'migration-nft': false,
+}
+
+// What the server rendered the page with: by default for a visitor with no
+// wallet in the connection cookie.
+const pageStartMock = vi.hoisted(() => vi.fn<() => DecidedFeatureSwitches>())
 
 vi.mock('@tanstack/react-router', () => ({
   rootRouteId: '__root__',
   useHydrated: () => true,
-  useLoaderData: () => SERVER_SWITCHES,
+  useLoaderData: () => pageStartMock(),
 }))
 vi.mock('@intercom/messenger-js-sdk', () => ({
   boot: vi.fn(),
@@ -112,13 +128,34 @@ const connectionCallbacks = () => {
   return callbacks
 }
 
-const connected = (address: string | undefined) => {
+const reports = (
+  status: ReturnType<typeof useConnection>['status'],
+  address: string | undefined,
+) => {
   vi.mocked(useConnection).mockReturnValue({
     address,
     chainId: 1,
     connector: { name: 'test-wallet' },
-    status: address ? 'connected' : 'disconnected',
+    status,
   } as unknown as ReturnType<typeof useConnection>)
+}
+
+const connected = (address: string | undefined) =>
+  reports(address ? 'connected' : 'disconnected', address)
+
+const restoring = (address: string | undefined) =>
+  reports('reconnecting', address)
+
+const written = (switches: FeatureSwitches) =>
+  [switches, undefined, { merge: false }] as const
+
+/** The page once wagmi has restored the stored connection: reconnecting, then the final state. */
+const renderRestored = (address: string | undefined) => {
+  restoring(address)
+  const view = renderProvider()
+  connected(address)
+  view.rerenderProvider()
+  return view
 }
 
 describe('PHProvider', () => {
@@ -127,7 +164,11 @@ describe('PHProvider', () => {
     vi.stubEnv('VITE_PUBLIC_POSTHOG_KEY', 'test-key')
     vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('pending')
     vi.mocked(startAnalyticsChoice).mockReturnValue('pending')
-    vi.mocked(getFeatureSwitches).mockResolvedValue(WALLET_SWITCHES)
+    pageStartMock.mockReturnValue({ wallet: null, switches: SERVER_SWITCHES })
+    vi.mocked(getFeatureSwitches).mockResolvedValue({
+      wallet: WALLET,
+      switches: WALLET_SWITCHES,
+    })
     connected(undefined)
   })
 
@@ -176,7 +217,7 @@ describe('PHProvider', () => {
     })
   })
 
-  it("on Decline, stops analytics and puts the server's switches back", async () => {
+  it('on Decline, stops analytics', async () => {
     renderProvider()
 
     await act(async () =>
@@ -184,13 +225,6 @@ describe('PHProvider', () => {
     )
 
     expect(declineAnalytics).toHaveBeenCalledWith(posthog)
-    expect(posthog.updateFlags).toHaveBeenCalledWith(
-      SERVER_SWITCHES,
-      undefined,
-      {
-        merge: false,
-      },
-    )
     expect(screen.getByText('denied')).not.toBeNull()
   })
 
@@ -265,129 +299,169 @@ describe('PHProvider', () => {
     )
   })
 
-  it('on disconnect, puts answers for a visitor without a wallet into the SDK at once, before the server answers', async () => {
-    connected(WALLET)
-    renderProvider()
-    await vi.waitFor(() => expect(posthog.updateFlags).toHaveBeenCalled())
-    vi.mocked(posthog.updateFlags).mockClear()
-
-    connectionCallbacks().onDisconnect?.()
-
-    // After the reset the page would show its starting answers, which were
-    // for the wallet; no switch stays on for it while the server is asked.
-    expect(posthog.updateFlags).toHaveBeenCalledWith(
-      ALL_SWITCHES_OFF,
-      undefined,
-      { merge: false },
-    )
-    expect(vi.mocked(resetVisitor).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
-    )
-  })
-
-  it("follows a choice made in another tab or app, and puts the server's switches back after a followed Decline", async () => {
-    vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
-    renderProvider()
-    await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
-    const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
-    vi.mocked(posthog.updateFlags).mockClear()
-
-    act(() => following?.onChange('denied'))
-
-    expect(screen.getByText('denied')).not.toBeNull()
-    expect(posthog.updateFlags).toHaveBeenCalledWith(
-      SERVER_SWITCHES,
-      undefined,
-      { merge: false },
-    )
-  })
-
-  it("puts the server's answers for the connected wallet into the SDK", async () => {
-    connected(WALLET)
-    renderProvider()
-
-    await vi.waitFor(() =>
-      expect(posthog.updateFlags).toHaveBeenCalledWith(
-        WALLET_SWITCHES,
-        undefined,
-        {
-          merge: false,
-        },
-      ),
-    )
-    expect(getFeatureSwitches).toHaveBeenCalledWith({
-      data: { wallet: WALLET },
-    })
-  })
-
-  describe('when the connected wallet changes', () => {
+  describe('the switches in the SDK', () => {
     const answersWaiting = () => new Promise<never>(() => {})
 
-    it("puts no switch in the SDK for the next wallet until the server has answered for it, and not the last wallet's", async () => {
-      connected(WALLET)
-      const { rerenderProvider } = renderProvider()
-      await vi.waitFor(() =>
-        expect(posthog.updateFlags).toHaveBeenCalledWith(
-          WALLET_SWITCHES,
-          undefined,
-          { merge: false },
-        ),
-      )
-      vi.mocked(posthog.updateFlags).mockClear()
-
-      // The server has not answered for the next wallet, or never does.
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
-      connected(OTHER_WALLET)
-      rerenderProvider()
-
-      expect(posthog.updateFlags).toHaveBeenCalledWith(
-        ALL_SWITCHES_OFF,
-        undefined,
-        { merge: false },
-      )
-    })
-
-    it('puts back the answers already held for a wallet the visitor returns to', async () => {
-      connected(WALLET)
-      const { rerenderProvider } = renderProvider()
-      await vi.waitFor(() =>
-        expect(posthog.updateFlags).toHaveBeenCalledWith(
-          WALLET_SWITCHES,
-          undefined,
-          { merge: false },
-        ),
-      )
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
-      connected(OTHER_WALLET)
-      rerenderProvider()
-      vi.mocked(posthog.updateFlags).mockClear()
-
-      connected(WALLET)
-      rerenderProvider()
-
-      expect(posthog.updateFlags).toHaveBeenCalledWith(
-        WALLET_SWITCHES,
-        undefined,
-        { merge: false },
-      )
-      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
-        ALL_SWITCHES_OFF,
-        undefined,
-        { merge: false },
-      )
-    })
-
-    it('keeps the answers a visitor without a wallet holds while the first wallet connects', async () => {
+    it('writes nothing while wagmi restores the connection, then the answers the page started with for the wallet it restores', () => {
+      pageStartMock.mockReturnValue({
+        wallet: WALLET,
+        switches: WALLET_SWITCHES,
+      })
+      // wagmi's first report is "disconnected", before it has restored
+      // anything; the page's answers are for WALLET and still hold.
       connected(undefined)
       const { rerenderProvider } = renderProvider()
-      await vi.waitFor(() => expect(posthog.updateFlags).toHaveBeenCalled())
-      vi.mocked(posthog.updateFlags).mockClear()
+      restoring(WALLET)
+      rerenderProvider()
+      expect(posthog.updateFlags).not.toHaveBeenCalled()
 
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
       connected(WALLET)
       rerenderProvider()
 
-      expect(posthog.updateFlags).not.toHaveBeenCalled()
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(WALLET_SWITCHES),
+      )
+      expect(getFeatureSwitches).not.toHaveBeenCalled()
+    })
+
+    it("writes every switch off for a wallet restored other than the one the page started with, and asks the server for that wallet's", async () => {
+      pageStartMock.mockReturnValue({
+        wallet: WALLET,
+        switches: WALLET_SWITCHES,
+      })
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+
+      renderRestored(OTHER_WALLET)
+
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(ALL_SWITCHES_OFF),
+      )
+      expect(getFeatureSwitches).toHaveBeenCalledWith({
+        data: { wallet: OTHER_WALLET },
+      })
+    })
+
+    it("writes the server's answers for the connected wallet", async () => {
+      renderRestored(WALLET)
+
+      await vi.waitFor(() =>
+        expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+          ...written(WALLET_SWITCHES),
+        ),
+      )
+      expect(getFeatureSwitches).toHaveBeenCalledWith({
+        data: { wallet: WALLET },
+      })
+    })
+
+    it('on disconnect, does not write the switches itself, and has them written again once the SDK has been reset', async () => {
+      pageStartMock.mockReturnValue({
+        wallet: WALLET,
+        switches: WALLET_SWITCHES,
+      })
+      renderRestored(WALLET)
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      // The connection is still reported as it was: only the reset is asked for.
+      act(() => connectionCallbacks().onDisconnect?.())
+
+      expect(resetVisitor).toHaveBeenCalledWith(posthog)
+      expect(posthog.updateFlags).toHaveBeenCalledOnce()
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(WALLET_SWITCHES),
+      )
+      expect(vi.mocked(resetVisitor).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
+      )
+    })
+
+    it('after a disconnect, writes every switch off for a visitor with no wallet until the server has answered for one', async () => {
+      pageStartMock.mockReturnValue({
+        wallet: WALLET,
+        switches: WALLET_SWITCHES,
+      })
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+      renderRestored(WALLET)
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      // wagmi has already moved to "disconnected" when it calls onDisconnect.
+      act(() => {
+        connected(undefined)
+        connectionCallbacks().onDisconnect?.()
+      })
+
+      // The page started with WALLET's answers, which are not a departed
+      // wallet's to keep.
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(ALL_SWITCHES_OFF),
+      )
+      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
+        ...written(WALLET_SWITCHES),
+      )
+    })
+
+    it("on Decline, has the switches written again from what is known for the connected wallet, not from the page's start", async () => {
+      // The page started for a visitor with no wallet; WALLET connected after.
+      renderRestored(WALLET)
+      await vi.waitFor(() =>
+        expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+          ...written(WALLET_SWITCHES),
+        ),
+      )
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      await act(async () =>
+        screen.getByRole('button', { name: 'decline' }).click(),
+      )
+
+      expect(declineAnalytics).toHaveBeenCalledWith(posthog)
+      expect(posthog.updateFlags).toHaveBeenCalledOnce()
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(WALLET_SWITCHES),
+      )
+      expect(
+        vi.mocked(declineAnalytics).mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
+      )
+    })
+
+    it('on Decline, writes every switch off for a wallet whose answers are not known yet, never the answers the page started with', async () => {
+      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
+      renderRestored(WALLET)
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      await act(async () =>
+        screen.getByRole('button', { name: 'decline' }).click(),
+      )
+
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(ALL_SWITCHES_OFF),
+      )
+      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
+        ...written(SERVER_SWITCHES),
+      )
+    })
+
+    it('follows a Decline made in another tab or app, and has the switches written again from what is known for the connected wallet', async () => {
+      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+      renderRestored(WALLET)
+      await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+      await vi.waitFor(() =>
+        expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+          ...written(WALLET_SWITCHES),
+        ),
+      )
+      const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+      vi.mocked(posthog.updateFlags).mockClear()
+
+      act(() => following?.onChange('denied'))
+
+      expect(screen.getByText('denied')).not.toBeNull()
+      expect(posthog.updateFlags).toHaveBeenCalledOnce()
+      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+        ...written(WALLET_SWITCHES),
+      )
     })
   })
 

@@ -22,6 +22,16 @@ export const FEATURE_SWITCH_NAMES: readonly FeatureSwitchName[] = Object.values(
 /** The server's answer for every switch, for one visitor. */
 export type FeatureSwitches = Readonly<Record<FeatureSwitchName, boolean>>
 
+/**
+ * The server's answers for one visitor, with the wallet they were decided
+ * for: the valid address, or null for a visitor with none. Answers belong to
+ * the wallet they were decided for and to no other.
+ */
+export type DecidedFeatureSwitches = {
+  readonly wallet: string | null
+  readonly switches: FeatureSwitches
+}
+
 /** What every visitor gets when the server cannot decide the switches. */
 export const ALL_SWITCHES_OFF: FeatureSwitches = {
   i18n: false,

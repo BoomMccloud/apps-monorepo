@@ -1,7 +1,6 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
-import type { QueryClient } from '@tanstack/react-query'
 import { fromPromise } from 'neverthrow'
 import { getFeatureSwitches } from './getFeatureSwitches'
 
@@ -12,7 +11,7 @@ class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
 /** The server's switch answers for a wallet, or for a visitor with none. */
 export const fetchFeatureSwitches = (wallet: string | null) =>
   fromPromise(
-    getFeatureSwitches({ data: { wallet } }),
+    getFeatureSwitches({ data: { wallet } }).then(({ switches }) => switches),
     (cause) => new GetFeatureSwitchesError({ cause }),
   )
 
@@ -25,9 +24,3 @@ export const getFeatureSwitchesQueryOptions = (wallet: string | null) =>
     queryFn: ({ queryKey: [{ wallet }] }) => fetchFeatureSwitches(wallet),
     staleTime: FEATURE_SWITCHES_STALE_TIME_MS,
   })
-
-/** The answers this page already holds for a wallet, or for none. */
-export const getKnownFeatureSwitches = (
-  queryClient: QueryClient,
-  wallet: string | null,
-) => queryClient.getQueryData(getFeatureSwitchesQueryOptions(wallet).queryKey)

@@ -38,8 +38,11 @@ describe('getFeatureSwitches', () => {
     vi.mocked(getConnectionCookie).mockReturnValue(COOKIE_WALLET)
   })
 
-  it('decides for the wallet in the connection cookie when none is passed', async () => {
-    await getFeatureSwitches({ data: {} })
+  it('decides for the wallet in the connection cookie when none is passed, and names it', async () => {
+    await expect(getFeatureSwitches({ data: {} })).resolves.toEqual({
+      wallet: COOKIE_WALLET,
+      switches: ALL_SWITCHES_OFF,
+    })
 
     expect(decideFeatureSwitches).toHaveBeenCalledWith(
       WORKER_ENV,
@@ -47,21 +50,25 @@ describe('getFeatureSwitches', () => {
     )
   })
 
-  it('decides for a passed wallet, or for no wallet, over the cookie', async () => {
-    await getFeatureSwitches({ data: { wallet: PASSED_WALLET } })
-    await getFeatureSwitches({ data: { wallet: null } })
+  it('decides for a passed wallet, or for no wallet, over the cookie, and names the one it decided for', async () => {
+    const passed = await getFeatureSwitches({ data: { wallet: PASSED_WALLET } })
+    const none = await getFeatureSwitches({ data: { wallet: null } })
 
+    expect(passed.wallet).toBe(PASSED_WALLET)
+    expect(none.wallet).toBeNull()
     expect(vi.mocked(decideFeatureSwitches).mock.calls).toEqual([
       [WORKER_ENV, PASSED_WALLET],
       [WORKER_ENV, null],
     ])
   })
 
-  it('decides a value that is not an address as no wallet', async () => {
+  it('decides a value that is not an address as no wallet, and names none', async () => {
     vi.mocked(getConnectionCookie).mockReturnValue('not-an-address')
-    await getFeatureSwitches({ data: {} })
-    await getFeatureSwitches({ data: { wallet: 'nick.eth' } })
+    const fromCookie = await getFeatureSwitches({ data: {} })
+    const fromInput = await getFeatureSwitches({ data: { wallet: 'nick.eth' } })
 
+    expect(fromCookie.wallet).toBeNull()
+    expect(fromInput.wallet).toBeNull()
     expect(vi.mocked(decideFeatureSwitches).mock.calls).toEqual([
       [WORKER_ENV, null],
       [WORKER_ENV, null],

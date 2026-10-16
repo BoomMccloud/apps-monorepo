@@ -23,7 +23,7 @@ export const Route = createFileRoute('/upgrade')({
     if (!wallet || !isAddress(wallet)) {
       throw redirect({ to: '/dashboard', replace: true })
     }
-    const switches = await getFeatureSwitches({ data: {} })
+    const { switches } = await getFeatureSwitches({ data: {} })
     if (!switches.migration) {
       throw redirect({ to: '/dashboard', replace: true })
     }

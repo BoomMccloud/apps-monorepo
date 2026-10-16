@@ -38,10 +38,15 @@ vi.mock('@/lib/connection-cookie', () => ({
   getConnectionCookie: getConnectionCookieMock,
 }))
 
-const switches = (isMigrationOn: boolean) => ({
-  i18n: false,
-  migration: isMigrationOn,
-  'migration-nft': false,
+// What the server function answers: the switches, and the wallet they were
+// decided for.
+const decided = (isMigrationOn: boolean) => ({
+  wallet: null,
+  switches: {
+    i18n: false,
+    migration: isMigrationOn,
+    'migration-nft': false,
+  },
 })
 
 vi.mock('@/features/migration/pages/MigrationPage', () => ({
@@ -113,7 +118,7 @@ describe('/upgrade route auth', () => {
   it('lets a wallet in when the server turns migration on for it', async () => {
     vi.stubGlobal('window', undefined)
     getConnectionCookieMock.mockReturnValue(OWNER_ADDRESS)
-    getFeatureSwitchesMock.mockResolvedValue(switches(true))
+    getFeatureSwitchesMock.mockResolvedValue(decided(true))
 
     await expect(runBeforeLoad()).resolves.toBeUndefined()
     expect(getFeatureSwitchesMock).toHaveBeenCalledWith({ data: {} })
@@ -122,7 +127,7 @@ describe('/upgrade route auth', () => {
   it('sends a wallet the server keeps out of migration to the dashboard', async () => {
     vi.stubGlobal('window', undefined)
     getConnectionCookieMock.mockReturnValue(OWNER_ADDRESS)
-    getFeatureSwitchesMock.mockResolvedValue(switches(false))
+    getFeatureSwitchesMock.mockResolvedValue(decided(false))
 
     await expect(runBeforeLoad()).rejects.toEqual({
       options: { to: '/dashboard', replace: true },
@@ -135,7 +140,7 @@ describe('/upgrade route auth', () => {
   ])('sends a visitor with %s to the dashboard, even when migration is open to everyone', async (_case, cookie) => {
     vi.stubGlobal('window', undefined)
     getConnectionCookieMock.mockReturnValue(cookie)
-    getFeatureSwitchesMock.mockResolvedValue(switches(true))
+    getFeatureSwitchesMock.mockResolvedValue(decided(true))
 
     await expect(runBeforeLoad()).rejects.toEqual({
       options: { to: '/dashboard', replace: true },
