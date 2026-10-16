@@ -69,6 +69,28 @@ describe('scrubErrorMessage', () => {
     }
   })
 
+  it('cuts the addresses inside a longer hex run, as a failed call prints its data', () => {
+    const from = '1'.repeat(40)
+    const to = '2'.repeat(40)
+    const padding = '0'.repeat(24)
+    // transferFrom(address,address,uint256): the selector, then each argument.
+    const data = `0x23b872dd${padding}${from}${padding}${to}${'0'.repeat(63)}1`
+
+    expect(scrubErrorMessage(`Raw Call Arguments: data: ${data}`)).toBe(
+      'Raw Call Arguments: data: [address]',
+    )
+  })
+
+  it('leaves no run of 40 hex digits in generated messages, whatever their length', () => {
+    const random = seeded(1742)
+    for (let index = 0; index < 500; index += 1) {
+      const run = `0x${hexDigits(random, 40 + Math.floor(random() * 400))}`
+      const message = `${pick(random, WORDS)} ${run} ${pick(random, WORDS)}`
+
+      expect(scrubErrorMessage(message)).not.toMatch(/[0-9a-fA-F]{40}/)
+    }
+  })
+
   it('keeps the rest of the message', () => {
     expect(
       scrubErrorMessage(
@@ -89,7 +111,7 @@ describe('scrubErrorMessage', () => {
     )
   })
 
-  it('scrubs a message holding a whole call data quickly, and still cuts what it shows', () => {
+  it('scrubs a message holding a whole call data quickly, and cuts the data with the rest', () => {
     // A failed call's error prints its data as one long 0x token.
     const message = `Call failed for 0x1111111111111111111111111111111111111111 on vitalik.eth: data 0x${'ab'.repeat(50_000)}`
     const started = performance.now()
@@ -97,8 +119,7 @@ describe('scrubErrorMessage', () => {
     const elapsed = performance.now() - started
 
     expect(elapsed).toBeLessThan(500)
-    expect(scrubbed).toMatch(/^Call failed for \[address\] on \[name\]: data /)
-    expect(scrubbed).toHaveLength(ERROR_MESSAGE_MAX_LENGTH)
+    expect(scrubbed).toBe('Call failed for [address] on [name]: data [address]')
   })
 
   it('cuts a long message to its maximum length, after scrubbing', () => {

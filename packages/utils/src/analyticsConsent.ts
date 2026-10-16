@@ -420,7 +420,9 @@ export const identifyWallet = (
 // Error reports
 // ---------------------------------------------------------------------------
 
-const ADDRESS_PATTERN = /0x[0-9a-fA-F]{40,64}/g
+// `0x` and 40 or more hex digits, of any length: an address, a hash, or a failed
+// call's whole data, which holds addresses inside it.
+const ADDRESS_PATTERN = /0x[0-9a-fA-F]{40,}/g
 // A run of anything but spaces, quotes and brackets that ends in `.eth`, no
 // longer than a name can be (253 characters), so a long run with no `.eth`,
 // such as a call's whole data, is not searched again from every character.
