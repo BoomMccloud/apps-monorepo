@@ -68,7 +68,7 @@ export const ANALYTICS_NOTICE_SHARING_HEADING = 'One choice for the ENS apps'
 
 export const ANALYTICS_NOTICE_SHARING = [
   'Your choice applies to all ENS apps that share it, today the ENS Manager and the ENS Explorer.',
-  'The choice and your visitor id are kept in cookies that these apps share. Once you connect a wallet, your visitor id is your wallet address, and any ENS site on the same domain can read it.',
+  'The choice and your visitor id are kept in cookies that these apps share. Once you connect a wallet, your visitor id is your wallet address, and the ENS sites on the same domain can read it.',
 ] as const
 
 export const ANALYTICS_NOTICE_PROCESSOR_HEADING = 'Who processes it'

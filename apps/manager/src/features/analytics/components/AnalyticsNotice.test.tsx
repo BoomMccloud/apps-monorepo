@@ -48,7 +48,7 @@ describe('AnalyticsNotice', () => {
       /applies to all ENS apps that share it/i,
       /kept in cookies that these apps share/i,
       /your visitor id is your wallet address/i,
-      /any ENS site on the same domain can read it/i,
+      /the ENS sites on the same domain can read it/i,
       /wallet addresses and \.eth names are cut from error messages, but other names may remain/i,
     ]) {
       expect(text).toMatch(statement)
