@@ -177,6 +177,21 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(sent.length).toBe(sentAtDecline)
   })
 
+  it('sends nothing after Decline, not even what was captured just before it', async () => {
+    const { client, sent } = startClient()
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+    client.identify(WALLET, { address: WALLET })
+    await flush()
+    const sentBeforeDecline = sent.length
+
+    // Waiting for the next batch, as the click on Decline itself would be.
+    client.capture('wallet:connect', { wallet_address: WALLET })
+    declineAnalytics(client)
+    await flush()
+
+    expect(sent.slice(sentBeforeDecline)).toEqual([])
+  })
+
   it.each([
     ['granted', '1'],
     ['denied', '0'],

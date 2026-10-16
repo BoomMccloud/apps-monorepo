@@ -134,6 +134,13 @@ export interface AnalyticsClient {
    * keeps the browser from asking PostHog for feature switches.
    */
   _onRemoteConfig(result: { ok: true; config: object } | { ok: false }): void
+  /**
+   * The SDK's batches waiting for their send, a few seconds after capture,
+   * and the requests it will try again. Neither checks the choice before
+   * sending, and the SDK has no public way to empty them.
+   */
+  readonly _requestQueue?: object
+  readonly _retryQueue?: object
 }
 
 /** Where the SDK itself reads the project's settings from. */
@@ -188,13 +195,28 @@ const forgetTabSession = (client: AnalyticsClient): void => {
 }
 
 /**
- * Decline: collection stops at once. The SDK keeps the visitor id in memory
- * after an opt-out, and only a reset clears it; the reset erases the choice
- * too, so the choice is put back.
+ * Empty one of the SDK's send queues: what is in it was captured before
+ * Decline, the click on Decline itself included, and carries the visitor id.
+ */
+const dropPendingRequests = (queue: object | undefined): void => {
+  const pending = (queue as { readonly _queue?: unknown } | undefined)?._queue
+  if (Array.isArray(pending)) {
+    // no-mutation: the SDK's own queue is emptied in place, as no API can.
+    pending.length = 0
+  }
+}
+
+/**
+ * Decline: collection stops at once, and nothing captured before it is sent
+ * after it. The SDK keeps the visitor id in memory after an opt-out, and
+ * only a reset clears it; the reset erases the choice too, so the choice is
+ * put back.
  */
 export const declineAnalytics = (client: AnalyticsClient): void => {
   client.set_config(COLLECTION_OFF)
   client.opt_out_capturing()
+  dropPendingRequests(client._requestQueue)
+  dropPendingRequests(client._retryQueue)
   client.reset()
   client.opt_out_capturing()
   forgetTabSession(client)
