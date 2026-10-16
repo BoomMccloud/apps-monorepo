@@ -296,8 +296,9 @@ test.describe('Manager analytics choice', () => {
     await expect
       .poll(() => connectionCookie(page), { timeout: 30_000 })
       .toMatch(new RegExp(OTHER_WALLET, 'i'))
-    await expect.poll(() => pageSwitch(page, 'migration')).toBe(false)
-    expect(await pageSwitch(page, 'i18n')).toBe(true)
+    // Until the server has answered for this wallet every switch is off.
+    await expect.poll(() => pageSwitch(page, 'i18n')).toBe(true)
+    expect(await pageSwitch(page, 'migration')).toBe(false)
     await page.goto(`${MANAGER_APP_URL}/upgrade`)
     await expect(page).toHaveURL(`${ORIGIN}/dashboard`)
     expect(await pageSwitch(page, 'migration')).toBe(false)
@@ -307,8 +308,8 @@ test.describe('Manager analytics choice', () => {
     await expect
       .poll(() => connectionCookie(page), { timeout: 30_000 })
       .toBeUndefined()
-    await expect.poll(() => pageSwitch(page, 'migration')).toBe(false)
-    expect(await pageSwitch(page, 'i18n')).toBe(true)
+    await expect.poll(() => pageSwitch(page, 'i18n')).toBe(true)
+    expect(await pageSwitch(page, 'migration')).toBe(false)
     await page.goto(`${MANAGER_APP_URL}/upgrade`)
     await expect(page).not.toHaveURL(`${ORIGIN}/upgrade`)
     expect(await pageSwitch(page, 'migration')).toBe(false)
@@ -417,8 +418,8 @@ test.describe('Manager analytics choice', () => {
     const disconnectedAt = Date.now()
     await wallet.changeAccounts([])
     await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
-    await expect.poll(() => pageSwitch(page, 'migration')).toBe(false)
-    expect(await pageSwitch(page, 'i18n')).toBe(true)
+    await expect.poll(() => pageSwitch(page, 'i18n')).toBe(true)
+    expect(await pageSwitch(page, 'migration')).toBe(false)
     expect(await storedConsent(context)).toBe('1')
     await expectEventsSent(standIn, ['wallet:disconnect'])
     await openFresh(page, '/legal/terms-of-use')
