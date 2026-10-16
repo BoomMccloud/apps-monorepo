@@ -141,10 +141,11 @@ export interface AnalyticsClient {
   /**
    * The SDK's batches waiting for their send, a few seconds after capture,
    * and the requests it will try again. Neither checks the choice before
-   * sending, and the SDK has no public way to empty them.
+   * sending, and the SDK has no public way to empty them. The SDK declares
+   * each queue's list private, so no type here can name it.
    */
-  readonly _requestQueue?: object
-  readonly _retryQueue?: object
+  readonly _requestQueue?: unknown
+  readonly _retryQueue?: unknown
 }
 
 /** Where the SDK itself reads the project's settings from. */
@@ -202,8 +203,9 @@ const forgetTabSession = (client: AnalyticsClient): void => {
  * Empty one of the SDK's send queues: what is in it was captured before
  * Decline, the click on Decline itself included, and carries the visitor id.
  */
-const dropPendingRequests = (queue: object | undefined): void => {
-  const pending = (queue as { readonly _queue?: unknown } | undefined)?._queue
+const dropPendingRequests = (queue: unknown): void => {
+  if (!isObject(queue) || !('_queue' in queue)) return
+  const pending = queue._queue
   if (Array.isArray(pending)) {
     // no-mutation: the SDK's own queue is emptied in place, as no API can.
     pending.length = 0

@@ -96,6 +96,39 @@ describe('decideFeatureSwitches', () => {
     expect(values.size).toBe(0)
   })
 
+  it('decides from its own download when the stored rules cannot be read, and logs that once per instance', async () => {
+    const decide = await loadDecide()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Only `get` is read; the rest of the binding is not modelled.
+    const unreadable = {
+      get: async () => {
+        throw new Error('KV is unavailable')
+      },
+    } as unknown as KVNamespace
+    const fetchRules = downloadAnswering(switchRules())
+    const env = {
+      POSTHOG_SWITCH_RULES: unreadable,
+      POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
+    }
+
+    await expect(decide(env, TEST_WALLET, { fetchRules })).resolves.toEqual({
+      migration: true,
+      i18n: true,
+      'migration-nft': false,
+    })
+    await expect(decide(env, null, { fetchRules })).resolves.toMatchObject({
+      migration: false,
+    })
+
+    expect(fetchRules).toHaveBeenCalledTimes(2)
+    expect(errors).toHaveBeenCalledOnce()
+    expect(errors.mock.calls[0]?.[0]).toMatchObject({
+      _tag: 'StoredSwitchRulesUnreadable',
+      message:
+        'the stored switch rules could not be read, so each request downloads its own',
+    })
+  })
+
   it('answers every switch off without rules or a key, and logs why once per instance', async () => {
     const decide = await loadDecide()
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})

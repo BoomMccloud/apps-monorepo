@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern'
 import { loadEnv } from 'vite'
 import { checkSwitchRules } from '../src/lib/posthog/switchRules'
 import { downloadSwitchRules } from '../src/lib/posthog/switchRulesDownload'
@@ -19,11 +20,11 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-const whenConfigured = process.argv.includes('--when-configured')
+const shouldRunOnlyWhenConfigured = process.argv.includes('--when-configured')
 const isDeployBuild = process.env.WORKERS_CI === '1'
 const secretKey = process.env[SECRET_KEY_NAME]
 
-if (!secretKey && whenConfigured && !isDeployBuild) {
+if (!secretKey && shouldRunOnlyWhenConfigured && !isDeployBuild) {
   console.log(`switch rules check skipped: ${SECRET_KEY_NAME} is not set`)
   process.exit(0)
 }
@@ -46,16 +47,14 @@ if (!projectKey || !host) {
 }
 
 const download = await downloadSwitchRules({ host, projectKey, secretKey })
-if (download.status !== 'downloaded') {
-  fail(
-    download.status === 'failed'
-      ? download.reason
-      : 'the download answered 304 to a request without an ETag',
+const rules = match(download)
+  .with({ status: 'downloaded' }, (downloaded) => downloaded.rules)
+  .with({ status: 'failed' }, ({ reason }) => fail(reason))
+  .with({ status: 'unchanged' }, () =>
+    fail('the download answered 304 to a request without an ETag'),
   )
-}
+  .exhaustive()
 
-const problems = await checkSwitchRules(download.rules)
+const problems = await checkSwitchRules(rules)
 if (problems.length > 0) fail(problems.join('\n'))
-console.log(
-  `switch rules ok: ${download.rules.flags.length} rules decide every switch`,
-)
+console.log(`switch rules ok: ${rules.flags.length} rules decide every switch`)

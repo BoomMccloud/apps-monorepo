@@ -25,6 +25,8 @@ export const AnalyticsBanner = () => {
     <section
       aria-labelledby={headingId}
       className={cn(
+        // top-(--phone-top): measured at run time under whichever app header
+        // is on screen (useTopUnderAppHeader), so no spacing token can fit.
         'fixed inset-x-2.5 top-(--phone-top) z-40 flex flex-col gap-3 rounded-xl border border-border bg-background p-4 text-foreground shadow-lg',
         'sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-6 sm:w-80',
       )}

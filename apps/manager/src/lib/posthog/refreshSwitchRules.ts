@@ -1,6 +1,7 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
+import { match } from 'ts-pattern'
 import { type SwitchRulesEnv, switchRulesSource } from './decideFeatureSwitches'
-import { checkSwitchRules } from './switchRules'
+import { checkSwitchRules, type SwitchRules } from './switchRules'
 import { downloadSwitchRules } from './switchRulesDownload'
 import { readStoredRules, writeStoredRules } from './switchRulesStore'
 
@@ -11,6 +12,26 @@ export class SwitchRulesRefreshFailed extends TaggedError(
 
 const refreshFailed = (message: string) =>
   new SwitchRulesRefreshFailed({ message, cause: undefined })
+
+/** Store downloaded rules once they pass the rules check, and never before. */
+const storeCheckedRules = async (
+  space: KVNamespace,
+  download: { readonly rules: SwitchRules; readonly etag: string | null },
+  now: () => Date,
+): Promise<'stored'> => {
+  const problems = await checkSwitchRules(download.rules)
+  if (problems.length > 0) {
+    throw refreshFailed(
+      `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+    )
+  }
+  await writeStoredRules(space, {
+    rules: download.rules,
+    etag: download.etag,
+    storedAt: now().toISOString(),
+  })
+  return 'stored'
+}
 
 /**
  * The scheduled job: download PostHog's switch rules and store them for the
@@ -38,19 +59,13 @@ export const refreshSwitchRules = async (
     etag: stored?.etag,
     fetchRules: options.fetchRules,
   })
-  if (download.status === 'unchanged') return 'unchanged'
-  if (download.status === 'failed') throw refreshFailed(download.reason)
-
-  const problems = await checkSwitchRules(download.rules)
-  if (problems.length > 0) {
-    throw refreshFailed(
-      `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+  return match(download)
+    .with({ status: 'unchanged' }, () => 'unchanged' as const)
+    .with({ status: 'failed' }, ({ reason }) => {
+      throw refreshFailed(reason)
+    })
+    .with({ status: 'downloaded' }, (downloaded) =>
+      storeCheckedRules(space, downloaded, options.now ?? (() => new Date())),
     )
-  }
-  await writeStoredRules(space, {
-    rules: download.rules,
-    etag: download.etag,
-    storedAt: (options.now ?? (() => new Date()))().toISOString(),
-  })
-  return 'stored'
+    .exhaustive()
 }

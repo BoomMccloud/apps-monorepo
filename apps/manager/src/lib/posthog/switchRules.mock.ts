@@ -10,8 +10,8 @@ type Condition = NonNullable<NonNullable<FlagRule['filters']>['groups']>[number]
 
 export const flagRule = (
   key: string,
-  conditions: Condition[],
-  extra: Partial<FlagRule> = {},
+  conditions: readonly Condition[],
+  extra: Readonly<Partial<FlagRule>> = {},
 ): FlagRule => ({
   id: key.length,
   name: key,
@@ -21,7 +21,7 @@ export const flagRule = (
   rollout_percentage: null,
   ensure_experience_continuity: false,
   experiment_set: [],
-  filters: { groups: conditions },
+  filters: { groups: [...conditions] },
   ...extra,
 })
 
@@ -44,7 +44,7 @@ export const forEveryone = (rolloutPercentage = 100): Condition => ({
 
 /** The Manager's three switches: migration for one wallet, i18n for everyone, the NFT for no one. */
 export const switchRules = (
-  overrides: Partial<Record<string, FlagRule>> = {},
+  overrides: Readonly<Partial<Record<string, FlagRule>>> = {},
 ): SwitchRules => {
   const flags = {
     migration: flagRule('migration', [forWallets([TEST_WALLET])]),

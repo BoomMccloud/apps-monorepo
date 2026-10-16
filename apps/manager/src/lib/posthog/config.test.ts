@@ -88,6 +88,21 @@ const storedChoice = () =>
     .map((cookie) => cookie.trim().split('='))
     .find(([name]) => name === ANALYTICS_CONSENT_COOKIE_NAME)?.[1]
 
+// The SDK's own cookie for the test project, which holds the visitor id.
+const VISITOR_COOKIE_NAME = 'ph_test-key_posthog'
+
+const visitorCookie = (): Readonly<Record<string, unknown>> => {
+  const entry = document.cookie
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${VISITOR_COOKIE_NAME}=`))
+  return entry
+    ? JSON.parse(
+        decodeURIComponent(entry.slice(VISITOR_COOKIE_NAME.length + 1)),
+      )
+    : {}
+}
+
 const clearCookies = () => {
   for (const cookie of document.cookie.split(';')) {
     const name = cookie.split('=')[0]?.trim()
@@ -275,6 +290,39 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(sent.slice(sentBeforeDecline)).toEqual([])
   })
 
+  it('sends nothing after Decline from the requests waiting to be tried again', async () => {
+    const client = new PostHog()
+    const sent: SentRequest[] = []
+    let isPostHogDown = true
+    vi.spyOn(client, '_send_request').mockImplementation((request) => {
+      sent.push({ url: request.url, data: request.data })
+      request.callback?.(
+        isPostHogDown
+          ? { statusCode: 502 }
+          : { statusCode: 200, json: { surveys: [] } },
+      )
+    })
+    client.init('test-key', {
+      ...startupConfig(SWITCHES),
+      api_host: 'https://posthog.example',
+      opt_out_useragent_filter: true,
+    })
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+    client.capture('wallet:connect', { wallet_address: WALLET })
+    await flush()
+    // The batch was sent and failed, so it waits to be tried again.
+    expect(eventsIn(sent).map((event) => event.event)).toContain(
+      'wallet:connect',
+    )
+
+    isPostHogDown = false
+    declineAnalytics(client)
+    const sentAtDecline = sent.length
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(eventsIn(sent.slice(sentAtDecline))).toEqual([])
+  })
+
   it.each([
     ['granted', '1'],
     ['denied', '0'],
@@ -292,6 +340,25 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(client.get_explicit_consent_status()).toBe(choice)
     expect(storedChoice()).toBe(stored)
     expect(client.get_distinct_id()).not.toBe(WALLET)
+  })
+
+  it("takes the visitor id another app's reset left in the shared cookie over this app's own", async () => {
+    const first = startClient()
+    await acceptAnalytics(first.client, { isDev: true, fetchSettings })
+    first.client.identify(WALLET, { address: WALLET })
+    await flush()
+    expect(visitorCookie().distinct_id).toBe(WALLET)
+
+    // Another ENS app reset the visitor on a disconnect: the shared cookie
+    // names a new id, while this app's local storage still holds the wallet.
+    // biome-ignore lint/suspicious/noDocumentCookie: The cookie another app wrote.
+    document.cookie = `${VISITOR_COOKIE_NAME}=${encodeURIComponent(
+      JSON.stringify({ ...visitorCookie(), distinct_id: 'id-after-reset' }),
+    )}; path=/`
+
+    // This app's next page.
+    const { client } = startClient()
+    expect(client.get_distinct_id()).toBe('id-after-reset')
   })
 
   it("forgets this tab's window id when the page starts after a decline made elsewhere", () => {

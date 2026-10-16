@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import { useEffect } from 'react'
 import type { FeatureSwitches } from './feature-flags'
-import { featureSwitchesQuery } from './featureSwitches.query'
+import { getFeatureSwitchesQueryOptions } from './featureSwitches.query'
 
 /**
  * Put the server's answers into the SDK, replacing every switch it holds,
@@ -24,7 +24,7 @@ export const useFeatureSwitchSync = (
   isConnectionSettled: boolean,
 ): void => {
   const { data } = useQuery({
-    ...featureSwitchesQuery(wallet),
+    ...getFeatureSwitchesQueryOptions(wallet),
     enabled: isConnectionSettled,
   })
   useEffect(() => {

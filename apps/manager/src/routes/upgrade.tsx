@@ -5,19 +5,22 @@ import {
   useNavigate,
 } from '@tanstack/react-router'
 import { type ReactNode, useCallback } from 'react'
+import { isAddress } from 'viem'
 import { useConnection } from 'wagmi'
 import { MigrationPage } from '@/features/migration/pages/MigrationPage'
 import { MigrationUiProvider } from '@/features/migration/state/migrationUi.context'
 import { useOnDisconnected } from '@/features/wallet/hooks/useOnDisconnected'
-import { isWalletConnectedCookie } from '@/lib/connection-cookie'
+import { getConnectionCookie } from '@/lib/connection-cookie'
 import { getFeatureSwitches } from '@/lib/posthog/getFeatureSwitches'
 import { useSmartAccountContext } from '@/lib/smart-account'
 
 export const Route = createFileRoute('/upgrade')({
   beforeLoad: async () => {
     // The page needs a connected wallet, and would only show its spinner to
-    // a visitor without one, whatever the switch says for such visitors.
-    if (!isWalletConnectedCookie()) {
+    // a visitor without one, whatever the switch says for such visitors. A
+    // cookie that holds no valid address is no wallet, as the server reads it.
+    const wallet = getConnectionCookie()
+    if (!wallet || !isAddress(wallet)) {
       throw redirect({ to: '/dashboard', replace: true })
     }
     const switches = await getFeatureSwitches({ data: {} })

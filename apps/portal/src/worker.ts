@@ -1,5 +1,5 @@
 import { escapeHtml } from '@ens-apps/og/markup'
-import { getPageTitle, TITLE_SUFFIX } from './utils/pageTitle'
+import { getPageTitle } from './utils/pageTitle'
 import {
   extractAddrFromPath,
   extractNameFromPath,
@@ -335,11 +335,12 @@ function handlePageMeta(
     return handleTldPage(request, url, env)
   }
 
-  // All other routes: inject default OG meta tags.
+  // All other routes: the default card, titled as the app titles the page,
+  // which is the bare app name unless getPageTitle names it (`/privacy`).
+  const pageTitle = getPageTitle(pathname)
   return injectMeta(request, env, {
-    // Every matcher getPageTitle would run has already failed above, so this
-    // branch is the bare app name by definition.
-    title: TITLE_SUFFIX,
+    title: pageTitle,
+    pageTitle,
     description: 'Explore ENS names and addresses',
     imageUrl: `https://${url.host}/og/default.png`,
   })

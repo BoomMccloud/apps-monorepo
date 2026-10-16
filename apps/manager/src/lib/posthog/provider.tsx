@@ -22,7 +22,7 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { track } from './events'
-import { featureSwitchesQuery } from './featureSwitches.query'
+import { getFeatureSwitchesQueryOptions } from './featureSwitches.query'
 import { linkSupportChat } from './supportChat'
 import {
   pushFeatureSwitches,
@@ -108,8 +108,9 @@ export const PHProvider = ({
     declineAnalytics(posthog)
     // The reset that clears the visitor id also empties the switches.
     pushFeatureSwitches(
-      queryClient.getQueryData(featureSwitchesQuery(wallet).queryKey) ??
-        switches,
+      queryClient.getQueryData(
+        getFeatureSwitchesQueryOptions(wallet).queryKey,
+      ) ?? switches,
     )
     setConsent('denied')
   }

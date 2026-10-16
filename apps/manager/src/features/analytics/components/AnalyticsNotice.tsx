@@ -44,7 +44,7 @@ export const AnalyticsNotice = () => {
           checked={consent === 'granted'}
           disabled={consent === 'unknown'}
           id={switchId}
-          onCheckedChange={(checked) => (checked ? accept() : decline())}
+          onCheckedChange={(isChecked) => (isChecked ? accept() : decline())}
         />
         <label className="text-gray-700" htmlFor={switchId}>
           {ANALYTICS_SWITCH_LABEL}

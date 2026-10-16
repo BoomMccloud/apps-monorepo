@@ -9,7 +9,7 @@ import { Route } from './upgrade'
 
 const navigateMock = vi.hoisted(() => vi.fn())
 const getFeatureSwitchesMock = vi.hoisted(() => vi.fn())
-const isWalletConnectedCookieMock = vi.hoisted(() => vi.fn())
+const getConnectionCookieMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({ options }),
@@ -35,12 +35,12 @@ vi.mock('@/lib/posthog/getFeatureSwitches', () => ({
 }))
 
 vi.mock('@/lib/connection-cookie', () => ({
-  isWalletConnectedCookie: isWalletConnectedCookieMock,
+  getConnectionCookie: getConnectionCookieMock,
 }))
 
-const switches = (migration: boolean) => ({
+const switches = (isMigrationOn: boolean) => ({
   i18n: false,
-  migration,
+  migration: isMigrationOn,
   'migration-nft': false,
 })
 
@@ -112,7 +112,7 @@ describe('/upgrade route auth', () => {
 
   it('lets a wallet in when the server turns migration on for it', async () => {
     vi.stubGlobal('window', undefined)
-    isWalletConnectedCookieMock.mockReturnValue(true)
+    getConnectionCookieMock.mockReturnValue(OWNER_ADDRESS)
     getFeatureSwitchesMock.mockResolvedValue(switches(true))
 
     await expect(runBeforeLoad()).resolves.toBeUndefined()
@@ -121,7 +121,7 @@ describe('/upgrade route auth', () => {
 
   it('sends a wallet the server keeps out of migration to the dashboard', async () => {
     vi.stubGlobal('window', undefined)
-    isWalletConnectedCookieMock.mockReturnValue(true)
+    getConnectionCookieMock.mockReturnValue(OWNER_ADDRESS)
     getFeatureSwitchesMock.mockResolvedValue(switches(false))
 
     await expect(runBeforeLoad()).rejects.toEqual({
@@ -129,9 +129,12 @@ describe('/upgrade route auth', () => {
     })
   })
 
-  it('sends a visitor without a wallet to the dashboard, even when migration is open to everyone', async () => {
+  it.each([
+    ['no connection cookie', null],
+    ['a connection cookie that holds no valid address', 'not-an-address'],
+  ])('sends a visitor with %s to the dashboard, even when migration is open to everyone', async (_case, cookie) => {
     vi.stubGlobal('window', undefined)
-    isWalletConnectedCookieMock.mockReturnValue(false)
+    getConnectionCookieMock.mockReturnValue(cookie)
     getFeatureSwitchesMock.mockResolvedValue(switches(true))
 
     await expect(runBeforeLoad()).rejects.toEqual({

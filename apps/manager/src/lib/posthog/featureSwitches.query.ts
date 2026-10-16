@@ -18,7 +18,7 @@ export const fetchFeatureSwitches = (wallet: string | null) =>
 /** The rules change rarely; a minute matches the server's refresh. */
 const FEATURE_SWITCHES_STALE_TIME_MS = 60_000
 
-export const featureSwitchesQuery = (wallet: string | null) =>
+export const getFeatureSwitchesQueryOptions = (wallet: string | null) =>
   resultQueryOptions({
     queryKey: qk('posthog', 'feature_switches', { wallet }),
     queryFn: ({ queryKey: [{ wallet }] }) => fetchFeatureSwitches(wallet),

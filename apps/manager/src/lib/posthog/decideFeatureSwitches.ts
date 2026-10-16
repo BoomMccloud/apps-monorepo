@@ -1,4 +1,5 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
+import { match } from 'ts-pattern'
 import {
   ALL_SWITCHES_OFF,
   FEATURE_SWITCH_NAMES,
@@ -29,6 +30,30 @@ export class FeatureSwitchesUndecided extends TaggedError(
   'FeatureSwitchesUndecided',
 )<{ readonly message: string; readonly cause: unknown }> {}
 
+/**
+ * Logged when the stored rules cannot be read, which would otherwise look
+ * like no rules stored: each request then downloads its own.
+ */
+export class StoredSwitchRulesUnreadable extends TaggedError(
+  'StoredSwitchRulesUnreadable',
+)<{ readonly message: string; readonly cause: unknown }> {}
+
+// One log line per problem and Worker instance. Remembering what was logged
+// is this module's own state, read by nothing else (no-mutation).
+const reportedProblems = new Set<string>()
+
+const reportOnce = (
+  problem: FeatureSwitchesUndecided | StoredSwitchRulesUnreadable,
+): void => {
+  const key = `${problem._tag}: ${problem.message}`
+  if (reportedProblems.has(key)) return
+  reportedProblems.add(key)
+  console.error(problem)
+}
+
+const switchesUndecided = (message: string) =>
+  new FeatureSwitchesUndecided({ message, cause: undefined })
+
 /** The project the switches belong to, or null when it is not configured. */
 export const switchRulesSource = (
   env: SwitchRulesEnv,
@@ -55,7 +80,18 @@ const rulesForRequest = async (
   fetchRules: typeof fetch | undefined,
 ): Promise<RequestRules> => {
   const stored = env.POSTHOG_SWITCH_RULES
-    ? await readStoredRules(env.POSTHOG_SWITCH_RULES).catch(() => null)
+    ? await readStoredRules(env.POSTHOG_SWITCH_RULES).catch(
+        (cause: unknown) => {
+          reportOnce(
+            new StoredSwitchRulesUnreadable({
+              message:
+                'the stored switch rules could not be read, so each request downloads its own',
+              cause,
+            }),
+          )
+          return null
+        },
+      )
     : null
   if (stored) return { status: 'usable', rules: stored.rules }
 
@@ -67,26 +103,26 @@ const rulesForRequest = async (
     }
   }
   const download = await downloadSwitchRules(source, { fetchRules })
-  if (download.status === 'downloaded') {
-    return { status: 'usable', rules: download.rules }
-  }
-  return {
-    status: 'unusable',
-    reason:
-      download.status === 'failed'
-        ? `no rules are stored and ${download.reason}`
-        : 'no rules are stored and the download had nothing new',
-  }
-}
-
-// One log line per problem and Worker instance. Remembering what was logged
-// is this module's own state, read by nothing else (no-mutation).
-const reportedProblems = new Set<string>()
-
-const reportOnce = (message: string): void => {
-  if (reportedProblems.has(message)) return
-  reportedProblems.add(message)
-  console.error(new FeatureSwitchesUndecided({ message, cause: undefined }))
+  return match(download)
+    .with(
+      { status: 'downloaded' },
+      ({ rules }): RequestRules => ({ status: 'usable', rules }),
+    )
+    .with(
+      { status: 'failed' },
+      ({ reason }): RequestRules => ({
+        status: 'unusable',
+        reason: `no rules are stored and ${reason}`,
+      }),
+    )
+    .with(
+      { status: 'unchanged' },
+      (): RequestRules => ({
+        status: 'unusable',
+        reason: 'no rules are stored and the download had nothing new',
+      }),
+    )
+    .exhaustive()
 }
 
 /**
@@ -102,15 +138,19 @@ export const decideFeatureSwitches = async (
 ): Promise<FeatureSwitches> => {
   const rules = await rulesForRequest(env, options.fetchRules)
   if (rules.status === 'unusable') {
-    reportOnce(rules.reason)
+    reportOnce(switchesUndecided(rules.reason))
     return ALL_SWITCHES_OFF
   }
   const answers = await evaluateSwitches(rules.rules, switchVisitor(wallet))
-  const undecided = FEATURE_SWITCH_NAMES.filter(
+  const undecidedNames = FEATURE_SWITCH_NAMES.filter(
     (name) => answers[name] === undefined,
   )
-  if (undecided.length > 0) {
-    reportOnce(`the rules decide no yes or no for ${undecided.join(', ')}`)
+  if (undecidedNames.length > 0) {
+    reportOnce(
+      switchesUndecided(
+        `the rules decide no yes or no for ${undecidedNames.join(', ')}`,
+      ),
+    )
     return ALL_SWITCHES_OFF
   }
   return { ...ALL_SWITCHES_OFF, ...answers }
