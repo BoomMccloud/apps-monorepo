@@ -1,4 +1,4 @@
-import { useAnalyticsConsent } from '@ens-apps/utils/analytics-consent-context'
+import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import {
   ANALYTICS_CHOICE_STATUS,
   ANALYTICS_NOTICE_COLLECTED,
@@ -14,7 +14,7 @@ import {
   ANALYTICS_NOTICE_SHARING,
   ANALYTICS_NOTICE_SHARING_HEADING,
   ANALYTICS_SWITCH_LABEL,
-} from '@ens-apps/utils/analytics-consent-wording'
+} from '@ens-apps/utils/analyticsConsentWording'
 import { useId } from 'react'
 import { Switch } from '@/components/ui/switch'
 

@@ -6,7 +6,7 @@ import {
   identifyWallet,
   resetVisitor,
   startAnalyticsChoice,
-} from '@ens-apps/utils/analytics-consent'
+} from '@ens-apps/utils/analyticsConsent'
 import { PostHog } from 'posthog-js/dist/module.full.no-external'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startupConfig } from './config'

@@ -1,4 +1,4 @@
-import type { SwitchRules } from './switch-rules'
+import type { SwitchRules } from './switchRules'
 
 /**
  * The last good switch rules, in the Worker's KV space. The scheduled refresh

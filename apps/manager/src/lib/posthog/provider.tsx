@@ -3,12 +3,12 @@ import {
   declineAnalytics,
   identifyWallet,
   resetVisitor,
-} from '@ens-apps/utils/analytics-consent'
+} from '@ens-apps/utils/analyticsConsent'
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
   useWalletIdentity,
-} from '@ens-apps/utils/analytics-consent-context'
+} from '@ens-apps/utils/analyticsConsentContext'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { PostHogProvider } from '@posthog/react'
 import { useQueryClient } from '@tanstack/react-query'

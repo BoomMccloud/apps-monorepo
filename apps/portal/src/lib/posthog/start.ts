@@ -1,5 +1,5 @@
-import { startAnalyticsChoice } from '@ens-apps/utils/analytics-consent'
-import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import { startAnalyticsChoice } from '@ens-apps/utils/analyticsConsent'
+import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 // Import the fully-bundled, no-external build so PostHog never lazy-loads its
 // extension bundles (session recorder, surveys, dead-clicks, web-vitals,
 // exception autocapture) at runtime. The default `posthog-js` build injects

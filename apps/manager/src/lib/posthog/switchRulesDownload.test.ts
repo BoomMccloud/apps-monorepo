@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { switchRules } from './switch-rules.mock'
+import { switchRules } from './switchRules.mock'
 import {
   downloadSwitchRules,
   type SwitchRulesSource,
   switchRulesUrl,
-} from './switch-rules-download'
+} from './switchRulesDownload'
 
 const SOURCE: SwitchRulesSource = {
   host: 'https://posthog.example/',

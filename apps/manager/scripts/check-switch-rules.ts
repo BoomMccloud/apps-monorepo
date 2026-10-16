@@ -1,6 +1,6 @@
 import { loadEnv } from 'vite'
-import { checkSwitchRules } from '../src/lib/posthog/switch-rules'
-import { downloadSwitchRules } from '../src/lib/posthog/switch-rules-download'
+import { checkSwitchRules } from '../src/lib/posthog/switchRules'
+import { downloadSwitchRules } from '../src/lib/posthog/switchRulesDownload'
 
 /**
  * The rules check against the live project: download PostHog's switch rules

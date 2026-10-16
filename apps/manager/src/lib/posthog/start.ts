@@ -1,5 +1,5 @@
-import { startAnalyticsChoice } from '@ens-apps/utils/analytics-consent'
-import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import { startAnalyticsChoice } from '@ens-apps/utils/analyticsConsent'
+import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 // Fully-bundled, no-external build so PostHog never lazy-loads extension
 // bundles via runtime <script> tags — our strict CSP blocks those. Same
 // approach as portal; see PostHog's CSP guide:

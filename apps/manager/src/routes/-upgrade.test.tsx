@@ -30,7 +30,7 @@ vi.mock('@/lib/smart-account', () => ({
   useSmartAccountContext: vi.fn(),
 }))
 
-vi.mock('@/lib/posthog/get-feature-switches', () => ({
+vi.mock('@/lib/posthog/getFeatureSwitches', () => ({
   getFeatureSwitches: getFeatureSwitchesMock,
 }))
 

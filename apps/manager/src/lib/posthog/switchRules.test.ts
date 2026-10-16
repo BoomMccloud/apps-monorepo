@@ -4,7 +4,7 @@ import {
   evaluateSwitches,
   NO_WALLET_VISITOR,
   switchVisitor,
-} from './switch-rules'
+} from './switchRules'
 import {
   flagRule,
   forEveryone,
@@ -12,7 +12,7 @@ import {
   OTHER_WALLET,
   switchRules,
   TEST_WALLET,
-} from './switch-rules.mock'
+} from './switchRules.mock'
 
 describe('evaluateSwitches', () => {
   afterEach(() => {

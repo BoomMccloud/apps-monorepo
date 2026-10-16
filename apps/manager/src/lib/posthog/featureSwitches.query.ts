@@ -2,7 +2,7 @@ import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
 import { fromPromise } from 'neverthrow'
-import { getFeatureSwitches } from './get-feature-switches'
+import { getFeatureSwitches } from './getFeatureSwitches'
 
 class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
   readonly cause: unknown

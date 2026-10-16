@@ -2,7 +2,7 @@ import '@testing-library/jest-dom'
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
-} from '@ens-apps/utils/analytics-consent-context'
+} from '@ens-apps/utils/analyticsConsentContext'
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { AnchorHTMLAttributes } from 'react'
 import { describe, expect, it, vi } from 'vitest'

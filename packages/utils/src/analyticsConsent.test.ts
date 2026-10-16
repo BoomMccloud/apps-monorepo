@@ -5,7 +5,7 @@ import {
   ERROR_MESSAGE_MAX_LENGTH,
   scrubErrorMessage,
   scrubErrorReport,
-} from './analytics-consent'
+} from './analyticsConsent'
 
 // A small deterministic generator, so every run checks the same cases.
 const seeded = (seed: number) => {

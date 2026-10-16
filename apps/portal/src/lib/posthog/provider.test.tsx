@@ -3,8 +3,8 @@ import {
   declineAnalytics,
   resetVisitor,
   startAnalyticsChoice,
-} from '@ens-apps/utils/analytics-consent'
-import { useAnalyticsConsent } from '@ens-apps/utils/analytics-consent-context'
+} from '@ens-apps/utils/analyticsConsent'
+import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
 import { act, render, screen } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
@@ -37,9 +37,9 @@ vi.mock('posthog-js/dist/module.full.no-external', () => ({
     get_explicit_consent_status: vi.fn(() => 'pending'),
   },
 }))
-vi.mock('@ens-apps/utils/analytics-consent', async (importOriginal) => ({
+vi.mock('@ens-apps/utils/analyticsConsent', async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import('@ens-apps/utils/analytics-consent')
+    typeof import('@ens-apps/utils/analyticsConsent')
   >()),
   acceptAnalytics: vi.fn(async () => {}),
   declineAnalytics: vi.fn(),

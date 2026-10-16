@@ -1,4 +1,4 @@
-import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +22,7 @@ const importSettingsMenu = async (surveyId: string | undefined) => {
   return {
     SettingsMenu: (await import('./SettingsMenu')).SettingsMenu,
     AnalyticsConsentContext: (
-      await import('@ens-apps/utils/analytics-consent-context')
+      await import('@ens-apps/utils/analyticsConsentContext')
     ).AnalyticsConsentContext,
   }
 }

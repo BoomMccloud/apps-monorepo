@@ -1,4 +1,4 @@
-import type { SwitchRules } from './switch-rules'
+import type { SwitchRules } from './switchRules'
 
 /**
  * Where the rules come from: the project's public key names the project, and

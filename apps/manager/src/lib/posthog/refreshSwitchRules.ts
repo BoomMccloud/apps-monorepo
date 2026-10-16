@@ -1,11 +1,8 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
-import {
-  type SwitchRulesEnv,
-  switchRulesSource,
-} from './decide-feature-switches'
-import { checkSwitchRules } from './switch-rules'
-import { downloadSwitchRules } from './switch-rules-download'
-import { readStoredRules, writeStoredRules } from './switch-rules-store'
+import { type SwitchRulesEnv, switchRulesSource } from './decideFeatureSwitches'
+import { checkSwitchRules } from './switchRules'
+import { downloadSwitchRules } from './switchRulesDownload'
+import { readStoredRules, writeStoredRules } from './switchRulesStore'
 
 /** A refresh that could not store new rules; the last good rules stay. */
 export class SwitchRulesRefreshFailed extends TaggedError(

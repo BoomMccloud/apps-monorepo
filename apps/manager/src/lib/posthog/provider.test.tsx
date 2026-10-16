@@ -4,8 +4,8 @@ import {
   declineAnalytics,
   resetVisitor,
   startAnalyticsChoice,
-} from '@ens-apps/utils/analytics-consent'
-import { useAnalyticsConsent } from '@ens-apps/utils/analytics-consent-context'
+} from '@ens-apps/utils/analyticsConsent'
+import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
@@ -13,7 +13,7 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
-import { getFeatureSwitches } from './get-feature-switches'
+import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
 const WALLET = '0x1111111111111111111111111111111111111111'
@@ -47,9 +47,9 @@ vi.mock('posthog-js/dist/module.full.no-external', () => ({
     get_explicit_consent_status: vi.fn(() => 'pending'),
   },
 }))
-vi.mock('@ens-apps/utils/analytics-consent', async (importOriginal) => ({
+vi.mock('@ens-apps/utils/analyticsConsent', async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import('@ens-apps/utils/analytics-consent')
+    typeof import('@ens-apps/utils/analyticsConsent')
   >()),
   acceptAnalytics: vi.fn(async () => {}),
   declineAnalytics: vi.fn(),
@@ -60,7 +60,7 @@ vi.mock('wagmi', () => ({
   useConnection: vi.fn(),
   useConnectionEffect: vi.fn(),
 }))
-vi.mock('./get-feature-switches', () => ({ getFeatureSwitches: vi.fn() }))
+vi.mock('./getFeatureSwitches', () => ({ getFeatureSwitches: vi.fn() }))
 vi.mock('@ens-apps/transaction-manager', () => ({
   transactionManager: {
     onFailedRunTelemetry: vi.fn(() => vi.fn()),

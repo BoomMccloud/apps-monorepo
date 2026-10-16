@@ -1,7 +1,7 @@
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
-} from '@ens-apps/utils/analytics-consent-context'
+} from '@ens-apps/utils/analyticsConsentContext'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'

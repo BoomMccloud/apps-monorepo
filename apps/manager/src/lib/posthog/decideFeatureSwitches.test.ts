@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ALL_SWITCHES_OFF } from './feature-flags'
-import type { SwitchRules } from './switch-rules'
+import type { SwitchRules } from './switchRules'
 import {
   memoryKv,
   OTHER_WALLET,
   switchRules,
   TEST_WALLET,
-} from './switch-rules.mock'
-import { SWITCH_RULES_KEY } from './switch-rules-store'
+} from './switchRules.mock'
+import { SWITCH_RULES_KEY } from './switchRulesStore'
 
 const SECRET_KEY = 'phs_secret_value'
 
@@ -32,7 +32,7 @@ const downloadAnswering = (rules: SwitchRules) =>
 // The module remembers what it has logged for the life of the Worker
 // instance, so each test starts from a fresh copy of it.
 const loadDecide = async () =>
-  (await import('./decide-feature-switches')).decideFeatureSwitches
+  (await import('./decideFeatureSwitches')).decideFeatureSwitches
 
 describe('decideFeatureSwitches', () => {
   beforeEach(() => {

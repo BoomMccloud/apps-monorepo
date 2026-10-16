@@ -1,4 +1,4 @@
-import type { SwitchRules } from './switch-rules'
+import type { SwitchRules } from './switchRules'
 
 /** Test fixtures: switch rules in the shape PostHog's download gives them. */
 

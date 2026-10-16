@@ -4,7 +4,7 @@ import {
   type AnalyticsConsent,
   type ConnectedWallet,
   identifyWallet,
-} from './analytics-consent'
+} from './analyticsConsent'
 
 /** The choice as the page knows it; `unknown` until the SDK has started. */
 export type AnalyticsConsentState = AnalyticsConsent | 'unknown'

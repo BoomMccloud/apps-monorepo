@@ -8,12 +8,12 @@ import {
   evaluateSwitches,
   type SwitchRules,
   switchVisitor,
-} from './switch-rules'
+} from './switchRules'
 import {
   downloadSwitchRules,
   type SwitchRulesSource,
-} from './switch-rules-download'
-import { readStoredRules } from './switch-rules-store'
+} from './switchRulesDownload'
+import { readStoredRules } from './switchRulesStore'
 
 /** The Worker bindings the switches need. */
 export type SwitchRulesEnv = {

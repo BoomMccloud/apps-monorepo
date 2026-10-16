@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getConnectionCookie } from '@/lib/connection-cookie'
-import { decideFeatureSwitches } from './decide-feature-switches'
+import { decideFeatureSwitches } from './decideFeatureSwitches'
 import { ALL_SWITCHES_OFF } from './feature-flags'
-import { getFeatureSwitches } from './get-feature-switches'
+import { getFeatureSwitches } from './getFeatureSwitches'
 
 const WORKER_ENV = vi.hoisted(() => ({
   POSTHOG_PROJECT_SECRET_API_KEY: 'phs_secret_value',
@@ -25,7 +25,7 @@ vi.mock('@/lib/connection-cookie', () => ({
   getConnectionCookie: vi.fn(),
 }))
 
-vi.mock('./decide-feature-switches', () => ({
+vi.mock('./decideFeatureSwitches', () => ({
   decideFeatureSwitches: vi.fn(async () => ALL_SWITCHES_OFF),
 }))
 

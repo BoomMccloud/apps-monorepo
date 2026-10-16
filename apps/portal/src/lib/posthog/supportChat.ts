@@ -1,4 +1,4 @@
-import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import {
   boot as bootIntercom,
   getVisitorId,

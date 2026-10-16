@@ -1,5 +1,5 @@
 import handler from '@tanstack/react-start/server-entry'
-import { refreshSwitchRules } from '@/lib/posthog/refresh-switch-rules'
+import { refreshSwitchRules } from '@/lib/posthog/refreshSwitchRules'
 
 /**
  * The Manager's Worker. TanStack Start answers every request; the scheduled

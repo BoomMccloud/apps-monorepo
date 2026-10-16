@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { isAddress } from 'viem'
 import { getConnectionCookie } from '@/lib/connection-cookie'
-import { decideFeatureSwitches } from './decide-feature-switches'
+import { decideFeatureSwitches } from './decideFeatureSwitches'
 import type { FeatureSwitches } from './feature-flags'
 
 export type FeatureSwitchesInput = {

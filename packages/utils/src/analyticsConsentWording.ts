@@ -6,7 +6,7 @@
  * translated.
  */
 
-import type { AnalyticsConsent } from './analytics-consent'
+import type { AnalyticsConsent } from './analyticsConsent'
 
 export const ANALYTICS_BANNER = {
   heading: 'Help us improve ENS',

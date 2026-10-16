@@ -1,4 +1,4 @@
-import type { AnalyticsConsentState } from '@ens-apps/utils/analytics-consent-context'
+import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import { useEffect } from 'react'
 import { subscribeFailedRunReports } from './failedRunReports'
 import type { FeatureSwitches } from './feature-flags'

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { refreshSwitchRules } from './refresh-switch-rules'
-import type { SwitchRules } from './switch-rules'
-import { memoryKv, switchRules } from './switch-rules.mock'
-import { SWITCH_RULES_KEY } from './switch-rules-store'
+import { refreshSwitchRules } from './refreshSwitchRules'
+import type { SwitchRules } from './switchRules'
+import { memoryKv, switchRules } from './switchRules.mock'
+import { SWITCH_RULES_KEY } from './switchRulesStore'
 
 const SECRET_KEY = 'phs_secret_value'
 const NOW = () => new Date('2026-10-16T12:00:00.000Z')
