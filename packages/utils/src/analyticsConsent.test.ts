@@ -162,9 +162,9 @@ describe('collection settings', () => {
     )
   })
 
-  it('collect nothing before Accept', () => {
+  it('collect nothing before Accept, and keep watching page changes for after it', () => {
     expect(COLLECTION_OFF).toMatchObject({
-      capture_pageview: false,
+      capture_pageview: 'history_change',
       capture_pageleave: false,
       autocapture: false,
       capture_exceptions: false,

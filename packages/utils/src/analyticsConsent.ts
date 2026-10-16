@@ -58,13 +58,17 @@ export type CollectionSettings = {
 /**
  * Collection before Accept and after Decline: everything off.
  *
+ * Page views stay set to follow history changes: the SDK starts watching
+ * them only at start-up, never on a later change of settings, and it sends
+ * nothing it sees until the visitor accepts.
+ *
  * Heatmaps, dead clicks and performance timings are left unset: each follows
  * the project's settings, which load only after Accept, so before Accept none
  * of them can start, and unset is the only value that hands them back to the
  * project's settings afterwards.
  */
 export const COLLECTION_OFF: CollectionSettings = {
-  capture_pageview: false,
+  capture_pageview: 'history_change',
   capture_pageleave: false,
   autocapture: false,
   capture_exceptions: false,

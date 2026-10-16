@@ -98,6 +98,10 @@ const clearCookies = () => {
 
 const flush = () => vi.advanceTimersByTimeAsync(4000)
 
+// The SDK wraps the page's history methods for the first client that starts
+// in a window, and leaves them wrapped: each test's client needs its own.
+const { pushState, replaceState } = history
+
 describe('PostHog settings and the analytics choice, on the installed SDK', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -111,6 +115,8 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
+    history.pushState = pushState
+    history.replaceState = replaceState
   })
 
   it('sends nothing and stores nothing before a choice, and sends once the visitor accepts', async () => {
@@ -187,6 +193,23 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(sent.some((request) => request.url.includes('/api/surveys'))).toBe(
       true,
     )
+  })
+
+  it('captures a page view for each move within the app after Accept', async () => {
+    const { client, sent } = startClient()
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+    await flush()
+
+    history.pushState({}, '', '/after-accept')
+    await flush()
+
+    expect(
+      eventsIn(sent).filter(
+        (event) =>
+          event.event === '$pageview' &&
+          event.properties.$pathname === '/after-accept',
+      ),
+    ).toHaveLength(1)
   })
 
   it("puts back the SDK's own defaults for what the pause turned off", () => {
