@@ -88,6 +88,23 @@ const openFresh = async (page: Page, path = '/'): Promise<void> => {
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^Connect( wallet)?$/ }).first()
 
+/**
+ * A page load may or may not restore the wallet connection, and the walks
+ * disconnect a connected wallet: connect it again when the load did not.
+ */
+const connectUnlessRestored = async (
+  page: Page,
+  wallet: Parameters<typeof connectWithHeadlessWallet>[1],
+): Promise<void> => {
+  const isRestored = await connectButton(page)
+    .waitFor({ state: 'hidden', timeout: 5_000 })
+    .then(
+      () => true,
+      () => false,
+    )
+  if (!isRestored) await connectWithHeadlessWallet(page, wallet)
+}
+
 /** Search a name from the home page and open it. */
 const searchName = async (page: Page, name: string): Promise<void> => {
   const input = page.getByRole('combobox', {
@@ -238,6 +255,7 @@ test.describe('Explorer analytics choice', () => {
       await connectWithHeadlessWallet(page, wallet)
       await searchName(page, SEARCHED_NAME)
       await openFresh(page)
+      await connectUnlessRestored(page, wallet)
       await wallet.changeAccounts([])
       await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
     }
@@ -348,6 +366,7 @@ test.describe('Explorer analytics choice', () => {
     // Disconnecting: analytics go on and the choice is still Accept.
     const disconnectedAt = Date.now()
     await openFresh(page)
+    await connectUnlessRestored(page, wallet)
     await wallet.changeAccounts([])
     await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
     expect(await storedConsent(context)).toBe('1')
