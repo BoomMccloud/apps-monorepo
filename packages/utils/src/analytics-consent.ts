@@ -1,0 +1,257 @@
+/**
+ * The visitor's analytics choice, shared by the ENS apps.
+ *
+ * PostHog's own consent setting keeps the choice in a cookie on the apps'
+ * shared parent domain, so a choice made in one app applies in all of them,
+ * and no code of ours reads or writes that cookie. This module holds what both
+ * apps do with the choice: the settings for each state of it, the steps that
+ * change it, and the scrubbing of error reports. Each app keeps its own
+ * banner, notice and wiring.
+ */
+
+/** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
+export const ANALYTICS_CONSENT_COOKIE_NAME = 'ens.analytics.consent'
+
+/** The choice as PostHog reports it; `pending` until the visitor chooses. */
+export type AnalyticsConsent = 'granted' | 'denied' | 'pending'
+
+/**
+ * Start-up settings. Nothing is captured or stored until Accept, the choice
+ * lives in the cookie the apps share, and the browser never asks PostHog for
+ * feature switches or for the project's settings on its own: the Manager's
+ * server decides the switches, and the project's settings are loaded after
+ * Accept (`acceptAnalytics`).
+ */
+export const ANALYTICS_CONSENT_SETTINGS = {
+  opt_out_capturing_by_default: true,
+  opt_out_persistence_by_default: true,
+  consent_persistence_name: ANALYTICS_CONSENT_COOKIE_NAME,
+  opt_out_capturing_persistence_type: 'cookie',
+  cross_subdomain_cookie: true,
+  // When the shared cookie and local storage disagree, the cookie wins, so a
+  // visitor id reset in one app reaches the others.
+  __preview_cookie_wins_on_conflict: true,
+  advanced_disable_flags: true,
+} as const
+
+/** The collection settings the choice switches on and off. */
+export type CollectionSettings = {
+  readonly capture_pageview: boolean | 'history_change'
+  readonly capture_pageleave: boolean | 'if_capture_pageview'
+  readonly autocapture: boolean
+  readonly capture_exceptions:
+    | boolean
+    | {
+        readonly capture_unhandled_errors: boolean
+        readonly capture_unhandled_rejections: boolean
+        readonly capture_console_errors: boolean
+      }
+  readonly save_campaign_params: boolean
+  readonly save_referrer: boolean
+  readonly disable_surveys: boolean
+  readonly disable_product_tours: boolean
+  readonly disable_web_experiments: boolean
+  readonly disable_conversations: boolean
+  readonly disable_session_recording: boolean
+}
+
+/**
+ * Collection before Accept and after Decline: everything off.
+ *
+ * Heatmaps, dead clicks and performance timings are left unset: each follows
+ * the project's settings, which load only after Accept, so before Accept none
+ * of them can start, and unset is the only value that hands them back to the
+ * project's settings afterwards.
+ */
+export const COLLECTION_OFF: CollectionSettings = {
+  capture_pageview: false,
+  capture_pageleave: false,
+  autocapture: false,
+  capture_exceptions: false,
+  save_campaign_params: false,
+  save_referrer: false,
+  disable_surveys: true,
+  disable_product_tours: true,
+  disable_web_experiments: true,
+  disable_conversations: true,
+  disable_session_recording: true,
+}
+
+/** Error reports: uncaught errors and unhandled rejections, never the console. */
+export const ERROR_REPORTS_ON = {
+  capture_unhandled_errors: true,
+  capture_unhandled_rejections: true,
+  capture_console_errors: false,
+} as const
+
+/**
+ * Collection after Accept: what ran before the launch pause, the SDK's
+ * defaults apart from page views on history changes and no recordings on a
+ * development build, plus error reports, which are set here because the
+ * project's own setting for them is never loaded.
+ */
+export const collectionOn = ({
+  isDev,
+}: {
+  readonly isDev: boolean
+}): CollectionSettings => ({
+  capture_pageview: 'history_change',
+  capture_pageleave: 'if_capture_pageview',
+  autocapture: true,
+  capture_exceptions: ERROR_REPORTS_ON,
+  save_campaign_params: true,
+  save_referrer: true,
+  disable_surveys: false,
+  disable_product_tours: false,
+  disable_web_experiments: true,
+  disable_conversations: false,
+  disable_session_recording: isDev,
+})
+
+/** The part of the PostHog browser SDK the choice uses. */
+export interface AnalyticsClient {
+  readonly config: { readonly token: string; readonly api_host: string }
+  get_explicit_consent_status(): AnalyticsConsent
+  opt_in_capturing(options: { captureEventName: false }): void
+  opt_out_capturing(): void
+  reset(): void
+  set_config(config: CollectionSettings): void
+  /**
+   * The SDK's own hand-off of the project's settings to its recordings,
+   * surveys, heatmaps and the rest. It has no public way to load them once
+   * `advanced_disable_flags` is set at start-up, and that setting is what
+   * keeps the browser from asking PostHog for feature switches.
+   */
+  _onRemoteConfig(result: { ok: true; config: object } | { ok: false }): void
+}
+
+/** Where the SDK itself reads the project's settings from. */
+export const projectSettingsUrl = (client: AnalyticsClient): string =>
+  `${client.config.api_host.replace(/\/+$/, '')}/array/${client.config.token}/config`
+
+const isObject = (value: unknown): value is object =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * Load the project's settings and hand them to the SDK, as it would at
+ * start-up had the visitor already accepted. Settings that arrive after the
+ * visitor has declined are dropped.
+ */
+export const loadProjectSettings = async (
+  client: AnalyticsClient,
+  fetchSettings: typeof fetch = fetch,
+): Promise<void> => {
+  const settings = await fetchSettings(projectSettingsUrl(client))
+    .then((response) => (response.ok ? response.json() : undefined))
+    .catch(() => undefined)
+  if (client.get_explicit_consent_status() !== 'granted') return
+  client._onRemoteConfig(
+    isObject(settings) ? { ok: true, config: settings } : { ok: false },
+  )
+}
+
+/** Accept: collection starts at once, then the project's settings load. */
+export const acceptAnalytics = (
+  client: AnalyticsClient,
+  options: { readonly isDev: boolean; readonly fetchSettings?: typeof fetch },
+): Promise<void> => {
+  client.set_config(collectionOn(options))
+  // The SDK's own `$opt_in` event is not one the apps sent before the pause.
+  client.opt_in_capturing({ captureEventName: false })
+  return loadProjectSettings(client, options.fetchSettings)
+}
+
+/**
+ * Decline: collection stops at once. The SDK keeps the visitor id in memory
+ * after an opt-out, and only a reset clears it; the reset erases the choice
+ * too, so the choice is put back.
+ */
+export const declineAnalytics = (client: AnalyticsClient): void => {
+  client.set_config(COLLECTION_OFF)
+  client.opt_out_capturing()
+  client.reset()
+  client.opt_out_capturing()
+}
+
+const RESTORE_CONSENT: Readonly<
+  Record<AnalyticsConsent, (client: AnalyticsClient) => void>
+> = {
+  granted: (client) => client.opt_in_capturing({ captureEventName: false }),
+  denied: (client) => client.opt_out_capturing(),
+  pending: () => {},
+}
+
+/**
+ * Forget the visitor (on a wallet disconnect) and keep their choice: the
+ * SDK's reset erases the stored choice along with the visitor id.
+ */
+export const resetVisitor = (client: AnalyticsClient): void => {
+  const consent = client.get_explicit_consent_status()
+  client.reset()
+  RESTORE_CONSENT[consent](client)
+}
+
+/**
+ * At start-up, a visitor who accepted earlier, here or in another ENS app,
+ * gets what Accept switches on. Returns the choice the page starts with.
+ */
+export const startAnalyticsChoice = (
+  client: AnalyticsClient,
+  options: { readonly isDev: boolean; readonly fetchSettings?: typeof fetch },
+): AnalyticsConsent => {
+  const consent = client.get_explicit_consent_status()
+  if (consent === 'granted') void acceptAnalytics(client, options)
+  return consent
+}
+
+// ---------------------------------------------------------------------------
+// Error reports
+// ---------------------------------------------------------------------------
+
+const ADDRESS_PATTERN = /0x[0-9a-fA-F]{40,64}/g
+// A run of anything but spaces, quotes and brackets that ends in `.eth`.
+const ETH_NAME_PATTERN = /[^\s"'`<>()[\]{},;:]+\.eth\b/giu
+export const ERROR_MESSAGE_MAX_LENGTH = 200
+
+/**
+ * Cut addresses and `.eth` names out of an error message, then cut it to
+ * length. A name that does not end in `.eth` cannot be told from other text,
+ * so other names may remain.
+ */
+export const scrubErrorMessage = (message: string): string =>
+  message
+    .replace(ADDRESS_PATTERN, '[address]')
+    .replace(ETH_NAME_PATTERN, '[name]')
+    .slice(0, ERROR_MESSAGE_MAX_LENGTH)
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  isObject(value)
+
+const scrubExceptionEntry = (entry: unknown): unknown =>
+  isRecord(entry) && typeof entry.value === 'string'
+    ? { ...entry, value: scrubErrorMessage(entry.value) }
+    : entry
+
+/**
+ * The SDK's `before_send`: an error report's messages lose their addresses
+ * and `.eth` names; every other event passes through unchanged.
+ */
+export const scrubErrorReport = <
+  TEvent extends {
+    readonly event: string
+    readonly properties: Readonly<Record<string, unknown>>
+  },
+>(
+  event: TEvent | null,
+): TEvent | null => {
+  if (event?.event !== '$exception') return event
+  const list = event.properties.$exception_list
+  if (!Array.isArray(list)) return event
+  return {
+    ...event,
+    properties: {
+      ...event.properties,
+      $exception_list: list.map(scrubExceptionEntry),
+    },
+  }
+}
