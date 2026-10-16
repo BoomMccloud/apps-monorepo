@@ -60,6 +60,13 @@ const ruleProblems = (
       ...(property.operator === 'is_not_set'
         ? [`${name}: uses the is_not_set operator`]
         : []),
+      // A visitor without a wallet is decided with an empty address, which
+      // posthog-node counts as set.
+      ...(property.operator === 'is_set'
+        ? [
+            `${name}: uses the is_set operator, which a visitor without a wallet answers yes to`,
+          ]
+        : []),
       ...(property.type === 'cohort' &&
       !(String(property.value) in rules.cohorts)
         ? [

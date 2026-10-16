@@ -57,6 +57,24 @@ describe('refreshSwitchRules', () => {
     })
   })
 
+  it('replaces a stored value it cannot read, downloading the rules whole', async () => {
+    const { space, values } = memoryKv({ [SWITCH_RULES_KEY]: 'not json' })
+    const fetchRules = vi.fn(
+      answering(() => rulesResponse(switchRules(), '"v2"')),
+    )
+    const env = {
+      POSTHOG_SWITCH_RULES: space,
+      POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
+    }
+
+    await expect(
+      refreshSwitchRules(env, { fetchRules, now: NOW }),
+    ).resolves.toBe('stored')
+    const headers = new Headers(fetchRules.mock.calls[0]?.[1]?.headers)
+    expect(headers.has('If-None-Match')).toBe(false)
+    expect(storedValue(values)).toMatchObject({ etag: '"v2"' })
+  })
+
   it('asks with the stored ETag and keeps the stored rules when they are unchanged', async () => {
     const { space, values } = memoryKv()
     const env = {

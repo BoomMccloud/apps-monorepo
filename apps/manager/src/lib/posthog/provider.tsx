@@ -7,6 +7,7 @@ import {
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
+  useFollowedChoice,
   useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
@@ -22,6 +23,7 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { track } from './events'
+import { ALL_SWITCHES_OFF } from './feature-flags'
 import { getFeatureSwitchesQueryOptions } from './featureSwitches.query'
 import { linkSupportChat } from './supportChat'
 import {
@@ -46,8 +48,24 @@ export const PHProvider = ({
   const queryClient = useQueryClient()
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
   const wallet = address ?? null
+  // The server's answers this page already holds for a wallet, or for none.
+  const knownSwitches = (forWallet: string | null) =>
+    queryClient.getQueryData(getFeatureSwitchesQueryOptions(forWallet).queryKey)
 
   usePostHogStart(isHydrated, switches, setConsent)
+  useFollowedChoice(
+    posthog,
+    consent !== 'unknown',
+    import.meta.env.DEV,
+    (followed) => {
+      setConsent(followed)
+      if (followed === 'granted') linkSupportChat()
+      // The decline followed here reset the SDK, which empties the switches.
+      if (followed === 'denied') {
+        pushFeatureSwitches(knownSwitches(wallet) ?? switches)
+      }
+    },
+  )
   useWalletIdentity(
     posthog,
     consent,
@@ -87,11 +105,15 @@ export const PHProvider = ({
       }
     },
     onDisconnect() {
-      // A new visitor id for whoever uses the browser next; the choice stays,
-      // and the switches for a visitor without a wallet follow.
+      // A new visitor id for whoever uses the browser next; the choice stays.
+      // The reset empties the switches, and the page would then show those it
+      // started with, decided for the wallet that just left: the answers for
+      // a visitor with no wallet go in at once, or all off until the server
+      // has given them.
       try {
         track('wallet:disconnect')
         resetVisitor(posthog)
+        pushFeatureSwitches(knownSwitches(null) ?? ALL_SWITCHES_OFF)
       } catch (error) {
         console.warn('[posthog] reset on disconnect failed', error)
       }
@@ -107,11 +129,7 @@ export const PHProvider = ({
   const decline = () => {
     declineAnalytics(posthog)
     // The reset that clears the visitor id also empties the switches.
-    pushFeatureSwitches(
-      queryClient.getQueryData(
-        getFeatureSwitchesQueryOptions(wallet).queryKey,
-      ) ?? switches,
-    )
+    pushFeatureSwitches(knownSwitches(wallet) ?? switches)
     setConsent('denied')
   }
 

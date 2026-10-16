@@ -2,6 +2,7 @@ import { transactionManager } from '@ens-apps/transaction-manager'
 import {
   acceptAnalytics,
   declineAnalytics,
+  followStoredChoice,
   resetVisitor,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
@@ -13,6 +14,7 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
+import { ALL_SWITCHES_OFF } from './feature-flags'
 import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
@@ -53,6 +55,7 @@ vi.mock('@ens-apps/utils/analyticsConsent', async (importOriginal) => ({
   >()),
   acceptAnalytics: vi.fn(async () => {}),
   declineAnalytics: vi.fn(),
+  followStoredChoice: vi.fn(() => () => {}),
   resetVisitor: vi.fn(),
   startAnalyticsChoice: vi.fn(() => 'pending'),
 }))
@@ -253,6 +256,43 @@ describe('PHProvider', () => {
     expect(resetVisitor).toHaveBeenCalledWith(posthog)
     expect(vi.mocked(posthog.capture).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(resetVisitor).mock.invocationCallOrder[0] ?? 0,
+    )
+  })
+
+  it('on disconnect, puts answers for a visitor without a wallet into the SDK at once, before the server answers', async () => {
+    connected(WALLET)
+    renderProvider()
+    await vi.waitFor(() => expect(posthog.updateFlags).toHaveBeenCalled())
+    vi.mocked(posthog.updateFlags).mockClear()
+
+    connectionCallbacks().onDisconnect?.()
+
+    // After the reset the page would show its starting answers, which were
+    // for the wallet; no switch stays on for it while the server is asked.
+    expect(posthog.updateFlags).toHaveBeenCalledWith(
+      ALL_SWITCHES_OFF,
+      undefined,
+      { merge: false },
+    )
+    expect(vi.mocked(resetVisitor).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
+    )
+  })
+
+  it("follows a choice made in another tab or app, and puts the server's switches back after a followed Decline", async () => {
+    vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+    renderProvider()
+    await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+    const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+    vi.mocked(posthog.updateFlags).mockClear()
+
+    act(() => following?.onChange('denied'))
+
+    expect(screen.getByText('denied')).not.toBeNull()
+    expect(posthog.updateFlags).toHaveBeenCalledWith(
+      SERVER_SWITCHES,
+      undefined,
+      { merge: false },
     )
   })
 

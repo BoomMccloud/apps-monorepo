@@ -1,6 +1,10 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { match } from 'ts-pattern'
-import { type SwitchRulesEnv, switchRulesSource } from './decideFeatureSwitches'
+import {
+  StoredSwitchRulesUnreadable,
+  type SwitchRulesEnv,
+  switchRulesSource,
+} from './decideFeatureSwitches'
 import { checkSwitchRules, type SwitchRules } from './switchRules'
 import { downloadSwitchRules } from './switchRulesDownload'
 import { readStoredRules, writeStoredRules } from './switchRulesStore'
@@ -54,7 +58,17 @@ export const refreshSwitchRules = async (
     )
   }
 
-  const stored = await readStoredRules(space)
+  // A stored value that cannot be read is replaced by a whole download.
+  const stored = await readStoredRules(space).catch((cause: unknown) => {
+    console.warn(
+      new StoredSwitchRulesUnreadable({
+        message:
+          'the stored switch rules could not be read, so the refresh replaces them',
+        cause,
+      }),
+    )
+    return null
+  })
   const download = await downloadSwitchRules(source, {
     etag: stored?.etag,
     fetchRules: options.fetchRules,

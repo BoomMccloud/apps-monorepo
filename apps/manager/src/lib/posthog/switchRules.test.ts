@@ -117,6 +117,32 @@ describe('checkSwitchRules', () => {
     )
   })
 
+  it('names a switch aimed at any wallet with is_set, which a visitor without a wallet would match too', async () => {
+    const anyWallet = switchRules({
+      migration: flagRule('migration', [
+        {
+          properties: [
+            {
+              key: 'address',
+              type: 'person',
+              operator: 'is_set',
+              value: 'is_set',
+            },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+    // The empty address of a visitor without a wallet counts as set.
+    await expect(
+      evaluateSwitches(anyWallet, NO_WALLET_VISITOR),
+    ).resolves.toMatchObject({ migration: true })
+
+    expect(await checkSwitchRules(anyWallet)).toContain(
+      'migration: uses the is_set operator, which a visitor without a wallet answers yes to',
+    )
+  })
+
   it('names a switch aimed at a group type the rules do not hold', async () => {
     const problems = await checkSwitchRules(
       switchRules({

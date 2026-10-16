@@ -1,6 +1,7 @@
 import {
   acceptAnalytics,
   declineAnalytics,
+  followStoredChoice,
   resetVisitor,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
@@ -43,6 +44,7 @@ vi.mock('@ens-apps/utils/analyticsConsent', async (importOriginal) => ({
   >()),
   acceptAnalytics: vi.fn(async () => {}),
   declineAnalytics: vi.fn(),
+  followStoredChoice: vi.fn(() => () => {}),
   resetVisitor: vi.fn(),
   startAnalyticsChoice: vi.fn(() => 'pending'),
 }))
@@ -141,6 +143,20 @@ describe('PHProvider', () => {
       recent_replay: 'https://replay.example/1',
     })
     expect(screen.getByText('granted')).toBeInTheDocument()
+  })
+
+  it('follows an Accept made in another tab or app, and links the support chat', async () => {
+    renderProvider()
+    await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+    const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+
+    act(() => following?.onChange('granted'))
+
+    expect(screen.getByText('granted')).toBeInTheDocument()
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: 'anonymous-visitor',
+      recent_replay: 'https://replay.example/1',
+    })
   })
 
   it('stops analytics on Decline', async () => {

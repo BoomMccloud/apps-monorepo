@@ -5,8 +5,9 @@
  * shared parent domain, so a choice made in one app applies in all of them,
  * and no code of ours reads or writes that cookie. This module holds what both
  * apps do with the choice: the settings for each state of it, the steps that
- * change it, and the scrubbing of error reports. Each app keeps its own
- * banner, notice and wiring.
+ * change it, the check of it at every send, following a change made in
+ * another tab or app, and the scrubbing of error reports. Each app keeps its
+ * own banner, notice and wiring.
  */
 
 /** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
@@ -129,7 +130,8 @@ export interface AnalyticsClient {
   register(properties: Readonly<Record<string, unknown>>): void
   opt_in_capturing(options: { captureEventName: false }): void
   opt_out_capturing(): void
-  reset(): void
+  /** With `true`, the device id is forgotten along with the visitor id. */
+  reset(resetDeviceId?: boolean): void
   set_config(config: CollectionSettings): void
   /**
    * The SDK's own hand-off of the project's settings to its recordings,
@@ -146,6 +148,17 @@ export interface AnalyticsClient {
    */
   readonly _requestQueue?: unknown
   readonly _retryQueue?: unknown
+  /**
+   * The SDK's one way out to PostHog, for every batch, retry and beacon.
+   * It checks the choice nowhere, so `checkChoiceAtSend` wraps it.
+   */
+  _send_request(request: SdkRequest): void
+}
+
+/** What the SDK hands its sending method, as far as the check reads it. */
+export type SdkRequest = {
+  readonly callback?: (response: { readonly statusCode: number }) => void
+  readonly fireCallbackOnDrop?: boolean
 }
 
 /** Where the SDK itself reads the project's settings from. */
@@ -173,11 +186,49 @@ export const loadProjectSettings = async (
   )
 }
 
+/** The options of Accept, of start-up and of following the stored choice. */
+type ChoiceOptions = {
+  readonly isDev: boolean
+  readonly fetchSettings?: typeof fetch
+}
+
+// The choice each client's page last applied, so that following the stored
+// choice applies only a change made elsewhere. This module's own record,
+// read by nothing else (no-mutation).
+const appliedChoice = new WeakMap<AnalyticsClient, AnalyticsConsent>()
+
+// The clients whose sending already checks the choice (no-mutation: this
+// module's own record, read by nothing else).
+const checkedClients = new WeakSet<AnalyticsClient>()
+
+/**
+ * Check the choice at every send. The SDK checks it only when it captures,
+ * then sends its batches, retries and beacons without looking, so a batch on
+ * its way at Decline that fails, or one left in another tab's queue, would
+ * leave after the visitor declined.
+ */
+const checkChoiceAtSend = (client: AnalyticsClient): void => {
+  if (checkedClients.has(client)) return
+  checkedClients.add(client)
+  const send = client._send_request.bind(client)
+  // no-mutation: the SDK has no setting for this, so its one sending method
+  // is wrapped in place.
+  client._send_request = (request) => {
+    if (client.get_explicit_consent_status() === 'denied') {
+      // Dropped the way the SDK drops a request it cannot send.
+      if (request.fireCallbackOnDrop) request.callback?.({ statusCode: 0 })
+      return
+    }
+    send(request)
+  }
+}
+
 /** Accept: collection starts at once, then the project's settings load. */
 export const acceptAnalytics = (
   client: AnalyticsClient,
-  options: { readonly isDev: boolean; readonly fetchSettings?: typeof fetch },
+  options: ChoiceOptions,
 ): Promise<void> => {
+  appliedChoice.set(client, 'granted')
   client.set_config(collectionOn(options))
   // The SDK's own `$opt_in` event is not one the apps sent before the pause.
   client.opt_in_capturing({ captureEventName: false })
@@ -215,15 +266,18 @@ const dropPendingRequests = (queue: unknown): void => {
 /**
  * Decline: collection stops at once, and nothing captured before it is sent
  * after it. The SDK keeps the visitor id in memory after an opt-out, and
- * only a reset clears it; the reset erases the choice too, so the choice is
- * put back.
+ * only a reset clears it; the reset forgets the device too, so a later Accept
+ * does not tie new events to old ones, and it erases the choice, so the
+ * choice is put back.
  */
 export const declineAnalytics = (client: AnalyticsClient): void => {
+  checkChoiceAtSend(client)
+  appliedChoice.set(client, 'denied')
   client.set_config(COLLECTION_OFF)
   client.opt_out_capturing()
   dropPendingRequests(client._requestQueue)
   dropPendingRequests(client._retryQueue)
-  client.reset()
+  client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)
 }
@@ -252,9 +306,11 @@ export const resetVisitor = (client: AnalyticsClient): void => {
  */
 export const startAnalyticsChoice = (
   client: AnalyticsClient,
-  options: { readonly isDev: boolean; readonly fetchSettings?: typeof fetch },
+  options: ChoiceOptions,
 ): AnalyticsConsent => {
+  checkChoiceAtSend(client)
   const consent = client.get_explicit_consent_status()
+  appliedChoice.set(client, consent)
   if (consent === 'granted') {
     void acceptAnalytics(client, options)
   } else {
@@ -262,6 +318,63 @@ export const startAnalyticsChoice = (
     forgetTabSession(client)
   }
   return consent
+}
+
+/** How often an open page checks for a choice made in another tab or app. */
+export const STORED_CHOICE_CHECK_MS = 3_000
+
+/** A choice another tab or app applied, applied here the same way. */
+const FOLLOW_STORED_CHOICE: Readonly<
+  Record<
+    AnalyticsConsent,
+    (client: AnalyticsClient, options: ChoiceOptions) => void
+  >
+> = {
+  granted: (client, options) => {
+    void acceptAnalytics(client, options)
+  },
+  denied: (client) => declineAnalytics(client),
+  // The choice was removed elsewhere: nothing is collected until one is made.
+  pending: (client) => {
+    appliedChoice.set(client, 'pending')
+    client.set_config(COLLECTION_OFF)
+    forgetTabSession(client)
+  },
+}
+
+/**
+ * Follow a choice made in another tab or another ENS app. The choice lives in
+ * the shared cookie and PostHog tells nobody when it changes, so the page
+ * looks at it whenever it comes back into view and every few seconds while
+ * it stays open, and applies a change made elsewhere as a press here would;
+ * without it, a tab left open after a Decline elsewhere would go on storing
+ * the visitor id. Returns the stop.
+ */
+export const followStoredChoice = (
+  client: AnalyticsClient,
+  options: ChoiceOptions & {
+    readonly onChange: (consent: AnalyticsConsent) => void
+  },
+): (() => void) => {
+  const check = (): void => {
+    const stored = client.get_explicit_consent_status()
+    if (stored === (appliedChoice.get(client) ?? 'pending')) return
+    FOLLOW_STORED_CHOICE[stored](client, options)
+    options.onChange(stored)
+  }
+  const checkWhenShown = (): void => {
+    if (globalThis.document?.visibilityState === 'visible') check()
+  }
+  const timer = setInterval(check, STORED_CHOICE_CHECK_MS)
+  globalThis.addEventListener?.('focus', check)
+  globalThis.addEventListener?.('pageshow', check)
+  globalThis.document?.addEventListener('visibilitychange', checkWhenShown)
+  return () => {
+    clearInterval(timer)
+    globalThis.removeEventListener?.('focus', check)
+    globalThis.removeEventListener?.('pageshow', check)
+    globalThis.document?.removeEventListener('visibilitychange', checkWhenShown)
+  }
 }
 
 export type ConnectedWallet = {
@@ -299,9 +412,15 @@ export const identifyWallet = (
 // ---------------------------------------------------------------------------
 
 const ADDRESS_PATTERN = /0x[0-9a-fA-F]{40,64}/g
-// A run of anything but spaces, quotes and brackets that ends in `.eth`.
-const ETH_NAME_PATTERN = /[^\s"'`<>()[\]{},;:]+\.eth\b/giu
+// A run of anything but spaces, quotes and brackets that ends in `.eth`, no
+// longer than a name can be (253 characters), so a long run with no `.eth`,
+// such as a call's whole data, is not searched again from every character.
+const ETH_NAME_PATTERN = /[^\s"'`<>()[\]{},;:]{1,253}\.eth\b/giu
 export const ERROR_MESSAGE_MAX_LENGTH = 200
+// More than enough for any 200 characters left after scrubbing, since each
+// address or name cut shrinks the text, and short enough to scrub at once on
+// the page's thread.
+const SCRUBBED_INPUT_MAX_LENGTH = 10_000
 
 /**
  * Cut addresses and `.eth` names out of an error message, then cut it to
@@ -310,6 +429,7 @@ export const ERROR_MESSAGE_MAX_LENGTH = 200
  */
 export const scrubErrorMessage = (message: string): string =>
   message
+    .slice(0, SCRUBBED_INPUT_MAX_LENGTH)
     .replace(ADDRESS_PATTERN, '[address]')
     .replace(ETH_NAME_PATTERN, '[name]')
     .slice(0, ERROR_MESSAGE_MAX_LENGTH)

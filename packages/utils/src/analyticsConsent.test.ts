@@ -89,6 +89,18 @@ describe('scrubErrorMessage', () => {
     )
   })
 
+  it('scrubs a message holding a whole call data quickly, and still cuts what it shows', () => {
+    // A failed call's error prints its data as one long 0x token.
+    const message = `Call failed for 0x1111111111111111111111111111111111111111 on vitalik.eth: data 0x${'ab'.repeat(50_000)}`
+    const started = performance.now()
+    const scrubbed = scrubErrorMessage(message)
+    const elapsed = performance.now() - started
+
+    expect(elapsed).toBeLessThan(500)
+    expect(scrubbed).toMatch(/^Call failed for \[address\] on \[name\]: data /)
+    expect(scrubbed).toHaveLength(ERROR_MESSAGE_MAX_LENGTH)
+  })
+
   it('cuts a long message to its maximum length, after scrubbing', () => {
     const long = `${'x'.repeat(250)} vitalik.eth`
     expect(scrubErrorMessage(long)).toHaveLength(ERROR_MESSAGE_MAX_LENGTH)

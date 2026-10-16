@@ -7,6 +7,7 @@ import {
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
+  useFollowedChoice,
   useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
@@ -38,6 +39,15 @@ export const PHProvider = ({
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
 
   usePostHogStart(setConsent)
+  useFollowedChoice(
+    posthog,
+    consent !== 'unknown',
+    import.meta.env.DEV,
+    (followed) => {
+      setConsent(followed)
+      if (followed === 'granted') linkSupportChat()
+    },
+  )
   useWalletIdentity(
     posthog,
     consent,

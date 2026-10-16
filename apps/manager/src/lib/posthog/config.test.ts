@@ -5,7 +5,9 @@ import {
   COLLECTION_OFF,
   declineAnalytics,
   ERROR_REPORTS_ON,
+  followStoredChoice,
   resetVisitor,
+  STORED_CHOICE_CHECK_MS,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
 import { PostHog } from 'posthog-js/dist/module.full.no-external'
@@ -340,6 +342,87 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(client.get_explicit_consent_status()).toBe(choice)
     expect(storedChoice()).toBe(stored)
     expect(client.get_distinct_id()).not.toBe(WALLET)
+  })
+
+  it('sends nothing after Decline, not even a batch in flight at the press that then fails', async () => {
+    const client = new PostHog()
+    const sent: SentRequest[] = []
+    const inFlight: Array<() => void> = []
+    let isHoldingBatches = true
+    vi.spyOn(client, '_send_request').mockImplementation((request) => {
+      sent.push({ url: request.url, data: request.data })
+      if (isHoldingBatches && request.url.includes('/e/')) {
+        // The batch is on its way when the visitor presses Decline, and
+        // PostHog answers it with an error only afterwards.
+        inFlight.push(() => request.callback?.({ statusCode: 502 }))
+        return
+      }
+      request.callback?.({ statusCode: 200, json: { surveys: [] } })
+    })
+    client.init('test-key', {
+      ...startupConfig(SWITCHES),
+      api_host: 'https://posthog.example',
+      opt_out_useragent_filter: true,
+    })
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+    client.capture('wallet:connect', { wallet_address: WALLET })
+    await flush()
+    expect(inFlight.length).toBeGreaterThan(0)
+
+    isHoldingBatches = false
+    declineAnalytics(client)
+    const sentAtDecline = sent.length
+    for (const failInFlight of inFlight) failInFlight()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(eventsIn(sent.slice(sentAtDecline))).toEqual([])
+  })
+
+  it('forgets the device on Decline, so a later Accept starts afresh', async () => {
+    const { client } = startClient()
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+    client.identify(WALLET, { address: WALLET })
+    const deviceBeforeDecline = client.get_property('$device_id')
+    expect(deviceBeforeDecline).toEqual(expect.any(String))
+
+    declineAnalytics(client)
+    await acceptAnalytics(client, { isDev: true, fetchSettings })
+
+    expect(client.get_property('$device_id')).not.toBe(deviceBeforeDecline)
+  })
+
+  it('follows a Decline made in another tab: this tab keeps nothing and sends nothing', async () => {
+    const thisTab = startClient()
+    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
+    thisTab.client.identify(WALLET, { address: WALLET })
+    await flush()
+    const onChange = vi.fn()
+    const stopFollowing = followStoredChoice(thisTab.client, {
+      isDev: true,
+      fetchSettings,
+      onChange,
+    })
+
+    // Another tab, of this app or another ENS app, declines.
+    const otherTab = startClient()
+    expect(
+      startAnalyticsChoice(otherTab.client, { isDev: true, fetchSettings }),
+    ).toBe('granted')
+    declineAnalytics(otherTab.client)
+    await flush()
+    const sentAfterDecline = thisTab.sent.length
+
+    // This tab goes on: the Manager pushes switches, the visitor clicks.
+    await vi.advanceTimersByTimeAsync(STORED_CHOICE_CHECK_MS)
+    thisTab.client.updateFlags(SWITCHES, undefined, { merge: false })
+    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
+    await flush()
+
+    expect(onChange).toHaveBeenCalledWith('denied')
+    expect(thisTab.client.get_distinct_id()).not.toBe(WALLET)
+    expect(postHogStorage().filter((key) => /^(__)?ph_/.test(key))).toEqual([])
+    expect(eventsIn(thisTab.sent.slice(sentAfterDecline))).toEqual([])
+    stopFollowing()
   })
 
   it("takes the visitor id another app's reset left in the shared cookie over this app's own", async () => {
