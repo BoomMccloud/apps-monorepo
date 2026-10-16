@@ -23,7 +23,8 @@
     "i18n:pull": "crowdin download --config crowdin.yml",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
-    "prebuild": "tsx scripts/check-network-config.ts"
+    "check:switch-rules": "tsx scripts/check-switch-rules.ts",
+    "prebuild": "tsx scripts/check-network-config.ts && tsx scripts/check-switch-rules.ts --when-configured"
   },
   "dependencies": {
     "@ens-apps/config": "workspace:^",

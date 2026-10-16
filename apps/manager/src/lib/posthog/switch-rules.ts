@@ -1,0 +1,152 @@
+import { PostHog } from 'posthog-node'
+import type {
+  FlagDefinitionCacheData,
+  FlagDefinitionCacheProvider,
+} from 'posthog-node/experimental'
+import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
+
+/**
+ * PostHog's rules for the project's feature switches, as its local-evaluation
+ * download gives them. The Manager's server decides every switch from these
+ * alone, so the browser never asks PostHog and PostHog never learns which
+ * wallet asked.
+ */
+export type SwitchRules = FlagDefinitionCacheData
+
+/** Who the switches are decided for. */
+export type SwitchVisitor = {
+  readonly distinctId: string
+  readonly address: string
+}
+
+/**
+ * Every visitor without a wallet is decided alike: a rule aimed at named
+ * wallets is off for them, a rule open to everyone is on, and a percentage
+ * rule gives all of them the same answer.
+ */
+export const NO_WALLET_VISITOR: SwitchVisitor = {
+  distinctId: 'visitor-without-wallet',
+  address: '',
+}
+
+export const switchVisitor = (wallet: string | null): SwitchVisitor =>
+  wallet ? { distinctId: wallet, address: wallet } : NO_WALLET_VISITOR
+
+/** A wallet the rules check decides every switch for, besides no wallet. */
+const SAMPLE_WALLET = '0x000000000000000000000000000000000000dEaD'
+
+type FlagRule = SwitchRules['flags'][number]
+
+const propertiesOf = (rule: FlagRule) =>
+  (rule.filters?.groups ?? []).flatMap((group) => group.properties ?? [])
+
+/** What in a switch's own rule PostHog alone could decide. */
+const ruleProblems = (
+  rules: SwitchRules,
+  name: FeatureSwitchName,
+): readonly string[] => {
+  const rule = rules.flags.find((flag) => flag.key === name)
+  if (!rule) return [`${name}: missing from the rules`]
+  const groupTypeIndex = rule.filters?.aggregation_group_type_index
+  return [
+    ...(rule.ensure_experience_continuity
+      ? [`${name}: persists across sign-in (experience continuity)`]
+      : []),
+    ...(typeof groupTypeIndex === 'number' &&
+    !(String(groupTypeIndex) in rules.groupTypeMapping)
+      ? [`${name}: aims at a group type the rules do not hold`]
+      : []),
+    ...propertiesOf(rule).flatMap((property) => [
+      ...(property.operator === 'is_not_set'
+        ? [`${name}: uses the is_not_set operator`]
+        : []),
+      ...(property.type === 'cohort' &&
+      !(String(property.value) in rules.cohorts)
+        ? [
+            `${name}: uses cohort ${String(property.value)}, which the rules do not hold`,
+          ]
+        : []),
+    ]),
+  ]
+}
+
+/** Hands the client the rules it was given, and never lets it fetch any. */
+const heldRules = (rules: SwitchRules): FlagDefinitionCacheProvider => ({
+  getFlagDefinitions: () => rules,
+  shouldFetchFlagDefinitions: () => false,
+  onFlagDefinitionsReceived: () => {},
+  shutdown: () => {},
+})
+
+const refuseNetwork = (): never => {
+  throw new Error('Feature switches are decided from stored rules only')
+}
+
+/** Long enough that the client never refreshes within one evaluation. */
+const NO_POLLING_MS = 60 * 60 * 1000
+
+/** The switches the rules decided; one they could not decide is absent. */
+export type SwitchAnswers = Readonly<
+  Partial<Record<FeatureSwitchName, boolean>>
+>
+
+/**
+ * Decide each switch for one visitor from the rules alone. Nothing is ever
+ * asked of PostHog, and no record of the read is sent.
+ */
+export const evaluateSwitches = async (
+  rules: SwitchRules,
+  visitor: SwitchVisitor,
+  names: readonly FeatureSwitchName[] = FEATURE_SWITCH_NAMES,
+): Promise<SwitchAnswers> => {
+  const client = new PostHog('switch-rules', {
+    host: 'http://switch-rules.invalid',
+    personalApiKey: 'switch-rules',
+    strictLocalEvaluation: true,
+    flagDefinitionCacheProvider: heldRules(rules),
+    featureFlagsPollingInterval: NO_POLLING_MS,
+    fetch: refuseNetwork,
+    disableGeoip: true,
+  })
+  try {
+    const flags = await client.getAllFlags(visitor.distinctId, {
+      personProperties: { address: visitor.address },
+      onlyEvaluateLocally: true,
+      flagKeys: [...names],
+    })
+    return Object.fromEntries(
+      names.flatMap((name) => {
+        const value = flags[name]
+        return typeof value === 'boolean' ? [[name, value]] : []
+      }),
+    )
+  } finally {
+    await client.shutdown()
+  }
+}
+
+/**
+ * The rules check: every switch the Manager reads is in the rules, depends on
+ * nothing PostHog alone holds, and gets a yes or a no both for a wallet and
+ * for a visitor with none. Returns what is wrong; empty means the rules can
+ * serve every visitor. The deploy, the scheduled refresh and the tests run it.
+ */
+export const checkSwitchRules = async (
+  rules: SwitchRules,
+  names: readonly FeatureSwitchName[] = FEATURE_SWITCH_NAMES,
+): Promise<readonly string[]> => {
+  const structural = names.flatMap((name) => ruleProblems(rules, name))
+  const visitors = [
+    { label: 'a wallet', visitor: switchVisitor(SAMPLE_WALLET) },
+    { label: 'no wallet', visitor: NO_WALLET_VISITOR },
+  ] as const
+  const undecided = await Promise.all(
+    visitors.map(async ({ label, visitor }) => {
+      const answers = await evaluateSwitches(rules, visitor, names)
+      return names
+        .filter((name) => answers[name] === undefined)
+        .map((name) => `${name}: no yes or no for ${label}`)
+    }),
+  )
+  return [...structural, ...undecided.flat()]
+}

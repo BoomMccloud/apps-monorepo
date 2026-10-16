@@ -8,7 +8,8 @@ import { useSmartAccountContext } from '@/lib/smart-account'
 import { Route } from './upgrade'
 
 const navigateMock = vi.hoisted(() => vi.fn())
-const getFeatureFlagMock = vi.hoisted(() => vi.fn())
+const getFeatureSwitchesMock = vi.hoisted(() => vi.fn())
+const isWalletConnectedCookieMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({ options }),
@@ -29,9 +30,19 @@ vi.mock('@/lib/smart-account', () => ({
   useSmartAccountContext: vi.fn(),
 }))
 
-vi.mock('@/lib/posthog/get-feature-flag', () => ({
-  getFeatureFlag: getFeatureFlagMock,
+vi.mock('@/lib/posthog/get-feature-switches', () => ({
+  getFeatureSwitches: getFeatureSwitchesMock,
 }))
+
+vi.mock('@/lib/connection-cookie', () => ({
+  isWalletConnectedCookie: isWalletConnectedCookieMock,
+}))
+
+const switches = (migration: boolean) => ({
+  i18n: false,
+  migration,
+  'migration-nft': false,
+})
 
 vi.mock('@/features/migration/pages/MigrationPage', () => ({
   MigrationPage: () => <div data-testid="migration-page" />,
@@ -99,32 +110,34 @@ describe('/upgrade route auth', () => {
     vi.unstubAllGlobals()
   })
 
-  it('allows direct server requests when the migration flag is enabled', async () => {
+  it('lets a wallet in when the server turns migration on for it', async () => {
     vi.stubGlobal('window', undefined)
-    getFeatureFlagMock.mockResolvedValue(true)
+    isWalletConnectedCookieMock.mockReturnValue(true)
+    getFeatureSwitchesMock.mockResolvedValue(switches(true))
 
     await expect(runBeforeLoad()).resolves.toBeUndefined()
-    expect(getFeatureFlagMock).toHaveBeenCalledWith({
-      data: { flag: 'migration' },
-    })
+    expect(getFeatureSwitchesMock).toHaveBeenCalledWith({ data: {} })
   })
 
-  it('redirects direct server requests when the migration flag is disabled', async () => {
+  it('sends a wallet the server keeps out of migration to the dashboard', async () => {
     vi.stubGlobal('window', undefined)
-    getFeatureFlagMock.mockResolvedValue(false)
+    isWalletConnectedCookieMock.mockReturnValue(true)
+    getFeatureSwitchesMock.mockResolvedValue(switches(false))
 
     await expect(runBeforeLoad()).rejects.toEqual({
       options: { to: '/dashboard', replace: true },
     })
   })
 
-  it('redirects direct server requests when migration access cannot be evaluated', async () => {
+  it('sends a visitor without a wallet to the dashboard, even when migration is open to everyone', async () => {
     vi.stubGlobal('window', undefined)
-    getFeatureFlagMock.mockResolvedValue(null)
+    isWalletConnectedCookieMock.mockReturnValue(false)
+    getFeatureSwitchesMock.mockResolvedValue(switches(true))
 
     await expect(runBeforeLoad()).rejects.toEqual({
       options: { to: '/dashboard', replace: true },
     })
+    expect(getFeatureSwitchesMock).not.toHaveBeenCalled()
   })
 
   it('waits during wallet restoration before rendering or redirecting', () => {

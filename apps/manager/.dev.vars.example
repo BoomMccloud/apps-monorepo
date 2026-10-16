@@ -8,3 +8,11 @@ RHINESTONE_INTEGRATOR_ID=""
 RHINESTONE_PROJECT_ID=""
 RHINESTONE_APP_ID=""
 RHINESTONE_KEY_ID=""
+
+# PostHog project secret API key that can only read feature flags: created by a
+# project admin under Project secret API keys with the "Local feature flag
+# evaluation" preset. The server downloads the switch rules with it and decides
+# every switch locally (src/lib/posthog). Production holds it as a Cloudflare
+# secret (`wrangler secret put`); a build that deploys holds it too, for the
+# rules check (scripts/check-switch-rules.ts). Without it, every switch is off.
+POSTHOG_PROJECT_SECRET_API_KEY=""

@@ -3,7 +3,9 @@
   "name": "manager-app-v4",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  // TanStack Start's entry plus the scheduled refresh of the feature-switch
+  // rules (src/server.ts).
+  "main": "./src/server.ts",
   // The OG cards read their TTF faces out of `public/og/fonts` through this
   // binding; a worker can't fetch them back over its own origin.
   "assets": {
@@ -18,6 +20,13 @@
       "simple": { "limit": 30, "period": 60 }
     }
   ],
+  // PostHog's feature-switch rules: the cron below stores the last good rules
+  // here and every request reads them (src/lib/posthog). No id: `wrangler
+  // deploy` provisions the namespace, and local dev keeps one of its own.
+  "kv_namespaces": [{ "binding": "POSTHOG_SWITCH_RULES" }],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
   "preview_urls": true,
   "observability": {
     "enabled": true

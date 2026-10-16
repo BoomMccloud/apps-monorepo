@@ -9,17 +9,19 @@ import { useConnection } from 'wagmi'
 import { MigrationPage } from '@/features/migration/pages/MigrationPage'
 import { MigrationUiProvider } from '@/features/migration/state/migrationUi.context'
 import { useOnDisconnected } from '@/features/wallet/hooks/useOnDisconnected'
-import { POSTHOG_FEATURE_FLAGS } from '@/lib/posthog/feature-flags'
-import { getFeatureFlag } from '@/lib/posthog/get-feature-flag'
+import { isWalletConnectedCookie } from '@/lib/connection-cookie'
+import { getFeatureSwitches } from '@/lib/posthog/get-feature-switches'
 import { useSmartAccountContext } from '@/lib/smart-account'
 
 export const Route = createFileRoute('/upgrade')({
   beforeLoad: async () => {
-    const migrationAccess = await getFeatureFlag({
-      data: { flag: POSTHOG_FEATURE_FLAGS.MIGRATION },
-    })
-
-    if (migrationAccess !== true) {
+    // The page needs a connected wallet, and would only show its spinner to
+    // a visitor without one, whatever the switch says for such visitors.
+    if (!isWalletConnectedCookie()) {
+      throw redirect({ to: '/dashboard', replace: true })
+    }
+    const switches = await getFeatureSwitches({ data: {} })
+    if (!switches.migration) {
       throw redirect({ to: '/dashboard', replace: true })
     }
   },
