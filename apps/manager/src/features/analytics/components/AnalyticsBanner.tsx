@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { floatingWrapperGlassClassName } from '@/features/navigation/Header/shared/FloatingWrapper'
-import { cn } from '@/lib/utils'
+import { tw } from '@/utils/tailwind'
 
 /**
  * The analytics banner: a card floating over the page until the visitor
@@ -21,7 +21,7 @@ export const AnalyticsBanner = () => {
   return (
     <section
       aria-labelledby={headingId}
-      className={cn(
+      className={tw(
         'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
         'xs:inset-x-auto xs:top-auto xs:bottom-6 xs:left-6 xs:w-80',
         floatingWrapperGlassClassName,
