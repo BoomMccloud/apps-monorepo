@@ -5,10 +5,12 @@
  * shared parent domain, so a choice made in one app applies in all of them,
  * and no code of ours reads or writes that cookie. This module holds what both
  * apps do with the choice: the settings for each state of it, the steps that
- * change it, the check of it at every send, following a change made in
- * another tab or app, and the scrubbing of error reports. Each app keeps its
- * own banner, notice and wiring.
+ * change it, following a change made in another tab or app, and the scrubbing
+ * of error reports. What is sent is held back until the visitor accepts by
+ * `analyticsSendGuard`. Each app keeps its own banner, notice and wiring.
  */
+import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
+import { guardPostHogSends } from './analyticsSendGuard'
 
 /** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
 export const ANALYTICS_CONSENT_COOKIE_NAME = 'ens.analytics.consent'
@@ -33,6 +35,10 @@ export const ANALYTICS_CONSENT_SETTINGS = {
   // visitor id reset in one app reaches the others.
   __preview_cookie_wins_on_conflict: true,
   advanced_disable_flags: true,
+  // Each event is sent as it is captured, at one request per event, so none
+  // waits in a batch to leave after a visitor who declined accepts again.
+  // What is sent after a Decline is held back by `analyticsSendGuard`.
+  request_batching: false,
 } as const
 
 /** The collection settings the choice switches on and off. */
@@ -113,6 +119,31 @@ export const collectionOn = ({
   disable_session_recording: isDev,
 })
 
+/**
+ * The SDK's start-up settings for every ENS app. Nothing is captured, stored or
+ * sent until the visitor accepts, the choice lives in the cookie the apps
+ * share, and the SDK never asks PostHog for feature switches: an app that
+ * reads switches passes the ones its server decided, which the SDK takes as
+ * they are.
+ */
+export const analyticsStartupConfig = ({
+  apiHost,
+  bootstrapSwitches,
+}: {
+  readonly apiHost: string | undefined
+  readonly bootstrapSwitches?: Readonly<Record<string, boolean>>
+}): Partial<PostHogConfig> => ({
+  api_host: apiHost,
+  defaults: '2025-11-30',
+  person_profiles: 'identified_only',
+  ...ANALYTICS_CONSENT_SETTINGS,
+  ...COLLECTION_OFF,
+  ...(bootstrapSwitches
+    ? { bootstrap: { featureFlags: bootstrapSwitches } }
+    : {}),
+  before_send: scrubErrorReport,
+})
+
 /** The part of the PostHog browser SDK the choice uses. */
 export interface AnalyticsClient {
   readonly config: {
@@ -128,7 +159,7 @@ export interface AnalyticsClient {
     userPropertiesToSetOnce: Readonly<Record<string, unknown>>,
   ): void
   register(properties: Readonly<Record<string, unknown>>): void
-  opt_in_capturing(options: { captureEventName: false }): void
+  opt_in_capturing(options: { readonly captureEventName: false }): void
   opt_out_capturing(): void
   /** With `true`, the device id is forgotten along with the visitor id. */
   reset(resetDeviceId?: boolean): void
@@ -139,26 +170,11 @@ export interface AnalyticsClient {
    * `advanced_disable_flags` is set at start-up, and that setting is what
    * keeps the browser from asking PostHog for feature switches.
    */
-  _onRemoteConfig(result: { ok: true; config: object } | { ok: false }): void
-  /**
-   * The SDK's batches waiting for their send, a few seconds after capture,
-   * and the requests it will try again. Neither checks the choice before
-   * sending, and the SDK has no public way to empty them. The SDK declares
-   * each queue's list private, so no type here can name it.
-   */
-  readonly _requestQueue?: unknown
-  readonly _retryQueue?: unknown
-  /**
-   * The SDK's one way out to PostHog, for every batch, retry and beacon.
-   * It checks the choice nowhere, so `checkChoiceAtSend` wraps it.
-   */
-  _send_request(request: SdkRequest): void
-}
-
-/** What the SDK hands its sending method, as far as the check reads it. */
-export type SdkRequest = {
-  readonly callback?: (response: { readonly statusCode: number }) => void
-  readonly fireCallbackOnDrop?: boolean
+  _onRemoteConfig(
+    result:
+      | { readonly ok: true; readonly config: object }
+      | { readonly ok: false },
+  ): void
 }
 
 /** Where the SDK itself reads the project's settings from. */
@@ -175,9 +191,8 @@ const isObject = (value: unknown): value is object =>
  */
 export const loadProjectSettings = async (
   client: AnalyticsClient,
-  fetchSettings: typeof fetch = fetch,
 ): Promise<void> => {
-  const settings = await fetchSettings(projectSettingsUrl(client))
+  const settings = await fetch(projectSettingsUrl(client))
     .then((response) => (response.ok ? response.json() : undefined))
     .catch(() => undefined)
   if (client.get_explicit_consent_status() !== 'granted') return
@@ -189,7 +204,6 @@ export const loadProjectSettings = async (
 /** The options of Accept, of start-up and of following the stored choice. */
 type ChoiceOptions = {
   readonly isDev: boolean
-  readonly fetchSettings?: typeof fetch
 }
 
 // The choice each client's page last applied, so that following the stored
@@ -197,44 +211,17 @@ type ChoiceOptions = {
 // read by nothing else (no-mutation).
 const appliedChoice = new WeakMap<AnalyticsClient, AnalyticsConsent>()
 
-// The clients whose sending already checks the choice (no-mutation: this
-// module's own record, read by nothing else).
-const checkedClients = new WeakSet<AnalyticsClient>()
-
-/**
- * Check the choice at every send. The SDK checks it only when it captures,
- * then sends its batches, retries and beacons without looking, so a batch on
- * its way at Decline that fails, or one left in another tab's queue, would
- * leave after the visitor declined. Only a visitor who has accepted is sent
- * for: one who has not chosen, or whose choice was removed, counts as
- * declined.
- */
-const checkChoiceAtSend = (client: AnalyticsClient): void => {
-  if (checkedClients.has(client)) return
-  checkedClients.add(client)
-  const send = client._send_request.bind(client)
-  // no-mutation: the SDK has no setting for this, so its one sending method
-  // is wrapped in place.
-  client._send_request = (request) => {
-    if (client.get_explicit_consent_status() !== 'granted') {
-      // Dropped the way the SDK drops a request it cannot send.
-      if (request.fireCallbackOnDrop) request.callback?.({ statusCode: 0 })
-      return
-    }
-    send(request)
-  }
-}
-
 /** Accept: collection starts at once, then the project's settings load. */
 export const acceptAnalytics = (
   client: AnalyticsClient,
   options: ChoiceOptions,
 ): Promise<void> => {
+  guardPostHogSends(client)
   appliedChoice.set(client, 'granted')
   client.set_config(collectionOn(options))
   // The SDK's own `$opt_in` event is not one the apps sent before the pause.
   client.opt_in_capturing({ captureEventName: false })
-  return loadProjectSettings(client, options.fetchSettings)
+  return loadProjectSettings(client)
 }
 
 /**
@@ -253,37 +240,18 @@ const forgetTabSession = (client: AnalyticsClient): void => {
 }
 
 /**
- * Empty one of the SDK's send queues: what is in it was captured before
- * Decline, the click on Decline itself included, and carries the visitor id.
- */
-const dropPendingRequests = (queue: unknown): void => {
-  if (!isObject(queue) || !('_queue' in queue)) return
-  const pending = queue._queue
-  if (Array.isArray(pending)) {
-    // no-mutation: the SDK's own queue is emptied in place, as no API can.
-    pending.length = 0
-  }
-}
-
-/** Forget what was captured and is waiting to be sent or tried again. */
-const dropQueuedRequests = (client: AnalyticsClient): void => {
-  dropPendingRequests(client._requestQueue)
-  dropPendingRequests(client._retryQueue)
-}
-
-/**
  * Decline: collection stops at once, and nothing captured before it is sent
- * after it. The SDK keeps the visitor id in memory after an opt-out, and
+ * after it, since the send guard holds back every request while the choice is
+ * not Accept. The SDK keeps the visitor id in memory after an opt-out, and
  * only a reset clears it; the reset forgets the device too, so a later Accept
  * does not tie new events to old ones, and it erases the choice, so the
  * choice is put back.
  */
 export const declineAnalytics = (client: AnalyticsClient): void => {
-  checkChoiceAtSend(client)
+  guardPostHogSends(client)
   appliedChoice.set(client, 'denied')
   client.set_config(COLLECTION_OFF)
   client.opt_out_capturing()
-  dropQueuedRequests(client)
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)
@@ -315,7 +283,7 @@ export const startAnalyticsChoice = (
   client: AnalyticsClient,
   options: ChoiceOptions,
 ): AnalyticsConsent => {
-  checkChoiceAtSend(client)
+  guardPostHogSends(client)
   const consent = client.get_explicit_consent_status()
   appliedChoice.set(client, consent)
   if (consent === 'granted') {
@@ -342,11 +310,10 @@ const FOLLOW_STORED_CHOICE: Readonly<
   },
   denied: (client) => declineAnalytics(client),
   // The choice was removed elsewhere: nothing is collected until one is made,
-  // and what was captured under the old one is not sent.
+  // and the send guard holds back what is still waiting.
   pending: (client) => {
     appliedChoice.set(client, 'pending')
     client.set_config(COLLECTION_OFF)
-    dropQueuedRequests(client)
     forgetTabSession(client)
   },
 }

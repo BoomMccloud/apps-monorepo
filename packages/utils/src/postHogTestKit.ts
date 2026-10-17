@@ -1,0 +1,260 @@
+import { vi } from 'vitest'
+
+/**
+ * Test support for the real PostHog SDK: the network it sends on, replaced so
+ * that every request it would put on the wire is seen, whichever way inside
+ * the SDK it got there. Nothing here touches an SDK internal.
+ *
+ * Order matters, and each test file sets it up itself: the SDK keeps the
+ * `fetch` it finds when its module loads, and the send guard wraps the `fetch`
+ * it finds when it loads, so the network goes in first, then the consent
+ * module (which loads the guard), then the SDK:
+ *
+ *   const network = installPostHogNetwork()
+ *   const consent = await import('@ens-apps/utils/analyticsConsent')
+ *   const { PostHog } = await import('posthog-js/dist/module.full.no-external')
+ */
+
+/** The project's settings as PostHog serves them, with everything on. */
+export const PROJECT_SETTINGS = {
+  // Once these arrive the SDK gzips what it sends, with the platform's stream.
+  supportedCompression: ['gzip', 'gzip-js'],
+  sessionRecording: { endpoint: '/s/' },
+  surveys: true,
+  heatmaps: true,
+  capturePerformance: { web_vitals: true },
+} as const
+
+export type SentEvent = {
+  readonly event: string
+  readonly properties: Readonly<Record<string, unknown>>
+}
+
+/** One request that reached the network, after the send guard. */
+export type WireRequest = {
+  readonly via: 'fetch' | 'beacon'
+  readonly method: string
+  readonly url: string
+  readonly path: string
+  readonly events: readonly SentEvent[]
+}
+
+export type NetworkAnswers = {
+  /** What a request carrying events gets, each time one arrives. */
+  readonly events?: () => Response | Promise<Response>
+  readonly projectSettings?: object
+}
+
+const urlOf = (input: RequestInfo | URL): string =>
+  typeof input === 'string'
+    ? input
+    : input instanceof URL
+      ? input.href
+      : input.url
+
+/** The answers of PostHog's host, by path. */
+export const answering =
+  ({
+    events = () => Response.json({ status: 1 }),
+    projectSettings = PROJECT_SETTINGS,
+  }: NetworkAnswers = {}) =>
+  async (input: RequestInfo | URL): Promise<Response> => {
+    const { pathname } = new URL(urlOf(input))
+    if (/^\/array\/[^/]+\/config$/.test(pathname)) {
+      return Response.json(projectSettings)
+    }
+    if (pathname.startsWith('/api/surveys')) {
+      return Response.json({ surveys: [] })
+    }
+    if (pathname.startsWith('/flags')) {
+      return Response.json({ flags: {}, featureFlags: {} })
+    }
+    return pathname.startsWith('/e') ? events() : Response.json({ status: 1 })
+  }
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// The SDK encodes a body as gzip bytes, as `data=<base64 of the JSON>`, or as
+// plain JSON, according to its compression settings and the request.
+const fromBase64 = (text: string): string =>
+  new TextDecoder().decode(
+    Uint8Array.from(atob(text), (char) => char.charCodeAt(0)),
+  )
+
+const gunzip = (bytes: BufferSource): Promise<string> =>
+  new Response(
+    new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')),
+  ).text()
+
+const decodeBody = async (
+  raw: string | ArrayBuffer | ArrayBufferView,
+): Promise<unknown> => {
+  try {
+    if (typeof raw !== 'string') {
+      const bytes = ArrayBuffer.isView(raw)
+        ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+        : new Uint8Array(raw)
+      return JSON.parse(await gunzip(Uint8Array.from(bytes)))
+    }
+    return JSON.parse(
+      raw.startsWith('data=')
+        ? fromBase64(decodeURIComponent(raw.slice('data='.length)))
+        : raw,
+    )
+  } catch {
+    return undefined
+  }
+}
+
+const eventsIn = (body: unknown): readonly SentEvent[] =>
+  (isRecord(body) && Array.isArray(body.batch)
+    ? body.batch
+    : Array.isArray(body)
+      ? body
+      : [body]
+  ).filter(
+    (item): item is SentEvent =>
+      isRecord(item) && typeof item.event === 'string',
+  )
+
+const bodyText = async (
+  body: BodyInit | null | undefined,
+): Promise<string | ArrayBuffer | ArrayBufferView | undefined> =>
+  body instanceof Blob
+    ? body.text()
+    : typeof body === 'string' || ArrayBuffer.isView(body)
+      ? body
+      : body instanceof ArrayBuffer
+        ? body
+        : undefined
+
+/** Put the network in place of the page's `fetch` and `sendBeacon`. */
+export const installPostHogNetwork = (answers: NetworkAnswers = {}) => {
+  const fetchStub = vi.fn(answering(answers))
+  const beaconStub = vi.fn(
+    (_url: string | URL, _data?: BodyInit | null): boolean => true,
+  )
+  globalThis.fetch = fetchStub as unknown as typeof fetch
+  globalThis.navigator.sendBeacon = beaconStub
+
+  const wire = async (): Promise<readonly WireRequest[]> => {
+    const fetched = await Promise.all(
+      fetchStub.mock.calls.map(async ([input], index) => {
+        const init = (fetchStub.mock.calls[index] as unknown[])[1] as
+          | RequestInit
+          | undefined
+        const url = urlOf(input)
+        const raw = await bodyText(init?.body)
+        return {
+          order: fetchStub.mock.invocationCallOrder[index] ?? 0,
+          request: {
+            via: 'fetch',
+            method: init?.method ?? 'GET',
+            url,
+            path: new URL(url).pathname,
+            events: raw === undefined ? [] : eventsIn(await decodeBody(raw)),
+          } satisfies WireRequest,
+        }
+      }),
+    )
+    const beaconed = await Promise.all(
+      beaconStub.mock.calls.map(async ([url, data], index) => {
+        const href = urlOf(url)
+        const raw = await bodyText(data)
+        return {
+          order: beaconStub.mock.invocationCallOrder[index] ?? 0,
+          request: {
+            via: 'beacon',
+            method: 'POST',
+            url: href,
+            path: new URL(href).pathname,
+            events: raw === undefined ? [] : eventsIn(await decodeBody(raw)),
+          } satisfies WireRequest,
+        }
+      }),
+    )
+    return [...fetched, ...beaconed]
+      .sort((first, second) => first.order - second.order)
+      .map(({ request }) => request)
+  }
+
+  /** Forget what was sent and go back to the default answers. */
+  const reset = (nextAnswers: NetworkAnswers = answers): void => {
+    fetchStub.mockReset()
+    fetchStub.mockImplementation(answering(nextAnswers))
+    beaconStub.mockClear()
+  }
+
+  return { fetch: fetchStub, sendBeacon: beaconStub, wire, reset }
+}
+
+export type PostHogNetwork = ReturnType<typeof installPostHogNetwork>
+
+/** The events a list of requests carries, in order. */
+export const eventsOf = (
+  requests: readonly WireRequest[],
+): readonly SentEvent[] => requests.flatMap((request) => request.events)
+
+export const eventNames = (requests: readonly WireRequest[]): string[] =>
+  eventsOf(requests).map((event) => event.event)
+
+/**
+ * The SDK gzips a body with the platform's `CompressionStream`, which finishes
+ * in real time and not in fake time. After moving the fake clock, give the
+ * real event loop a few turns before looking at the wire.
+ */
+const realSetTimeout = globalThis.setTimeout
+export const settle = async (
+  advance: (ms: number) => Promise<unknown>,
+  ms: number,
+): Promise<void> => {
+  await advance(ms)
+  for (const _turn of [1, 2, 3, 4]) {
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 25))
+    await advance(5)
+  }
+}
+
+/**
+ * The SDK wraps the page's history methods for the first client that starts
+ * in a window and leaves them wrapped; spies put the originals back at
+ * `vi.restoreAllMocks()`, so each test's client wraps them afresh.
+ */
+export const keepHistoryMethods = (): void => {
+  vi.spyOn(history, 'pushState')
+  vi.spyOn(history, 'replaceState')
+}
+
+/** Set a cookie as another tab or app would have, or clear it with `max-age=0`. */
+export const writeCookie = (
+  name: string,
+  value: string,
+  attributes = 'path=/',
+): void => {
+  // biome-ignore lint/suspicious/noDocumentCookie: The tests set and clear the test document's cookies, as other tabs and apps do.
+  document.cookie = `${name}=${value}; ${attributes}`
+}
+
+export const clearCookies = (): void => {
+  for (const cookie of document.cookie.split(';')) {
+    const name = cookie.split('=')[0]?.trim()
+    if (name) writeCookie(name, '', 'max-age=0; path=/')
+  }
+}
+
+export const cookieValue = (name: string): string | undefined =>
+  document.cookie
+    .split(';')
+    .map((cookie) => cookie.trim().split('='))
+    .find(([cookieName]) => cookieName === name)?.[1]
+
+/** What the SDK keeps in the page's storage and cookies. */
+export const postHogStorage = (): string[] =>
+  [
+    ...Object.keys(localStorage),
+    ...Object.keys(sessionStorage),
+    ...document.cookie
+      .split(';')
+      .map((cookie) => cookie.split('=')[0]?.trim() ?? ''),
+  ].filter((key) => /^(__)?ph_/.test(key))

@@ -1,8 +1,4 @@
-import {
-  ANALYTICS_CONSENT_SETTINGS,
-  COLLECTION_OFF,
-  scrubErrorReport,
-} from '@ens-apps/utils/analyticsConsent'
+import { analyticsStartupConfig } from '@ens-apps/utils/analyticsConsent'
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
 import type { FeatureSwitches } from './feature-flags'
 
@@ -14,12 +10,8 @@ import type { FeatureSwitches } from './feature-flags'
  */
 export const startupConfig = (
   switches: FeatureSwitches,
-): Partial<PostHogConfig> => ({
-  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
-  defaults: '2025-11-30',
-  person_profiles: 'identified_only',
-  ...ANALYTICS_CONSENT_SETTINGS,
-  ...COLLECTION_OFF,
-  bootstrap: { featureFlags: switches },
-  before_send: scrubErrorReport,
-})
+): Partial<PostHogConfig> =>
+  analyticsStartupConfig({
+    apiHost: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+    bootstrapSwitches: switches,
+  })

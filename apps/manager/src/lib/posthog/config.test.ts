@@ -1,170 +1,65 @@
 // @vitest-environment happy-dom
 import {
-  ANALYTICS_CONSENT_COOKIE_NAME,
-  acceptAnalytics,
-  COLLECTION_OFF,
-  declineAnalytics,
-  ERROR_REPORTS_ON,
-  followStoredChoice,
-  resetVisitor,
-  STORED_CHOICE_CHECK_MS,
-  startAnalyticsChoice,
-} from '@ens-apps/utils/analyticsConsent'
-import { PostHog } from 'posthog-js/dist/module.full.no-external'
+  clearCookies,
+  installPostHogNetwork,
+  keepHistoryMethods,
+} from '@ens-apps/utils/postHogTestKit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { startupConfig } from './config'
 import type { FeatureSwitches } from './feature-flags'
 
 /**
- * The real SDK, every request it would send captured before it leaves. Each
- * Accept here is a development build's, recordings off, since the recorder
- * cannot run in happy-dom; the recorder's settings still arrive.
- * happy-dom reports `navigator.webdriver`, and the SDK drops every event from
- * what it takes for a bot, so each test turns that filter off and shows
- * events reaching the stub once the visitor accepts: a test of "nothing is
- * sent" otherwise passes for any settings.
+ * The Manager's start-up settings on the real SDK, with every request it would
+ * send seen on the network. The choice itself is tested once, on the shared
+ * module (`@ens-apps/utils/analyticsConsentSdk.test.ts`); this is what the
+ * Manager adds: the switches its server decided, which the SDK reads without
+ * asking PostHog. The SDK keeps the `fetch` it finds when it loads, and the
+ * send guard wraps the `fetch` it finds when it loads, so the network goes in
+ * first, then the consent module, then the SDK.
  */
+const network = installPostHogNetwork()
+const { acceptAnalytics, identifyWallet, startAnalyticsChoice } = await import(
+  '@ens-apps/utils/analyticsConsent'
+)
+const { PostHog } = await import('posthog-js/dist/module.full.no-external')
+const { startupConfig } = await import('./config')
 
 const WALLET = '0x1111111111111111111111111111111111111111'
+const CHOICE = { isDev: true } as const
 const SWITCHES: FeatureSwitches = {
   i18n: true,
   migration: true,
   'migration-nft': false,
 }
-const PROJECT_SETTINGS = {
-  sessionRecording: { endpoint: '/s/' },
-  surveys: true,
-  heatmaps: true,
-  capturePerformance: { web_vitals: true },
-}
-
-type SentRequest = { readonly url: string; readonly data?: unknown }
 
 const startClient = () => {
   const client = new PostHog()
-  const sent: SentRequest[] = []
-  vi.spyOn(client, '_send_request').mockImplementation((request) => {
-    sent.push({ url: request.url, data: request.data })
-    request.callback?.({ statusCode: 200, json: { surveys: [] } })
-  })
   client.init('test-key', {
     ...startupConfig(SWITCHES),
     api_host: 'https://posthog.example',
     opt_out_useragent_filter: true,
   })
-  return { client, sent }
+  return client
 }
 
-const fetchSettings = vi.fn(async () => Response.json(PROJECT_SETTINGS))
-
-type SentEvent = {
-  readonly event: string
-  readonly properties: Readonly<Record<string, unknown>>
-}
-
-const isEvent = (value: unknown): value is SentEvent =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as { event?: unknown }).event === 'string'
-
-// A batch carries a list of events; an event sent at once carries itself.
-const eventsIn = (sent: readonly SentRequest[]): SentEvent[] =>
-  sent.flatMap((request) =>
-    (Array.isArray(request.data) ? request.data : [request.data]).filter(
-      isEvent,
-    ),
-  )
-
-const postHogStorage = () => [
-  ...Object.keys(localStorage),
-  ...Object.keys(sessionStorage),
-  ...document.cookie
-    .split(';')
-    .map((cookie) => cookie.split('=')[0]?.trim() ?? '')
-    .filter(Boolean),
-]
-
-const storedChoice = () =>
-  document.cookie
-    .split(';')
-    .map((cookie) => cookie.trim().split('='))
-    .find(([name]) => name === ANALYTICS_CONSENT_COOKIE_NAME)?.[1]
-
-// The SDK's own cookie for the test project, which holds the visitor id.
-const VISITOR_COOKIE_NAME = 'ph_test-key_posthog'
-
-const visitorCookie = (): Readonly<Record<string, unknown>> => {
-  const entry = document.cookie
-    .split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${VISITOR_COOKIE_NAME}=`))
-  return entry
-    ? JSON.parse(
-        decodeURIComponent(entry.slice(VISITOR_COOKIE_NAME.length + 1)),
-      )
-    : {}
-}
-
-const clearCookies = () => {
-  for (const cookie of document.cookie.split(';')) {
-    const name = cookie.split('=')[0]?.trim()
-    // biome-ignore lint/suspicious/noDocumentCookie: Clearing the test document's cookies.
-    if (name) document.cookie = `${name}=; max-age=0; path=/`
-  }
-}
-
-const flush = () => vi.advanceTimersByTimeAsync(4000)
-
-// The SDK wraps the page's history methods for the first client that starts
-// in a window, and leaves them wrapped: each test's client needs its own.
-const { pushState, replaceState } = history
-
-describe('PostHog settings and the analytics choice, on the installed SDK', () => {
+describe("the Manager's PostHog settings, on the installed SDK", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     localStorage.clear()
     sessionStorage.clear()
     clearCookies()
-    fetchSettings.mockClear()
+    network.reset()
+    keepHistoryMethods()
   })
 
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
-    history.pushState = pushState
-    history.replaceState = replaceState
-  })
-
-  it('sends nothing and stores nothing before a choice, and sends once the visitor accepts', async () => {
-    const { client, sent } = startClient()
-    expect(startAnalyticsChoice(client, { isDev: true, fetchSettings })).toBe(
-      'pending',
-    )
-
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    client.captureException(new Error('before the choice'))
-    history.pushState({}, '', '/before-choice')
-    document.body.click()
-    await flush()
-
-    expect(sent).toEqual([])
-    expect(fetchSettings).not.toHaveBeenCalled()
-    expect(postHogStorage().filter((key) => /^(__)?ph_/.test(key))).toEqual([])
-    expect(storedChoice()).toBeUndefined()
-
-    // The control: the same SDK, accepted, reaches the stub.
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    await flush()
-    expect(eventsIn(sent).map((event) => event.event)).toEqual(
-      expect.arrayContaining(['$pageview', 'wallet:connect']),
-    )
-    expect(storedChoice()).toBe('1')
   })
 
   it("reads the server's switches with no request, and takes new answers whole", async () => {
-    const { client, sent } = startClient()
+    const client = startClient()
+    expect(startAnalyticsChoice(client, CHOICE)).toBe('pending')
 
     expect(client.isFeatureEnabled('migration', { send_event: false })).toBe(
       true,
@@ -180,366 +75,18 @@ describe('PostHog settings and the analytics choice, on the installed SDK', () =
     expect(
       client.isFeatureEnabled('migration', { send_event: false }),
     ).toBeFalsy()
+    expect(network.fetch).not.toHaveBeenCalled()
 
     // Even after Accept and an identify, the browser never asks for switches.
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.identify(WALLET, { address: WALLET })
-    await flush()
-    expect(sent.filter((request) => request.url.includes('/flags'))).toEqual([])
-  })
-
-  it('starts collection at once on Accept, and hands the SDK the project settings', async () => {
-    const { client, sent } = startClient()
-
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    await flush()
-
-    expect(fetchSettings).toHaveBeenCalledWith(
-      'https://posthog.example/array/test-key/config',
-    )
-    expect(client.config).toMatchObject({
-      capture_pageview: 'history_change',
-      autocapture: true,
-      capture_exceptions: ERROR_REPORTS_ON,
-      disable_surveys: false,
+    await acceptAnalytics(client, CHOICE)
+    identifyWallet(client, {
+      address: WALLET,
+      chainId: 1,
+      connectorName: 'test-wallet',
     })
-    // Recordings and surveys start from the project's settings.
-    expect(
-      client.get_property('$session_recording_remote_config'),
-    ).toMatchObject({ enabled: true, endpoint: '/s/' })
-    expect(sent.some((request) => request.url.includes('/api/surveys'))).toBe(
-      true,
-    )
-  })
-
-  it('captures a page view for each move within the app after Accept', async () => {
-    const { client, sent } = startClient()
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    await flush()
-
-    history.pushState({}, '', '/after-accept')
-    await flush()
-
-    expect(
-      eventsIn(sent).filter(
-        (event) =>
-          event.event === '$pageview' &&
-          event.properties.$pathname === '/after-accept',
-      ),
-    ).toHaveLength(1)
-  })
-
-  it("puts back the SDK's own defaults for what the pause turned off", () => {
-    const { client } = startClient()
-    const defaults = new PostHog()
-    vi.spyOn(defaults, '_send_request').mockImplementation(() => {})
-    defaults.init('defaults-key', {
-      api_host: 'https://posthog.example',
-      defaults: '2025-11-30',
-    })
-    void acceptAnalytics(client, { isDev: true, fetchSettings })
-
-    // Error reports are set in code; recordings follow the build.
-    const changedOnPurpose = new Set([
-      'capture_exceptions',
-      'disable_session_recording',
-    ])
-    for (const key of Object.keys(COLLECTION_OFF)) {
-      if (changedOnPurpose.has(key)) continue
-      expect(client.config[key as keyof typeof client.config], key).toEqual(
-        defaults.config[key as keyof typeof defaults.config],
-      )
-    }
-  })
-
-  it('stops collection on Decline, forgets the wallet and keeps the choice', async () => {
-    const { client, sent } = startClient()
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.identify(WALLET, { address: WALLET })
-    await flush()
-
-    declineAnalytics(client)
-    await flush()
-    const sentAtDecline = sent.length
-
-    expect(client.get_explicit_consent_status()).toBe('denied')
-    expect(storedChoice()).toBe('0')
-    expect(client.get_distinct_id()).not.toBe(WALLET)
-    expect(postHogStorage().filter((key) => /^(__)?ph_/.test(key))).toEqual([])
-    // The reset empties the switches; the provider pushes them back.
-    expect(
-      client.isFeatureEnabled('migration', { send_event: false }),
-    ).toBeFalsy()
-
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    client.captureException(new Error('after decline'))
-    await flush()
-    expect(sent.length).toBe(sentAtDecline)
-  })
-
-  it('sends nothing after Decline, not even what was captured just before it', async () => {
-    const { client, sent } = startClient()
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.identify(WALLET, { address: WALLET })
-    await flush()
-    const sentBeforeDecline = sent.length
-
-    // Waiting for the next batch, as the click on Decline itself would be.
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    declineAnalytics(client)
-    await flush()
-
-    expect(sent.slice(sentBeforeDecline)).toEqual([])
-  })
-
-  it('sends nothing after Decline from the requests waiting to be tried again', async () => {
-    const client = new PostHog()
-    const sent: SentRequest[] = []
-    let isPostHogDown = true
-    vi.spyOn(client, '_send_request').mockImplementation((request) => {
-      sent.push({ url: request.url, data: request.data })
-      request.callback?.(
-        isPostHogDown
-          ? { statusCode: 502 }
-          : { statusCode: 200, json: { surveys: [] } },
-      )
-    })
-    client.init('test-key', {
-      ...startupConfig(SWITCHES),
-      api_host: 'https://posthog.example',
-      opt_out_useragent_filter: true,
-    })
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    await flush()
-    // The batch was sent and failed, so it waits to be tried again.
-    expect(eventsIn(sent).map((event) => event.event)).toContain(
-      'wallet:connect',
-    )
-
-    isPostHogDown = false
-    declineAnalytics(client)
-    const sentAtDecline = sent.length
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(eventsIn(sent.slice(sentAtDecline))).toEqual([])
-  })
-
-  it.each([
-    ['granted', '1'],
-    ['denied', '0'],
-  ] as const)('keeps a %s choice through the reset on a wallet disconnect', async (choice, stored) => {
-    const { client } = startClient()
-    if (choice === 'granted') {
-      await acceptAnalytics(client, { isDev: true, fetchSettings })
-    } else {
-      declineAnalytics(client)
-    }
-    client.identify(WALLET, { address: WALLET })
-
-    resetVisitor(client)
-
-    expect(client.get_explicit_consent_status()).toBe(choice)
-    expect(storedChoice()).toBe(stored)
-    expect(client.get_distinct_id()).not.toBe(WALLET)
-  })
-
-  it('sends nothing after Decline, not even a batch in flight at the press that then fails', async () => {
-    const client = new PostHog()
-    const sent: SentRequest[] = []
-    const inFlight: Array<() => void> = []
-    let isHoldingBatches = true
-    vi.spyOn(client, '_send_request').mockImplementation((request) => {
-      sent.push({ url: request.url, data: request.data })
-      if (isHoldingBatches && request.url.includes('/e/')) {
-        // The batch is on its way when the visitor presses Decline, and
-        // PostHog answers it with an error only afterwards.
-        inFlight.push(() => request.callback?.({ statusCode: 502 }))
-        return
-      }
-      request.callback?.({ statusCode: 200, json: { surveys: [] } })
-    })
-    client.init('test-key', {
-      ...startupConfig(SWITCHES),
-      api_host: 'https://posthog.example',
-      opt_out_useragent_filter: true,
-    })
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.capture('wallet:connect', { wallet_address: WALLET })
-    await flush()
-    expect(inFlight.length).toBeGreaterThan(0)
-
-    isHoldingBatches = false
-    declineAnalytics(client)
-    const sentAtDecline = sent.length
-    for (const failInFlight of inFlight) failInFlight()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(eventsIn(sent.slice(sentAtDecline))).toEqual([])
-  })
-
-  it('forgets the device on Decline, so a later Accept starts afresh', async () => {
-    const { client } = startClient()
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-    client.identify(WALLET, { address: WALLET })
-    const deviceBeforeDecline = client.get_property('$device_id')
-    expect(deviceBeforeDecline).toEqual(expect.any(String))
-
-    declineAnalytics(client)
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-
-    expect(client.get_property('$device_id')).not.toBe(deviceBeforeDecline)
-  })
-
-  it('follows a Decline made in another tab: this tab keeps nothing and sends nothing', async () => {
-    const thisTab = startClient()
-    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
-    thisTab.client.identify(WALLET, { address: WALLET })
-    await flush()
-    const onChange = vi.fn()
-    const stopFollowing = followStoredChoice(thisTab.client, {
-      isDev: true,
-      fetchSettings,
-      onChange,
-    })
-
-    // Another tab, of this app or another ENS app, declines.
-    const otherTab = startClient()
-    expect(
-      startAnalyticsChoice(otherTab.client, { isDev: true, fetchSettings }),
-    ).toBe('granted')
-    declineAnalytics(otherTab.client)
-    await flush()
-    const sentAfterDecline = thisTab.sent.length
-
-    // This tab goes on: the Manager pushes switches, the visitor clicks.
-    await vi.advanceTimersByTimeAsync(STORED_CHOICE_CHECK_MS)
-    thisTab.client.updateFlags(SWITCHES, undefined, { merge: false })
-    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
-    await flush()
-
-    expect(onChange).toHaveBeenCalledWith('denied')
-    expect(thisTab.client.get_distinct_id()).not.toBe(WALLET)
-    expect(postHogStorage().filter((key) => /^(__)?ph_/.test(key))).toEqual([])
-    expect(eventsIn(thisTab.sent.slice(sentAfterDecline))).toEqual([])
-    stopFollowing()
-  })
-
-  it('sends nothing queued before the choice was removed in another tab, though it counts as declined', async () => {
-    const thisTab = startClient()
-    startAnalyticsChoice(thisTab.client, { isDev: true, fetchSettings })
-    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
-    thisTab.client.identify(WALLET, { address: WALLET })
-    await flush()
-    const onChange = vi.fn()
-    const stopFollowing = followStoredChoice(thisTab.client, {
-      isDev: true,
-      fetchSettings,
-      onChange,
-    })
-    const sentBeforeRemoval = thisTab.sent.length
-
-    // Waiting for the next batch when the visitor clears this site's data in
-    // another tab: the choice is gone, and so is the visitor's cookie.
-    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
-    clearCookies()
-    expect(thisTab.client.get_explicit_consent_status()).toBe('pending')
-    thisTab.client.capture('name:search', { name: 'vitalik.eth' })
-    await vi.advanceTimersByTimeAsync(STORED_CHOICE_CHECK_MS)
-    await flush()
-
-    expect(onChange).toHaveBeenCalledWith('pending')
-    expect(eventsIn(thisTab.sent.slice(sentBeforeRemoval))).toEqual([])
-    stopFollowing()
-  })
-
-  it('forgets what was queued before the choice was removed, if the visitor accepts again', async () => {
-    const thisTab = startClient()
-    startAnalyticsChoice(thisTab.client, { isDev: true, fetchSettings })
-    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
-    thisTab.client.identify(WALLET, { address: WALLET })
-    await flush()
-    const stopFollowing = followStoredChoice(thisTab.client, {
-      isDev: true,
-      fetchSettings,
-      onChange: vi.fn(),
-    })
-    const sentBeforeRemoval = thisTab.sent.length
-
-    thisTab.client.capture('wallet:connect', { wallet_address: WALLET })
-    clearCookies()
-    // The page notices the removal when it comes back into view, before the
-    // batch is due.
-    window.dispatchEvent(new Event('focus'))
-    await acceptAnalytics(thisTab.client, { isDev: true, fetchSettings })
-    await flush()
-
-    expect(
-      eventsIn(thisTab.sent.slice(sentBeforeRemoval)).map(
-        (event) => event.event,
-      ),
-    ).not.toContain('wallet:connect')
-    stopFollowing()
-  })
-
-  it("takes the visitor id another app's reset left in the shared cookie over this app's own", async () => {
-    const first = startClient()
-    await acceptAnalytics(first.client, { isDev: true, fetchSettings })
-    first.client.identify(WALLET, { address: WALLET })
-    await flush()
-    expect(visitorCookie().distinct_id).toBe(WALLET)
-
-    // Another ENS app reset the visitor on a disconnect: the shared cookie
-    // names a new id, while this app's local storage still holds the wallet.
-    // biome-ignore lint/suspicious/noDocumentCookie: The cookie another app wrote.
-    document.cookie = `${VISITOR_COOKIE_NAME}=${encodeURIComponent(
-      JSON.stringify({ ...visitorCookie(), distinct_id: 'id-after-reset' }),
-    )}; path=/`
-
-    // This app's next page.
-    const { client } = startClient()
-    expect(client.get_distinct_id()).toBe('id-after-reset')
-  })
-
-  it("forgets this tab's window id when the page starts after a decline made elsewhere", () => {
-    // The visitor accepted in this tab earlier, then declined in another one.
-    sessionStorage.setItem('ph_test-key_window_id', '"tab-window"')
-    sessionStorage.setItem('ph_test-key_primary_window_exists', 'true')
-    // biome-ignore lint/suspicious/noDocumentCookie: The choice another app stored.
-    document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=0; path=/`
-
-    const { client } = startClient()
-    expect(startAnalyticsChoice(client, { isDev: true, fetchSettings })).toBe(
-      'denied',
-    )
-    expect(postHogStorage().filter((key) => /^(__)?ph_/.test(key))).toEqual([])
-  })
-
-  it('leaves an undecided visitor undecided through a reset', () => {
-    const { client } = startClient()
-    resetVisitor(client)
-    expect(client.get_explicit_consent_status()).toBe('pending')
-    expect(storedChoice()).toBeUndefined()
-  })
-
-  it('cuts addresses and .eth names from error reports', async () => {
-    const { client, sent } = startClient()
-    await acceptAnalytics(client, { isDev: true, fetchSettings })
-
-    client.captureException(
-      new Error(`Call failed for ${WALLET} on vitalik.eth`),
-    )
-    await flush()
-
-    const reports = eventsIn(sent).filter(
-      (event) => event.event === '$exception',
-    )
-    expect(reports).toHaveLength(1)
-    expect(JSON.stringify(reports[0]?.properties.$exception_list)).not.toMatch(
-      /0x1111|vitalik\.eth/,
-    )
-    expect(JSON.stringify(reports[0]?.properties.$exception_list)).toContain(
-      'Call failed for [address] on [name]',
-    )
+    await vi.advanceTimersByTimeAsync(4000)
+    const paths = (await network.wire()).map((request) => request.path)
+    expect(paths.length).toBeGreaterThan(0)
+    expect(paths.filter((path) => path.startsWith('/flags'))).toEqual([])
   })
 })
