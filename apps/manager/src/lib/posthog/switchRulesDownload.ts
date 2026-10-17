@@ -62,6 +62,24 @@ class SwitchRulesDownloadFailed extends TaggedError(
   'SwitchRulesDownloadFailed',
 )<{ readonly message: string; readonly cause: unknown }> {}
 
+/** The response arrived, but its body could not be read as JSON. */
+class SwitchRulesBodyUnreadable extends TaggedError(
+  'SwitchRulesBodyUnreadable',
+)<{ readonly message: string; readonly cause: unknown }> {}
+
+/**
+ * Why a body could not be read, without quoting it: a parse error holds the
+ * start of the text it was given, and the download's reason is logged.
+ */
+const unreadableBody = (cause: unknown): SwitchRulesBodyUnreadable =>
+  new SwitchRulesBodyUnreadable({
+    message:
+      cause instanceof SyntaxError
+        ? 'is not JSON'
+        : `broke off: ${cause instanceof Error ? cause.message : String(cause)}`,
+    cause,
+  })
+
 const requestRules = async (
   source: SwitchRulesSource,
   options: { readonly etag: string | null; readonly fetchRules?: typeof fetch },
@@ -86,7 +104,10 @@ const requestRules = async (
 const readRules = async (response: Response): Promise<SwitchRulesDownload> => {
   if (!response.ok) return failed(`the download answered ${response.status}`)
 
-  const body: unknown = await response.json().catch(() => undefined)
+  const body: unknown = await response.json().catch(unreadableBody)
+  if (body instanceof SwitchRulesBodyUnreadable) {
+    return failed(`the download body ${body.message}`)
+  }
   if (!isRulesResponse(body)) return failed('the download held no rules')
   return {
     status: 'downloaded',

@@ -97,9 +97,21 @@ describe('downloadSwitchRules', () => {
       /held no rules/,
     ],
     [
-      'a body that is not JSON',
-      answering(new Response('<html>')),
-      /held no rules/,
+      'a body that is not JSON and holds the secret key',
+      answering(new Response(`<html>${SOURCE.secretKey}</html>`)),
+      /^the download body is not JSON$/,
+    ],
+    [
+      'a body that breaks off',
+      answering(
+        new Response(
+          new ReadableStream({
+            start: (controller) =>
+              controller.error(new Error('connection reset')),
+          }),
+        ),
+      ),
+      /body broke off: .*connection reset/,
     ],
     [
       'rules without keys',
