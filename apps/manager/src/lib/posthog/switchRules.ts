@@ -52,9 +52,10 @@ const ruleProblems = (
     ...(rule.ensure_experience_continuity
       ? [`${name}: persists across sign-in (experience continuity)`]
       : []),
-    ...(typeof groupTypeIndex === 'number' &&
-    !(String(groupTypeIndex) in rules.groupTypeMapping)
-      ? [`${name}: aims at a group type the rules do not hold`]
+    // The server is given no groups, so a switch aimed at a group is off for
+    // everyone without a word, whether or not the rules hold that group type.
+    ...(typeof groupTypeIndex === 'number'
+      ? [`${name}: aims at a group, and the server is given no groups`]
       : []),
     ...propertiesOf(rule).flatMap((property) => [
       ...(property.operator === 'is_not_set'

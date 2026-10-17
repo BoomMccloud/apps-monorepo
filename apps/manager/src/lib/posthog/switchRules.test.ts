@@ -143,9 +143,12 @@ describe('checkSwitchRules', () => {
     )
   })
 
-  it('names a switch aimed at a group type the rules do not hold', async () => {
-    const problems = await checkSwitchRules(
-      switchRules({
+  it.each([
+    ['a group type the rules do not hold', {}],
+    ['a group type the rules hold', { '0': 'organization' }],
+  ])('names a switch aimed at %s, since the server is given no groups', async (_label, groupTypeMapping) => {
+    const problems = await checkSwitchRules({
+      ...switchRules({
         i18n: flagRule('i18n', [forEveryone()], {
           filters: {
             aggregation_group_type_index: 0,
@@ -153,9 +156,10 @@ describe('checkSwitchRules', () => {
           },
         }),
       }),
-    )
+      groupTypeMapping,
+    })
     expect(problems).toContain(
-      'i18n: aims at a group type the rules do not hold',
+      'i18n: aims at a group, and the server is given no groups',
     )
   })
 

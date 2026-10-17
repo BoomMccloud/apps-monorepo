@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ALL_SWITCHES_OFF } from './feature-flags'
 import type { SwitchRules } from './switchRules'
 import {
+  flagRule,
   memoryKv,
   OTHER_WALLET,
   switchRules,
@@ -93,6 +94,46 @@ describe('decideFeatureSwitches', () => {
       TEST_WALLET.slice(2),
     )
     expect(contents().size).toBe(0)
+  })
+
+  it('answers every switch off when the rules it downloads for the request fail the rules check, as the refresh would not store them', async () => {
+    const decide = await loadDecide()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { space } = memoryKv()
+    // A rule aimed at any wallet with is_set, which a visitor without a wallet
+    // would match too.
+    const anyWallet = switchRules({
+      migration: flagRule('migration', [
+        {
+          properties: [
+            {
+              key: 'address',
+              type: 'person',
+              operator: 'is_set',
+              value: 'is_set',
+            },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+
+    await expect(
+      decide(
+        {
+          POSTHOG_SWITCH_RULES: space,
+          POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
+        },
+        null,
+        { fetchRules: downloadAnswering(anyWallet) },
+      ),
+    ).resolves.toEqual(ALL_SWITCHES_OFF)
+    expect(errors.mock.calls[0]?.[0]).toMatchObject({
+      _tag: 'FeatureSwitchesUndecided',
+      message: expect.stringContaining(
+        'the downloaded rules fail the rules check: migration: uses the is_set operator',
+      ),
+    })
   })
 
   it('decides from its own download when the stored rules cannot be read, and logs that once per instance', async () => {

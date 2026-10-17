@@ -6,6 +6,7 @@ import {
   type FeatureSwitches,
 } from './feature-flags'
 import {
+  checkSwitchRules,
   evaluateSwitches,
   type SwitchRules,
   switchVisitor,
@@ -71,6 +72,20 @@ type RequestRules =
   | { readonly status: 'unusable'; readonly reason: string }
 
 /**
+ * The rules a download holds, once they pass the rules check: rules that fail
+ * it are never stored by the refresh, and are not served either.
+ */
+const checkedForRequest = async (rules: SwitchRules): Promise<RequestRules> => {
+  const problems = await checkSwitchRules(rules)
+  return problems.length > 0
+    ? {
+        status: 'unusable',
+        reason: `no rules are stored and the downloaded rules fail the rules check: ${problems.join('; ')}`,
+      }
+    : { status: 'usable', rules }
+}
+
+/**
  * The stored rules. Until the scheduled refresh has stored any, as on a new
  * deploy or a preview, where crons do not run, each request downloads its own
  * and stores nothing.
@@ -104,10 +119,7 @@ const rulesForRequest = async (
   }
   const download = await downloadSwitchRules(source, { fetchRules })
   return match(download)
-    .with(
-      { status: 'downloaded' },
-      ({ rules }): RequestRules => ({ status: 'usable', rules }),
-    )
+    .with({ status: 'downloaded' }, ({ rules }) => checkedForRequest(rules))
     .with(
       { status: 'failed' },
       ({ reason }): RequestRules => ({
