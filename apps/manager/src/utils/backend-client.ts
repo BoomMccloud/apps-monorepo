@@ -3,7 +3,7 @@ import type { AppRouter } from 'api-worker/hc'
 import { hc } from 'hono/client'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import * as v from 'valibot'
-import { isTestnet } from '@/config'
+import { envConfig, isTestnet } from '@/config'
 import { DEBUG_FEATURES_ENABLED } from './debug-features'
 import { persist } from './xstate-store'
 
@@ -102,7 +102,8 @@ export const isBackendAuthed = backendAuthStore.select(
   (state) => state.authKey !== undefined,
 )
 
-export const DEFAULT_BACKEND_API_URL = import.meta.env.VITE_API_URL ?? '/api'
+export const DEFAULT_BACKEND_API_URL =
+  import.meta.env.VITE_API_URL || envConfig.appApiUrl
 
 export const ALLOWED_SIWE_DOMAINS = [
   'sepolia.app.ens.domains',
