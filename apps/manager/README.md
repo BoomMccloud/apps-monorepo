@@ -58,6 +58,15 @@ Worker's domain routing and Rhinestone credentials separately:
 `RHINESTONE_PROJECT_ID`, `RHINESTONE_APP_ID`, `RHINESTONE_KEY_ID`.
 The mainnet token rate limiter uses a separate namespace.
 
+The feature switches are decided on the server from PostHog's rules
+([`src/lib/posthog`](src/lib/posthog)). Each Worker, mainnet included, keeps
+its rules in its own `POSTHOG_SWITCH_RULES` KV namespace, which
+`wrangler deploy` provisions, and needs its own `POSTHOG_PROJECT_SECRET_API_KEY`
+Worker secret; without the secret every switch is off. `vite build` checks the
+live rules against that key in the mode it builds, so a build that deploys
+holds the key too (`pnpm check:switch-rules --mode mainnet` runs the same check
+by hand).
+
 ## Notes
 
 - `pnpm typecheck` builds the api-worker's exported types first.

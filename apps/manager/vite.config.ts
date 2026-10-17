@@ -5,19 +5,39 @@ import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type UserConfig } from 'vite'
 import {
   assertDeploymentEnvironment,
   assertNetworkConfig,
 } from '../../packages/config/src/index'
 import { MANAGER_ENDPOINTS } from './src/endpoints'
+import { checkSwitchRulesForBuild } from './src/lib/posthog/switchRulesBuildCheck'
+
+/**
+ * A build must not deploy a Manager whose switches the live rules cannot
+ * decide, so it checks them in the env of its own mode. Without the secret
+ * key it skips the check and says so, unless a Cloudflare Workers build, which
+ * deploys, is missing it.
+ */
+const assertSwitchRulesDecideEverySwitch = async (
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<void> => {
+  const check = await checkSwitchRulesForBuild(env, {
+    isSkippedWithoutKey: true,
+  })
+  if (check.status === 'failed') {
+    throw new Error(`Feature switch rules rejected:\n${check.message}`)
+  }
+  console.log(check.message)
+}
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
   const env = loadEnv(mode, process.cwd(), '')
   assertDeploymentEnvironment(env, mode)
   // Validate here so direct Vite commands and --mode use the same env files.
   assertNetworkConfig(env, { endpoints: MANAGER_ENDPOINTS })
+  if (command === 'build') await assertSwitchRulesDecideEverySwitch(env)
   return {
     server: {
       port: 3000,

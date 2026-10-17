@@ -1,60 +1,35 @@
 import { match } from 'ts-pattern'
 import { loadEnv } from 'vite'
-import { checkSwitchRules } from '../src/lib/posthog/switchRules'
-import { downloadSwitchRules } from '../src/lib/posthog/switchRulesDownload'
+import { checkSwitchRulesForBuild } from '../src/lib/posthog/switchRulesBuildCheck'
 
 /**
- * The rules check against the live project: download PostHog's switch rules
- * with the project secret key and fail when the server could not decide every
- * switch from them, so no switch turns off unnoticed after a deploy.
+ * The rules check against the live project, run by hand:
  *
- * `prebuild` runs it with `--when-configured`. A Cloudflare Workers build
- * (WORKERS_CI=1) must hold the key, or every switch would be off once
- * deployed; any other build without the key skips the check and says so.
+ *   tsx scripts/check-switch-rules.ts [--when-configured] [--mode <mode>]
+ *
+ * `vite build` runs the same check itself (vite.config.ts), in the mode it
+ * builds, so a build never needs this script. `--mode` picks the env files the
+ * check reads, as it does for Vite (production when not given).
+ * `--when-configured` skips the check, and says so, when the secret key is not
+ * set.
  */
 
-const SECRET_KEY_NAME = 'POSTHOG_PROJECT_SECRET_API_KEY'
-
-function fail(message: string): never {
-  console.error(`\nFeature switch rules rejected:\n${message}\n`)
+const isModeGiven = process.argv.includes('--mode')
+const mode = isModeGiven
+  ? process.argv[process.argv.indexOf('--mode') + 1]
+  : 'production'
+if (!mode) {
+  console.error('--mode needs a mode, for example --mode mainnet')
   process.exit(1)
 }
 
-const shouldRunOnlyWhenConfigured = process.argv.includes('--when-configured')
-const isDeployBuild = process.env.WORKERS_CI === '1'
-const secretKey = process.env[SECRET_KEY_NAME]
+const check = await checkSwitchRulesForBuild(loadEnv(mode, process.cwd(), ''), {
+  isSkippedWithoutKey: process.argv.includes('--when-configured'),
+})
 
-if (!secretKey && shouldRunOnlyWhenConfigured && !isDeployBuild) {
-  console.log(`switch rules check skipped: ${SECRET_KEY_NAME} is not set`)
-  process.exit(0)
-}
-if (!secretKey) {
-  fail(
-    `${SECRET_KEY_NAME} is not set, so the deployed Manager would have every switch off.`,
-  )
-}
-
-// `loadEnv` applies the same .env precedence the build itself will see.
-const env = loadEnv(
-  process.env.NODE_ENV ?? 'production',
-  process.cwd(),
-  'VITE_',
-)
-const projectKey = env.VITE_PUBLIC_POSTHOG_KEY
-const host = env.VITE_PUBLIC_POSTHOG_HOST
-if (!projectKey || !host) {
-  fail('VITE_PUBLIC_POSTHOG_KEY and VITE_PUBLIC_POSTHOG_HOST must be set.')
-}
-
-const download = await downloadSwitchRules({ host, projectKey, secretKey })
-const rules = match(download)
-  .with({ status: 'downloaded' }, (downloaded) => downloaded.rules)
-  .with({ status: 'failed' }, ({ reason }) => fail(reason))
-  .with({ status: 'unchanged' }, () =>
-    fail('the download answered 304 to a request without an ETag'),
-  )
-  .exhaustive()
-
-const problems = await checkSwitchRules(rules)
-if (problems.length > 0) fail(problems.join('\n'))
-console.log(`switch rules ok: ${rules.flags.length} rules decide every switch`)
+match(check)
+  .with({ status: 'failed' }, ({ message }) => {
+    console.error(`\nFeature switch rules rejected:\n${message}\n`)
+    process.exit(1)
+  })
+  .otherwise(({ message }) => console.log(message))

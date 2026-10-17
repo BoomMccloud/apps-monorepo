@@ -14,4 +14,4 @@ export default {
   scheduled: async (_controller, env) => {
     await refreshSwitchRules(env)
   },
-} satisfies ExportedHandler<Env>
+} satisfies ExportedHandler<Cloudflare.Env>

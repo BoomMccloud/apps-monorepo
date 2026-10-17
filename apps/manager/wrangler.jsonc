@@ -29,11 +29,16 @@
   },
   "preview_urls": true,
   // Build with pnpm build:mainnet. Assets and observability are inherited;
-  // rate-limit bindings and credentials are configured separately per Worker.
+  // rate-limit and KV bindings and credentials are configured separately per
+  // Worker.
   "env": {
     "mainnet": {
       "name": "manager-app-v4-mainnet",
       "preview_urls": false,
+      // An environment inherits no binding: the mainnet Worker keeps its own
+      // switch rules, in a namespace that `wrangler deploy` provisions, and
+      // the cron above refreshes them.
+      "kv_namespaces": [{ "binding": "POSTHOG_SWITCH_RULES" }],
       "ratelimits": [
         {
           "name": "RHINESTONE_TOKEN_RATE_LIMIT",
