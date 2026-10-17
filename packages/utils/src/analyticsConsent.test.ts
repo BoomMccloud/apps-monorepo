@@ -23,12 +23,14 @@ const HEX = '0123456789abcdefABCDEF'
 const hexDigits = (random: () => number, length: number): string =>
   Array.from({ length }, () => pick(random, [...HEX])).join('')
 
+// Labels as .eth names have them, with an accent and an emoji (written as an
+// escape, the fox emoji) among them.
 const LABELS = [
   'vitalik',
   'nick',
   'sub.domain',
   'café',
-  '🦊fox',
+  '\u{1F98A}fox',
   'a-b_c',
   '123',
 ]

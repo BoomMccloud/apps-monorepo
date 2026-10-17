@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { isRecord } from './isRecord'
 
 /**
  * Test support for the real PostHog SDK: the network it sends on, replaced so
@@ -71,9 +72,6 @@ export const answering =
     }
     return pathname.startsWith('/e') ? events() : Response.json({ status: 1 })
   }
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 // The SDK encodes a body as gzip bytes, as `data=<base64 of the JSON>`, or as
 // plain JSON, according to its compression settings and the request.

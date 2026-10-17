@@ -11,6 +11,7 @@
  */
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
 import { guardPostHogSends } from './analyticsSendGuard'
+import { isRecord } from './isRecord'
 
 /** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
 export const ANALYTICS_CONSENT_COOKIE_NAME = 'ens.analytics.consent'
@@ -181,9 +182,6 @@ export interface AnalyticsClient {
 export const projectSettingsUrl = (client: AnalyticsClient): string =>
   `${client.config.api_host.replace(/\/+$/, '')}/array/${client.config.token}/config`
 
-const isObject = (value: unknown): value is object =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 /**
  * Load the project's settings and hand them to the SDK, as it would at
  * start-up had the visitor already accepted. Settings that arrive after the
@@ -197,7 +195,7 @@ export const loadProjectSettings = async (
     .catch(() => undefined)
   if (client.get_explicit_consent_status() !== 'granted') return
   client._onRemoteConfig(
-    isObject(settings) ? { ok: true, config: settings } : { ok: false },
+    isRecord(settings) ? { ok: true, config: settings } : { ok: false },
   )
 }
 
@@ -411,9 +409,6 @@ export const scrubErrorMessage = (message: string): string =>
     .replace(ADDRESS_PATTERN, '[address]')
     .replace(ETH_NAME_PATTERN, '[name]')
     .slice(0, ERROR_MESSAGE_MAX_LENGTH)
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  isObject(value)
 
 const scrubExceptionEntry = (entry: unknown): unknown =>
   isRecord(entry) && typeof entry.value === 'string'
