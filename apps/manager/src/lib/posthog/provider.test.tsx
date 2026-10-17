@@ -217,7 +217,7 @@ describe('PHProvider', () => {
     })
   })
 
-  it('on Decline, stops analytics', async () => {
+  it("on Decline, stops analytics and blanks the support chat's link to them", async () => {
     renderProvider()
 
     await act(async () =>
@@ -225,6 +225,10 @@ describe('PHProvider', () => {
     )
 
     expect(declineAnalytics).toHaveBeenCalledWith(posthog)
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: '',
+      recent_replay: '',
+    })
     expect(screen.getByText('denied')).not.toBeNull()
   })
 
@@ -458,6 +462,10 @@ describe('PHProvider', () => {
       act(() => following?.onChange('denied'))
 
       expect(screen.getByText('denied')).not.toBeNull()
+      expect(update).toHaveBeenCalledWith({
+        posthog_distinct_id: '',
+        recent_replay: '',
+      })
       expect(posthog.updateFlags).toHaveBeenCalledOnce()
       expect(posthog.updateFlags).toHaveBeenLastCalledWith(
         ...written(WALLET_SWITCHES),

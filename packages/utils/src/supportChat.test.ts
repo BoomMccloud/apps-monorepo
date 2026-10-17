@@ -70,6 +70,16 @@ describe('createSupportChat', () => {
     )
   })
 
+  it('blanks the tie to the analytics on Decline and leaves the chat running', () => {
+    supportChat.unlinkSupportChat()
+
+    expect(intercom.update).toHaveBeenCalledExactlyOnceWith({
+      posthog_distinct_id: '',
+      recent_replay: '',
+    })
+    expect(intercom.boot).not.toHaveBeenCalled()
+  })
+
   it('never lets a failing chat crash the app', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     intercom.boot.mockImplementation(() => {
@@ -81,6 +91,7 @@ describe('createSupportChat', () => {
 
     expect(() => supportChat.bootSupportChat('granted')).not.toThrow()
     expect(() => supportChat.linkSupportChat()).not.toThrow()
-    expect(warn).toHaveBeenCalledTimes(2)
+    expect(() => supportChat.unlinkSupportChat()).not.toThrow()
+    expect(warn).toHaveBeenCalledTimes(3)
   })
 })

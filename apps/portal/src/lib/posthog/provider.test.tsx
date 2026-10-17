@@ -159,7 +159,7 @@ describe('PHProvider', () => {
     })
   })
 
-  it('stops analytics on Decline', async () => {
+  it("stops analytics on Decline, and blanks the support chat's link to them", async () => {
     renderProvider()
 
     await act(async () =>
@@ -167,7 +167,25 @@ describe('PHProvider', () => {
     )
 
     expect(declineAnalytics).toHaveBeenCalledWith(posthog)
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: '',
+      recent_replay: '',
+    })
     expect(screen.getByText('denied')).toBeInTheDocument()
+  })
+
+  it("follows a Decline made in another tab or app, and blanks the support chat's link", async () => {
+    renderProvider()
+    await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+    const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+
+    act(() => following?.onChange('denied'))
+
+    expect(screen.getByText('denied')).toBeInTheDocument()
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: '',
+      recent_replay: '',
+    })
   })
 
   it('does not identify a connecting wallet before Accept', () => {

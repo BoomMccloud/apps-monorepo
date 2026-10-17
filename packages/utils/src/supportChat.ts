@@ -6,7 +6,7 @@ import {
 import type { AnalyticsConsentState } from './analyticsConsentContext'
 
 /** The part of PostHog's SDK that ties a support conversation to the visitor. */
-export interface SupportChatAnalytics {
+interface SupportChatAnalytics {
   get_distinct_id(): string
   get_session_replay_url(): string
 }
@@ -20,7 +20,8 @@ type SupportChatOptions = {
 
 /**
  * The support chat of an ENS app. It works whatever the visitor's analytics
- * choice, and is tied to the visitor's analytics only after Accept.
+ * choice, is tied to the visitor's analytics only after Accept, and loses the
+ * tie on Decline.
  */
 export const createSupportChat = ({
   appId,
@@ -61,6 +62,19 @@ export const createSupportChat = ({
         recordSupportChatLink()
       } catch (error) {
         console.warn('[intercom] link failed', error)
+      }
+    },
+
+    /**
+     * On Decline, here or in another ENS app: blank the tie Accept made, so a
+     * support conversation no longer leads to the visitor's recordings. The
+     * chat goes on working; Intercom shows a blank attribute as unknown.
+     */
+    unlinkSupportChat: (): void => {
+      try {
+        updateIntercom({ posthog_distinct_id: '', recent_replay: '' })
+      } catch (error) {
+        console.warn('[intercom] unlink failed', error)
       }
     },
   }

@@ -18,7 +18,7 @@ import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
 import { useConnection } from 'wagmi'
 import posthog from './client'
-import { linkSupportChat } from './supportChat'
+import { linkSupportChat, unlinkSupportChat } from './supportChat'
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'
 import { usePostHogStart } from './usePostHogStart'
@@ -51,8 +51,11 @@ export const PHProvider = ({
     (followed) => {
       setConsent(followed)
       if (followed === 'granted') linkSupportChat()
-      // The Decline followed here reset the SDK.
-      if (followed === 'denied') recordReset()
+      if (followed === 'denied') {
+        unlinkSupportChat()
+        // The Decline followed here reset the SDK.
+        recordReset()
+      }
     },
   )
   useWalletIdentity(
@@ -77,6 +80,7 @@ export const PHProvider = ({
 
   const decline = () => {
     declineAnalytics(posthog)
+    unlinkSupportChat()
     // The reset that clears the visitor id also empties the switches.
     recordReset()
     setConsent('denied')

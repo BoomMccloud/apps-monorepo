@@ -18,7 +18,7 @@ import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
 import { useConnection } from 'wagmi'
 import posthog from './client'
-import { linkSupportChat } from './supportChat'
+import { linkSupportChat, unlinkSupportChat } from './supportChat'
 import { usePostHogStart } from './usePostHogStart'
 import { useWalletAnalytics } from './useWalletAnalytics'
 
@@ -43,6 +43,7 @@ export const PHProvider = ({
     (followed) => {
       setConsent(followed)
       if (followed === 'granted') linkSupportChat()
+      if (followed === 'denied') unlinkSupportChat()
     },
   )
   useWalletIdentity(
@@ -61,6 +62,7 @@ export const PHProvider = ({
 
   const decline = () => {
     declineAnalytics(posthog)
+    unlinkSupportChat()
     setConsent('denied')
   }
 
