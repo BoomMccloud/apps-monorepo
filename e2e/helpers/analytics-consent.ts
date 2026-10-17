@@ -600,7 +600,6 @@ export const expectNoSendAfterDecline = async ({
   // Past the time of the next retry the SDK would make, which backs off by
   // seconds, with some jitter, after each failure.
   await expectBrowserSilent(accepting, standIn, declinedAt)
-  await expectBrowserSilent(accepting, standIn, declinedAt)
 
   // Accept again: sending resumes, and nothing held back comes with it.
   await open(accepting, noticePath)

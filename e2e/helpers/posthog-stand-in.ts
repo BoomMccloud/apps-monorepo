@@ -4,9 +4,12 @@ import {
   type Server,
   type ServerResponse,
 } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { gunzipSync } from 'node:zlib'
-import { isRecord } from '@ens-apps/utils/isRecord'
+import { TaggedError } from '@ens-apps/utils/neverthrow'
+import {
+  eventsIn as eventsOfBody,
+  type SentEvent,
+} from '@ens-apps/utils/postHogEvents'
 import { fromThrowable } from 'neverthrow'
 
 /**
@@ -24,10 +27,7 @@ import { fromThrowable } from 'neverthrow'
 
 const POSTHOG_STAND_IN_PORT = Number(process.env.POSTHOG_STAND_IN_PORT ?? 4973)
 
-export type CapturedEvent = {
-  readonly event: string
-  readonly properties: Readonly<Record<string, unknown>>
-}
+export type CapturedEvent = SentEvent
 
 /**
  * Where a request came from: the browser (it carries an `Origin`), the
@@ -51,46 +51,43 @@ export type RecordedRequest = {
   readonly receivedAt: number
 }
 
-export type FlagRules = {
+type FlagRules = {
   readonly flags: readonly unknown[]
   readonly group_type_mapping: Readonly<Record<string, string>>
   readonly cohorts: Readonly<Record<string, unknown>>
 }
 
 export type PostHogStandIn = {
-  readonly url: string
-  readonly requests: () => readonly RecordedRequest[]
   readonly browserRequests: () => readonly RecordedRequest[]
   readonly serverRequests: () => readonly RecordedRequest[]
   /** Every event the browser has sent, in the order received. */
   readonly browserEvents: () => readonly CapturedEvent[]
   /**
-   * Answer every request carrying events whose body holds `marker` with
-   * `status`, a failure PostHog's SDK tries again, until `reset`.
+   * Answer every request carrying events whose body holds `marker` with a
+   * failure PostHog's SDK tries again, until `reset`.
    */
-  readonly failEventRequests: (marker: string, status?: number) => void
+  readonly failEventRequests: (marker: string) => void
   /**
    * Hold every request carrying events whose body holds `marker` without an
    * answer, a request in flight, until `release` is called; from then on each
-   * is answered with `status`, until `reset`.
+   * is answered with a failure, until `reset`.
    */
-  readonly holdEventRequests: (
-    marker: string,
-    status?: number,
-  ) => { readonly release: () => void }
+  readonly holdEventRequests: (marker: string) => {
+    readonly release: () => void
+  }
   readonly reset: () => void
   readonly close: () => Promise<void>
 }
 
 type StandInOptions = {
-  readonly port?: number
   /** Served at `/api/feature_flag/local_evaluation`. */
   readonly rules: FlagRules
   /** Served at `/array/<token>/config`. */
   readonly remoteConfig: Readonly<Record<string, unknown>>
-  /** Served at `/api/surveys/`. */
-  readonly surveys?: readonly unknown[]
 }
+
+/** The answer to a request the stand-in fails on purpose. */
+const FAILURE_STATUS = 502
 
 const GZIP_MAGIC = [0x1f, 0x8b] as const
 /** A PostHog project's public key, as each app and the SDK send it. */
@@ -114,48 +111,41 @@ const decodeBody = (raw: Buffer): string => {
   return text
 }
 
+// Another program on the port may send a body that does not decode (a gzip
+// body that is cut, a `data=` body that is not escaped): it is read as text.
+class UndecodableBodyError extends TaggedError('UndecodableBodyError')<{
+  readonly cause: unknown
+}> {}
+
+const decodeBodyOrText = (raw: Buffer): string =>
+  fromThrowable(
+    decodeBody,
+    (cause) => new UndecodableBodyError({ cause }),
+  )(raw).unwrapOr(raw.toString('utf8'))
+
 const sourceOf = (
   headers: Readonly<Record<string, string | undefined>>,
   hasProjectKey: boolean,
-): RequestSource =>
-  headers.origin !== undefined
-    ? 'browser'
-    : hasProjectKey
-      ? 'server'
-      : 'elsewhere'
+): RequestSource => {
+  if (headers.origin !== undefined) return 'browser'
+  return hasProjectKey ? 'server' : 'elsewhere'
+}
 
-const toEvent = (value: unknown): CapturedEvent | null =>
-  isRecord(value) && typeof value.event === 'string'
-    ? {
-        event: value.event,
-        properties: isRecord(value.properties) ? value.properties : {},
-      }
-    : null
+class NotJsonError extends TaggedError('NotJsonError')<{
+  readonly cause: unknown
+}> {}
 
 const parseJson = fromThrowable(
   (text: string): unknown => JSON.parse(text),
-  (): 'not JSON' => 'not JSON',
+  (cause) => new NotJsonError({ cause }),
 )
-
-const itemsIn = (parsed: unknown): readonly unknown[] =>
-  Array.isArray(parsed)
-    ? parsed
-    : isRecord(parsed) && Array.isArray(parsed.batch)
-      ? parsed.batch
-      : [parsed]
 
 // A body that is not JSON holds no events: another program on the port, or
 // a beacon in an encoding the stand-in does not read.
 const eventsIn = (body: string): readonly CapturedEvent[] =>
   !body.startsWith('[') && !body.startsWith('{')
     ? []
-    : parseJson(body).match(
-        (parsed) =>
-          itemsIn(parsed)
-            .map(toEvent)
-            .filter((event): event is CapturedEvent => event !== null),
-        () => [],
-      )
+    : parseJson(body).match(eventsOfBody, () => [])
 
 const readBody = (request: IncomingMessage): Promise<Buffer> =>
   new Promise((resolve, reject) => {
@@ -211,7 +201,7 @@ const answerFor = (path: string, options: StandInOptions): unknown => {
     return options.remoteConfig
   }
   if (path.startsWith('/api/surveys')) {
-    return { surveys: options.surveys ?? [] }
+    return { surveys: [] }
   }
   if (path.startsWith('/flags')) {
     return {
@@ -243,7 +233,7 @@ export const startPostHogStandIn = async (
     void readBody(request).then(
       (raw) => {
         const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
-        const body = decodeBody(raw)
+        const body = decodeBodyOrText(raw)
         const headers = flatHeaders(request)
         const hasProjectKey =
           PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
@@ -284,28 +274,31 @@ export const startPostHogStandIn = async (
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(options.port ?? POSTHOG_STAND_IN_PORT, '127.0.0.1', () =>
-      resolve(),
-    )
+    server.listen(POSTHOG_STAND_IN_PORT, '127.0.0.1', () => resolve())
   })
-  const { port } = server.address() as AddressInfo
 
   const requestsFrom = (source: RequestSource) =>
     recorded.filter((entry) => entry.source === source)
   const browserRequests = () => requestsFrom('browser')
 
   return {
-    url: `http://127.0.0.1:${port}`,
-    requests: () => [...recorded],
     browserRequests,
     serverRequests: () => requestsFrom('server'),
     browserEvents: () => browserRequests().flatMap((entry) => entry.events),
-    failEventRequests: (marker, status = 502) => {
-      eventBehaviors.push({ marker, status, released: Promise.resolve() })
+    failEventRequests: (marker) => {
+      eventBehaviors.push({
+        marker,
+        status: FAILURE_STATUS,
+        released: Promise.resolve(),
+      })
     },
-    holdEventRequests: (marker, status = 502) => {
+    holdEventRequests: (marker) => {
       const gate = Promise.withResolvers<void>()
-      eventBehaviors.push({ marker, status, released: gate.promise })
+      eventBehaviors.push({
+        marker,
+        status: FAILURE_STATUS,
+        released: gate.promise,
+      })
       return { release: gate.resolve }
     },
     reset: () => {
