@@ -3,6 +3,7 @@ import {
   clearCookies,
   installPostHogNetwork,
   keepHistoryMethods,
+  settle,
 } from '@ens-apps/utils/postHogTestKit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -63,7 +64,7 @@ describe("the Explorer's PostHog settings, on the installed SDK", () => {
       connectorName: 'test-wallet',
     })
     client.capture('wallet:connect', { wallet_address: WALLET })
-    await vi.advanceTimersByTimeAsync(4000)
+    await settle(vi.advanceTimersByTimeAsync, 4000)
     expect(await network.wire()).toEqual([])
     expect(client.get_distinct_id()).not.toBe(WALLET)
 
@@ -75,7 +76,7 @@ describe("the Explorer's PostHog settings, on the installed SDK", () => {
       chainId: 1,
       connectorName: 'test-wallet',
     })
-    await vi.advanceTimersByTimeAsync(4000)
+    await settle(vi.advanceTimersByTimeAsync, 4000)
     const paths = (await network.wire()).map((request) => request.path)
     expect(client.get_distinct_id()).toBe(WALLET)
     expect(paths.filter((path) => path.startsWith('/e'))).not.toEqual([])

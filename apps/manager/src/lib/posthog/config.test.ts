@@ -3,6 +3,7 @@ import {
   clearCookies,
   installPostHogNetwork,
   keepHistoryMethods,
+  settle,
 } from '@ens-apps/utils/postHogTestKit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureSwitches } from './feature-flags'
@@ -84,7 +85,7 @@ describe("the Manager's PostHog settings, on the installed SDK", () => {
       chainId: 1,
       connectorName: 'test-wallet',
     })
-    await vi.advanceTimersByTimeAsync(4000)
+    await settle(vi.advanceTimersByTimeAsync, 4000)
     const paths = (await network.wire()).map((request) => request.path)
     expect(paths.length).toBeGreaterThan(0)
     expect(paths.filter((path) => path.startsWith('/flags'))).toEqual([])
