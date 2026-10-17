@@ -5,7 +5,7 @@ import { checkSwitchRulesForBuild } from '../src/lib/posthog/switchRulesBuildChe
 /**
  * The rules check against the live project, run by hand:
  *
- *   tsx scripts/check-switch-rules.ts [--when-configured] [--mode <mode>]
+ *   tsx scripts/checkSwitchRules.ts [--when-configured] [--mode <mode>]
  *
  * `vite build` runs the same check itself (vite.config.ts), in the mode it
  * builds, so a build never needs this script. `--mode` picks the env files the
