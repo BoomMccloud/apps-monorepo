@@ -51,7 +51,7 @@ vi.mock('@intercom/messenger-js-sdk', () => ({
   update: vi.fn(),
 }))
 vi.mock('@posthog/react', () => ({
-  PostHogProvider: ({ children }: { children: ReactNode }) => children,
+  PostHogProvider: ({ children }: { readonly children: ReactNode }) => children,
 }))
 vi.mock('posthog-js/dist/module.full.no-external', () => ({
   default: {

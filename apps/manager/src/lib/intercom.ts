@@ -1,11 +1,13 @@
 import { Intercom } from '@intercom/messenger-js-sdk'
 import { createIsomorphicFn } from '@tanstack/react-start'
 
+export const INTERCOM_APP_ID = 're9q5yti'
+
 const CLIENT_initializeIntercom = () => {
   // Non-critical: can throw on blocked domains (403). Never crash the app.
   try {
     Intercom({
-      app_id: 're9q5yti',
+      app_id: INTERCOM_APP_ID,
     })
   } catch (error) {
     console.warn('[intercom] init failed', error)

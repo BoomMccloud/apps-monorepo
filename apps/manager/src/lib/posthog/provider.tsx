@@ -1,8 +1,6 @@
 import {
   acceptAnalytics,
   declineAnalytics,
-  identifyWallet,
-  resetVisitor,
 } from '@ens-apps/utils/analyticsConsent'
 import {
   AnalyticsConsentContext,
@@ -10,7 +8,6 @@ import {
   useFollowedChoice,
   useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
-import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 // @posthog/react types its `client` prop with the `PostHog` type from the
@@ -20,12 +17,12 @@ import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 import type { PostHog } from 'posthog-js'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
-import { useConnection, useConnectionEffect } from 'wagmi'
-import { track } from './events'
+import { useConnection } from 'wagmi'
 import { linkSupportChat } from './supportChat'
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'
 import { usePostHogStart } from './usePostHogStart'
+import { useWalletAnalytics } from './useWalletAnalytics'
 
 /**
  * PostHog for the Manager: analytics only after the visitor accepts, feature
@@ -70,47 +67,7 @@ export const PHProvider = ({
     resetCount,
   })
 
-  useConnectionEffect({
-    onConnect(data) {
-      // Analytics are non-critical; never let them crash the app.
-      try {
-        identifyWallet(posthog, {
-          address: data.address,
-          chainId: data.chainId,
-          connectorName: data.connector.name,
-        })
-        track('wallet:connect', {
-          wallet_address: data.address,
-          chain_id: data.chainId,
-          wallet_connector: data.connector.name,
-        })
-      } catch (error) {
-        console.warn('[posthog] wallet:connect failed', error)
-      }
-
-      try {
-        trackIntercomEvent('wallet:connect', {
-          wallet_address: data.address,
-          chain_id: data.chainId,
-          wallet_connector: data.connector.name,
-        })
-      } catch (error) {
-        console.warn('[intercom] wallet:connect failed', error)
-      }
-    },
-    onDisconnect() {
-      // A new visitor id for whoever uses the browser next; the choice stays.
-      // The reset empties the SDK's switches; the sync hook writes the answers
-      // for a visitor with no wallet, or every switch off until it has them.
-      try {
-        track('wallet:disconnect')
-        resetVisitor(posthog)
-        recordReset()
-      } catch (error) {
-        console.warn('[posthog] reset on disconnect failed', error)
-      }
-    },
-  })
+  useWalletAnalytics(recordReset)
 
   const accept = () => {
     void acceptAnalytics(posthog, { isDev: import.meta.env.DEV })
