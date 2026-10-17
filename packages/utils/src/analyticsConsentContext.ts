@@ -10,7 +10,7 @@ import {
 /** The choice as the page knows it; `unknown` until the SDK has started. */
 export type AnalyticsConsentState = AnalyticsConsent | 'unknown'
 
-export type AnalyticsConsentValue = {
+type AnalyticsConsentValue = {
   readonly consent: AnalyticsConsentState
   readonly accept: () => void
   readonly decline: () => void
@@ -32,11 +32,13 @@ export const useAnalyticsConsent = (): AnalyticsConsentValue =>
 /**
  * After Accept, the visitor is identified by their wallet, whether it was
  * connected before the press, connected later, or restored on a later visit.
+ * `onIdentified` runs after each identify, for what follows the visitor's id.
  */
 export const useWalletIdentity = (
   client: AnalyticsClient,
   consent: AnalyticsConsentState,
   wallet: ConnectedWallet | null,
+  onIdentified?: () => void,
 ): void => {
   const address = wallet?.address
   const chainId = wallet?.chainId
@@ -44,7 +46,8 @@ export const useWalletIdentity = (
   useEffect(() => {
     if (consent !== 'granted' || !address) return
     identifyWallet(client, { address, chainId, connectorName })
-  }, [client, consent, address, chainId, connectorName])
+    onIdentified?.()
+  }, [client, consent, address, chainId, connectorName, onIdentified])
 }
 
 /**

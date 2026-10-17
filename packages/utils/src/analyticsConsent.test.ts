@@ -126,6 +126,22 @@ describe('scrubErrorMessage', () => {
     expect(scrubbed).toBe('Call failed for [address] on [name]: data [address]')
   })
 
+  it('cuts the digits of an address that the input cut went through', () => {
+    // 37 digits of the address are left before the cut, too few for the pattern.
+    const message = `0x${'a'.repeat(9_950)}${' '.repeat(9)}0x${'b'.repeat(40)}`
+    expect(message.slice(0, 10_000).endsWith(`0x${'b'.repeat(37)}`)).toBe(true)
+
+    expect(scrubErrorMessage(message)).toBe(
+      `[address]${' '.repeat(9)}[address]`,
+    )
+  })
+
+  it('keeps a short hex value that ends a short message', () => {
+    expect(scrubErrorMessage('failed with code 0x1f')).toBe(
+      'failed with code 0x1f',
+    )
+  })
+
   it('cuts a long message to its maximum length, after scrubbing', () => {
     const long = `${'x'.repeat(250)} vitalik.eth`
     expect(scrubErrorMessage(long)).toHaveLength(ERROR_MESSAGE_MAX_LENGTH)

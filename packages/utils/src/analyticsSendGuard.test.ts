@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPostHogNetwork } from './postHogTestKit'
 
 // The guard wraps the `fetch` and `sendBeacon` it finds when it loads, so the
@@ -17,6 +17,14 @@ const clientWith = (
   config: { api_host: apiHost },
   get_explicit_consent_status: () => consent,
 })
+
+// happy-dom's way to give the page an address; its window type does not say so.
+const setPageUrl = (url: string): void => {
+  const { happyDOM } = window as unknown as {
+    readonly happyDOM: { setURL: (url: string) => void }
+  }
+  happyDOM.setURL(url)
+}
 
 describe('the send guard', () => {
   beforeEach(() => {
@@ -106,5 +114,36 @@ describe('the send guard', () => {
     await fetch('https://posthog.example:8443/e/')
 
     expect(network.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  describe('with a host that has no origin of its own', () => {
+    beforeEach(() => {
+      setPageUrl('https://app.example/dashboard')
+    })
+
+    afterEach(() => {
+      setPageUrl('about:blank')
+    })
+
+    it("holds the host path on the page's origin and lets the rest of the page through", async () => {
+      guardPostHogSends(clientWith('denied', '/ingest'))
+
+      await fetch('https://app.example/ingest/e/')
+      await fetch('https://app.example/api/anything')
+
+      expect(network.fetch).toHaveBeenCalledOnce()
+      expect(String(network.fetch.mock.calls[0]?.[0])).toBe(
+        'https://app.example/api/anything',
+      )
+    })
+
+    it('holds nothing of the page when the host is empty', async () => {
+      guardPostHogSends(clientWith('denied', ''))
+
+      await fetch('https://app.example/api/anything')
+      await fetch('https://app.example/_serverFn/x', { method: 'POST' })
+
+      expect(network.fetch).toHaveBeenCalledTimes(2)
+    })
   })
 })

@@ -43,7 +43,7 @@ const analyticsConsentSettings = {
 } as const
 
 /** The collection settings the choice switches on and off. */
-export type CollectionSettings = {
+type CollectionSettings = {
   readonly capture_pageview: boolean | 'history_change'
   readonly capture_pageleave: boolean | 'if_capture_pageview'
   readonly autocapture: boolean
@@ -276,7 +276,9 @@ const RESTORE_CONSENT: Readonly<
 
 /**
  * Forget the visitor (on a wallet disconnect) and keep their choice: the
- * SDK's reset erases the stored choice along with the visitor id.
+ * SDK's reset erases the stored choice along with the visitor id. The device
+ * id stays, as it did before the pause: it names the browser, not the person,
+ * and only Decline, which withdraws the choice, forgets it too.
  */
 export const resetVisitor = (client: AnalyticsClient): void => {
   const consent = client.get_explicit_consent_status()
@@ -409,14 +411,24 @@ export const ERROR_MESSAGE_MAX_LENGTH = 200
 // the page's thread.
 const SCRUBBED_INPUT_MAX_LENGTH = 10_000
 
+// The hex digits of an address the cut went through: with fewer than 40 left
+// they are no address to the pattern above, so they are cut with the rest.
+const CUT_ADDRESS_PATTERN = /0x[0-9a-fA-F]*$/u
+
+const cutToScrubbedInput = (message: string): string =>
+  message.length > SCRUBBED_INPUT_MAX_LENGTH
+    ? message
+        .slice(0, SCRUBBED_INPUT_MAX_LENGTH)
+        .replace(CUT_ADDRESS_PATTERN, '[address]')
+    : message
+
 /**
  * Cut addresses and `.eth` names out of an error message, then cut it to
  * length. A name that does not end in `.eth` cannot be told from other text,
  * so other names may remain.
  */
 export const scrubErrorMessage = (message: string): string =>
-  message
-    .slice(0, SCRUBBED_INPUT_MAX_LENGTH)
+  cutToScrubbedInput(message)
     .replace(ADDRESS_PATTERN, '[address]')
     .replace(ETH_NAME_PATTERN, '[name]')
     .slice(0, ERROR_MESSAGE_MAX_LENGTH)

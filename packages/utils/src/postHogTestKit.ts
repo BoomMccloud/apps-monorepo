@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { urlOf } from './inputUrl'
-import { isRecord } from './isRecord'
+import { eventsIn, type SentEvent } from './postHogEvents'
 
 /**
  * Test support for the real PostHog SDK: the network it sends on, replaced so
@@ -18,7 +18,7 @@ import { isRecord } from './isRecord'
  */
 
 /** The project's settings as PostHog serves them, with everything on. */
-export const PROJECT_SETTINGS = {
+const PROJECT_SETTINGS = {
   // Once these arrive the SDK gzips what it sends, with the platform's stream.
   supportedCompression: ['gzip', 'gzip-js'],
   sessionRecording: { endpoint: '/s/' },
@@ -27,13 +27,8 @@ export const PROJECT_SETTINGS = {
   capturePerformance: { web_vitals: true },
 } as const
 
-export type SentEvent = {
-  readonly event: string
-  readonly properties: Readonly<Record<string, unknown>>
-}
-
 /** One request that reached the network, after the send guard. */
-export type WireRequest = {
+type WireRequest = {
   readonly via: 'fetch' | 'beacon'
   readonly method: string
   readonly url: string
@@ -41,7 +36,7 @@ export type WireRequest = {
   readonly events: readonly SentEvent[]
 }
 
-export type NetworkAnswers = {
+type NetworkAnswers = {
   /** What a request carrying events gets, each time one arrives. */
   readonly events?: () => Response | Promise<Response>
   readonly projectSettings?: object
@@ -99,17 +94,6 @@ const decodeBody = async (
   }
 }
 
-const eventsIn = (body: unknown): readonly SentEvent[] =>
-  (isRecord(body) && Array.isArray(body.batch)
-    ? body.batch
-    : Array.isArray(body)
-      ? body
-      : [body]
-  ).filter(
-    (item): item is SentEvent =>
-      isRecord(item) && typeof item.event === 'string',
-  )
-
 const bodyText = async (
   body: BodyInit | null | undefined,
 ): Promise<string | ArrayBuffer | ArrayBufferView | undefined> =>
@@ -120,6 +104,28 @@ const bodyText = async (
       : body instanceof ArrayBuffer
         ? body
         : undefined
+
+/** One request that reached the network, with the order it was made in. */
+const wireRequest = async (
+  via: WireRequest['via'],
+  method: string,
+  address: RequestInfo | URL,
+  body: BodyInit | null | undefined,
+  order: number,
+) => {
+  const url = urlOf(address)
+  const raw = await bodyText(body)
+  return {
+    order,
+    request: {
+      via,
+      method,
+      url,
+      path: new URL(url).pathname,
+      events: raw === undefined ? [] : eventsIn(await decodeBody(raw)),
+    } satisfies WireRequest,
+  }
+}
 
 /** Put the network in place of the page's `fetch` and `sendBeacon`. */
 export const installPostHogNetwork = (answers: NetworkAnswers = {}) => {
@@ -136,35 +142,25 @@ export const installPostHogNetwork = (answers: NetworkAnswers = {}) => {
         const init = (fetchStub.mock.calls[index] as unknown[])[1] as
           | RequestInit
           | undefined
-        const url = urlOf(input)
-        const raw = await bodyText(init?.body)
-        return {
-          order: fetchStub.mock.invocationCallOrder[index] ?? 0,
-          request: {
-            via: 'fetch',
-            method: init?.method ?? 'GET',
-            url,
-            path: new URL(url).pathname,
-            events: raw === undefined ? [] : eventsIn(await decodeBody(raw)),
-          } satisfies WireRequest,
-        }
+        return wireRequest(
+          'fetch',
+          init?.method ?? 'GET',
+          input,
+          init?.body,
+          fetchStub.mock.invocationCallOrder[index] ?? 0,
+        )
       }),
     )
     const beaconed = await Promise.all(
-      beaconStub.mock.calls.map(async ([url, data], index) => {
-        const href = urlOf(url)
-        const raw = await bodyText(data)
-        return {
-          order: beaconStub.mock.invocationCallOrder[index] ?? 0,
-          request: {
-            via: 'beacon',
-            method: 'POST',
-            url: href,
-            path: new URL(href).pathname,
-            events: raw === undefined ? [] : eventsIn(await decodeBody(raw)),
-          } satisfies WireRequest,
-        }
-      }),
+      beaconStub.mock.calls.map(([url, data], index) =>
+        wireRequest(
+          'beacon',
+          'POST',
+          url,
+          data,
+          beaconStub.mock.invocationCallOrder[index] ?? 0,
+        ),
+      ),
     )
     return [...fetched, ...beaconed]
       .sort((first, second) => first.order - second.order)

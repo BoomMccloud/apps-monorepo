@@ -46,15 +46,23 @@ const isGranted = (client: GuardedClient): boolean => {
   }
 }
 
+/**
+ * Whether the address is under the host the SDK sends to, its path included:
+ * a host that is only a path on the page's own origin holds that path and not
+ * the page's other requests, and a host that is empty holds none of them.
+ */
 const isToHostOf = (
   client: GuardedClient,
   input: RequestInfo | URL,
 ): boolean => {
   try {
     const base = globalThis.location?.href
+    const target = new URL(urlOf(input), base)
+    const host = new URL(client.config.api_host, base)
+    const prefix = host.pathname.replace(/\/+$/u, '')
     return (
-      new URL(urlOf(input), base).origin ===
-      new URL(client.config.api_host, base).origin
+      target.origin === host.origin &&
+      (target.pathname === prefix || target.pathname.startsWith(`${prefix}/`))
     )
   } catch {
     return false

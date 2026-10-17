@@ -11,7 +11,7 @@ const OPTIONS = { isDev: true } as const
 const CONFIG = { api_host: 'https://posthog.example' }
 
 const startable = (
-  overrides: Partial<{ __loaded: boolean; init: () => void }> = {},
+  overrides: Readonly<Partial<{ __loaded: boolean; init: () => void }>> = {},
 ) =>
   ({
     __loaded: true,

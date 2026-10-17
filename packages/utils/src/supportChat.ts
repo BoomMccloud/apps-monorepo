@@ -9,6 +9,7 @@ import type { AnalyticsConsentState } from './analyticsConsentContext'
 interface SupportChatAnalytics {
   get_distinct_id(): string
   get_session_replay_url(): string
+  get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
 }
 
 type SupportChatOptions = {
@@ -17,6 +18,13 @@ type SupportChatOptions = {
   /** Record the support chat's visitor id against the visitor's analytics. */
   readonly recordSupportChatVisitor: (intercomVisitorId: string) => void
 }
+
+/**
+ * The chat's widget loads a little after the boot, and its visitor id is known
+ * only then: ask again this often, this many times.
+ */
+const VISITOR_ID_POLL_MS = 1_000
+const VISITOR_ID_POLL_LIMIT = 30
 
 /**
  * The support chat of an ENS app. It works whatever the visitor's analytics
@@ -34,9 +42,43 @@ export const createSupportChat = ({
     recent_replay: analytics.get_session_replay_url(),
   })
 
-  const recordSupportChatLink = (): void => {
+  // The chat visitors already recorded against a visitor of the analytics, so
+  // a boot and a link that both ask record one once. This module's own record,
+  // read by nothing else (no-mutation).
+  const recorded = new Set<string>()
+
+  /**
+   * Record the chat's visitor id against the visitor's analytics once the
+   * widget has one. Later asks happen only while the visitor has accepted.
+   */
+  const recordSupportChatLink = (asksLeft = VISITOR_ID_POLL_LIMIT): void => {
     const intercomVisitorId = getVisitorId()
-    if (intercomVisitorId) recordSupportChatVisitor(intercomVisitorId)
+    if (intercomVisitorId) {
+      const key = `${analytics.get_distinct_id()} ${intercomVisitorId}`
+      if (recorded.has(key)) return
+      recorded.add(key)
+      recordSupportChatVisitor(intercomVisitorId)
+      return
+    }
+    if (asksLeft === 0) return
+    setTimeout(() => {
+      if (analytics.get_explicit_consent_status() !== 'granted') return
+      try {
+        recordSupportChatLink(asksLeft - 1)
+      } catch (error) {
+        console.warn('[intercom] link failed', error)
+      }
+    }, VISITOR_ID_POLL_MS)
+  }
+
+  /** On Accept: tie the support chat, already booted, to the visitor's analytics. */
+  const linkSupportChat = (): void => {
+    try {
+      updateIntercom(supportChatLink())
+      recordSupportChatLink()
+    } catch (error) {
+      console.warn('[intercom] link failed', error)
+    }
   }
 
   return {
@@ -55,13 +97,16 @@ export const createSupportChat = ({
       }
     },
 
-    /** On Accept: tie the support chat, already booted, to the visitor's analytics. */
-    linkSupportChat: (): void => {
-      try {
-        updateIntercom(supportChatLink())
-        recordSupportChatLink()
-      } catch (error) {
-        console.warn('[intercom] link failed', error)
+    linkSupportChat,
+
+    /**
+     * After the visitor's id changed (a wallet identified, the visitor
+     * forgotten on a disconnect): tie the chat to the new id while the visitor
+     * has accepted, so it never holds the id of the visitor before.
+     */
+    relinkSupportChat: (): void => {
+      if (analytics.get_explicit_consent_status() === 'granted') {
+        linkSupportChat()
       }
     },
 
