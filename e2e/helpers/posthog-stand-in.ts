@@ -61,6 +61,20 @@ export type PostHogStandIn = {
   readonly serverRequests: () => readonly RecordedRequest[]
   /** Every event the browser has sent, in the order received. */
   readonly browserEvents: () => readonly CapturedEvent[]
+  /**
+   * Answer every request carrying events whose body holds `marker` with
+   * `status`, a failure PostHog's SDK tries again, until `reset`.
+   */
+  readonly failEventRequests: (marker: string, status?: number) => void
+  /**
+   * Hold every request carrying events whose body holds `marker` without an
+   * answer, a request in flight, until `release` is called; from then on each
+   * is answered with `status`, until `reset`.
+   */
+  readonly holdEventRequests: (
+    marker: string,
+    status?: number,
+  ) => { readonly release: () => void }
   readonly reset: () => void
   readonly close: () => Promise<void>
 }
@@ -201,6 +215,11 @@ export const startPostHogStandIn = async (
   options: StandInOptions,
 ): Promise<PostHogStandIn> => {
   const recorded: RecordedRequest[] = []
+  const eventBehaviors: Array<{
+    readonly marker: string
+    readonly status: number
+    readonly released: Promise<void>
+  }> = []
 
   const server: Server = createServer((request, response) => {
     void readBody(request).then((raw) => {
@@ -228,6 +247,17 @@ export const startPostHogStandIn = async (
         response.end()
         return
       }
+      const isEventRequest =
+        request.method === 'POST' && /^\/e\/?$/.test(url.pathname)
+      const behavior = isEventRequest
+        ? eventBehaviors.find((entry) => body.includes(entry.marker))
+        : undefined
+      if (behavior) {
+        void behavior.released.then(() =>
+          sendJson(request, response, behavior.status, { status: 0 }),
+        )
+        return
+      }
       sendJson(request, response, 200, answerFor(url.pathname, options))
     })
   })
@@ -251,8 +281,17 @@ export const startPostHogStandIn = async (
         (entry) => !entry.isFromBrowser && !entry.isFromElsewhere,
       ),
     browserEvents: () => browserRequests().flatMap((entry) => entry.events),
+    failEventRequests: (marker, status = 502) => {
+      eventBehaviors.push({ marker, status, released: Promise.resolve() })
+    },
+    holdEventRequests: (marker, status = 502) => {
+      const gate = Promise.withResolvers<void>()
+      eventBehaviors.push({ marker, status, released: gate.promise })
+      return { release: gate.resolve }
+    },
     reset: () => {
       recorded.length = 0
+      eventBehaviors.length = 0
     },
     close: () =>
       new Promise<void>((resolve, reject) => {

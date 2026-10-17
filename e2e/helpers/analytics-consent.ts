@@ -390,12 +390,16 @@ export const exceptionMessagesOf = (
 
 /** The SDK instance each app exposes on `window` for the browser tests. */
 type PostHogWindow = Window & {
-  posthog?: {
-    __loaded?: boolean
-    get_distinct_id?: () => string
-    getFeatureFlag?: (
+  readonly posthog?: {
+    readonly __loaded?: boolean
+    readonly get_distinct_id?: () => string
+    readonly capture?: (
+      name: string,
+      properties?: Readonly<Record<string, unknown>>,
+    ) => unknown
+    readonly getFeatureFlag?: (
       key: string,
-      options?: { send_event?: boolean },
+      options?: { readonly send_event?: boolean },
     ) => unknown
   }
 }
@@ -452,4 +456,137 @@ export const isDevServer = async (
     .get(`${origin}/@vite/client`, { failOnStatusCode: false })
     .catch(() => null)
   return response?.status() === 200
+}
+
+/** Capture an event from the page, as the app's own code would. */
+const captureOnPage = (page: Page, name: string): Promise<unknown> =>
+  page.evaluate(
+    (eventName) =>
+      (window as PostHogWindow).posthog?.capture?.(eventName, { walk: true }),
+    name,
+  )
+
+const requestsCarrying = (
+  standIn: PostHogStandIn,
+  marker: string,
+  since = 0,
+): readonly RecordedRequest[] =>
+  browserRequestsSince(standIn, since).filter((request) =>
+    requestText(request).includes(marker),
+  )
+
+const pageLeavesSince = (
+  standIn: PostHogStandIn,
+  since: number,
+): readonly CapturedEvent[] =>
+  browserRequestsSince(standIn, since)
+    .flatMap((request) => request.events)
+    .filter((event) => event.event === '$pageleave')
+
+/**
+ * Nothing leaves for PostHog after a Decline, by any way the SDK has of
+ * sending, and Accept sends again. One visitor, several tabs of one app: a
+ * tab accepts, one holds a request in flight, one holds a failed request
+ * waiting to be tried again, one will close, and one declines on the notice.
+ * After the press the request in flight fails, the retry's time comes and the
+ * page that closes sends its page-leave as a beacon; none of them may put a
+ * request on the wire, and what was held back stays gone when the visitor
+ * accepts again. The SDK sends each event as it is captured, so there is no
+ * batch in another tab to flush.
+ */
+export const expectNoSendAfterDecline = async ({
+  context,
+  standIn,
+  open,
+  noticePath,
+}: {
+  readonly context: BrowserContext
+  readonly standIn: PostHogStandIn
+  /** Open the app at a path in a tab, and wait for its SDK. */
+  readonly open: (page: Page, path: string) => Promise<void>
+  readonly noticePath: string
+}): Promise<void> => {
+  await forgetConsent(context)
+  const accepting = await context.newPage()
+  await open(accepting, '/')
+  await acceptButton(accepting).click()
+  await expectEventsSent(standIn, ['$pageview'])
+
+  // The control for the page that closes below: while the choice is Accept,
+  // a page that closes puts its page-leave on the wire as a beacon.
+  const leaving = await context.newPage()
+  await open(leaving, '/')
+  const leftAt = Date.now()
+  await leaving.close({ runBeforeUnload: true })
+  await expect
+    .poll(() => pageLeavesSince(standIn, leftAt).length, {
+      message: 'a page that closes sends its page-leave',
+      timeout: FLUSH_TIMEOUT,
+    })
+    .toBeGreaterThan(0)
+
+  // The other tabs read the accepted choice from the shared cookie.
+  const inFlight = await context.newPage()
+  const retrying = await context.newPage()
+  const closing = await context.newPage()
+  const declining = await context.newPage()
+  await open(inFlight, '/')
+  await open(retrying, '/')
+  await open(closing, '/')
+  await open(declining, noticePath)
+  await expect(analyticsSwitch(declining)).toBeChecked()
+
+  // A request that failed, and fails each time it is tried again.
+  standIn.failEventRequests('walk-retry')
+  await captureOnPage(retrying, 'walk-retry')
+  await expect
+    .poll(() => requestsCarrying(standIn, 'walk-retry').length, {
+      timeout: FLUSH_TIMEOUT,
+    })
+    .toBeGreaterThan(0)
+  // A request on its way, which PostHog has not answered.
+  const held = standIn.holdEventRequests('walk-in-flight')
+  await captureOnPage(inFlight, 'walk-in-flight')
+  await expect
+    .poll(() => requestsCarrying(standIn, 'walk-in-flight').length, {
+      timeout: FLUSH_TIMEOUT,
+    })
+    .toBeGreaterThan(0)
+
+  // Decline in one tab. The tab that closes now has not yet seen the choice
+  // change, and PostHog answers the request in flight with an error only now.
+  await analyticsSwitch(declining).click()
+  const declinedAt = Date.now()
+  await expect(analyticsSwitch(declining)).not.toBeChecked()
+  await closing.close({ runBeforeUnload: true })
+  await declining.close({ runBeforeUnload: true })
+  held.release()
+
+  // Past the time of the next retry the SDK would make, which backs off by
+  // seconds, with some jitter, after each failure.
+  await expectBrowserSilent(accepting, standIn, declinedAt)
+  await expectBrowserSilent(accepting, standIn, declinedAt)
+
+  // Accept again: sending resumes, and nothing held back comes with it.
+  await open(accepting, noticePath)
+  await analyticsSwitch(accepting).click()
+  await expect(analyticsSwitch(accepting)).toBeChecked()
+  const resumedAt = Date.now()
+  await captureOnPage(accepting, 'walk-after-accept')
+  await expect
+    .poll(
+      () => requestsCarrying(standIn, 'walk-after-accept', resumedAt).length,
+      {
+        timeout: FLUSH_TIMEOUT,
+      },
+    )
+    .toBeGreaterThan(0)
+  expect(
+    requestsCarrying(standIn, 'walk-retry', declinedAt),
+    'the failed request, sent after the visitor accepted again',
+  ).toEqual([])
+  expect(
+    requestsCarrying(standIn, 'walk-in-flight', declinedAt),
+    'the request in flight, sent after the visitor accepted again',
+  ).toEqual([])
 }

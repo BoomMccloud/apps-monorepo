@@ -18,6 +18,7 @@ import {
   expectEqualButtons,
   expectEventsSent,
   expectNoPostHogStorage,
+  expectNoSendAfterDecline,
   expectNoSidewaysScroll,
   expectRecordingsWhereBuilt,
   FLUSH_TIMEOUT,
@@ -537,6 +538,18 @@ test.describe('Manager analytics choice', () => {
       )
       .toBe(true)
     await expectRecordingsWhereBuilt(page, standIn, ORIGIN, resumedAt)
+  })
+
+  test('C4: after a Decline nothing in flight, waiting to be tried again or sent by a page that closes reaches PostHog, and Accept sends again', async ({
+    context,
+  }) => {
+    test.setTimeout(600_000)
+    await expectNoSendAfterDecline({
+      context,
+      standIn,
+      open: openFresh,
+      noticePath: NOTICE_PATH,
+    })
   })
 
   test('C5: the notice, opened from the banner, says what is collected and why, who processes it, and how to ask for deletion', async ({
