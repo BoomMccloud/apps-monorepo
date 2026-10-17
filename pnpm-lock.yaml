@@ -888,6 +888,9 @@ importers:
         specifier: 'catalog:'
         version: 2.52.2(typescript@7.0.2)(zod@4.6.5)
     devDependencies:
+      '@ens-apps/utils':
+        specifier: workspace:*
+        version: link:../packages/utils
       '@playwright/test':
         specifier: 1.58.2
         version: 1.58.2
@@ -1238,6 +1241,9 @@ importers:
       '@ensdomains/ensjs':
         specifier: 'catalog:'
         version: 5.2.1(@ensdomains/dnsprovejs@1.0.0)(graphql@17.0.2)(viem@2.52.2(typescript@7.0.2)(zod@4.6.5))
+      '@intercom/messenger-js-sdk':
+        specifier: ^0.0.20
+        version: 0.0.20
       '@tanstack/react-query':
         specifier: ^5.104.0
         version: 5.104.0(react@19.2.5)

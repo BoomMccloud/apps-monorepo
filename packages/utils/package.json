@@ -34,6 +34,7 @@
   "keywords": [],
   "dependencies": {
     "@ensdomains/ensjs": "catalog:",
+    "@intercom/messenger-js-sdk": "^0.0.20",
     "@tanstack/react-query": "^5.104.0",
     "neverthrow": "^8.2.0",
     "viem": "catalog:",
