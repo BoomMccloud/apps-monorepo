@@ -15,9 +15,9 @@ import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 // the no-external build's `PostHog`. Import that type to cast at the provider
 // boundary below.
 import type { PostHog } from 'posthog-js'
-import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
 import { useConnection } from 'wagmi'
+import posthog from './client'
 import { linkSupportChat } from './supportChat'
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'

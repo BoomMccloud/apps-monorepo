@@ -1,9 +1,8 @@
-// Must import from the same module path as provider.tsx — mixing the default
+// Must come from the same module as provider.tsx — mixing the default
 // `posthog-js` build with `module.full.no-external` would bundle PostHog twice
 // and run two separate SDK instances. See provider.tsx for why we use this build.
-import posthog, {
-  type CaptureOptions,
-} from 'posthog-js/dist/module.full.no-external'
+import type { CaptureOptions } from 'posthog-js/dist/module.full.no-external'
+import posthog from './client'
 
 export type PostHogEvents = {
   'wallet:connect': {

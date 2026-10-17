@@ -1,6 +1,6 @@
 import { createSupportChat } from '@ens-apps/utils/supportChat'
-import posthog from 'posthog-js/dist/module.full.no-external'
 import { INTERCOM_APP_ID } from '@/lib/intercom'
+import posthog from './client'
 import { trackWithOptions } from './events'
 
 export const { bootSupportChat, linkSupportChat } = createSupportChat({

@@ -1,8 +1,6 @@
 import type { FailedRunPayloadV2 } from '@ens-apps/transaction-manager'
 import type { CaptureOptions } from 'posthog-js'
-// Pre-bundled build so PostHog never injects runtime <script> tags that our
-// CSP would block. See provider.tsx for the full rationale.
-import posthog from 'posthog-js/dist/module.full.no-external'
+import posthog from './client'
 
 export type PostHogEvents = {
   'nft:completion_check': {

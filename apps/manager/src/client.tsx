@@ -1,6 +1,3 @@
-// Must stay the first import: PostHog's SDK keeps the `fetch` it finds when it
-// loads, and this guard holds back what it sends until the visitor accepts.
-import '@ens-apps/utils/analyticsSendGuard'
 // Dev-only: install the Anvil-tracking browser clock before hydration
 // (no-op unless DEV + VITE_TIME_TRAVEL).
 import '@ens-apps/dev-time-travel/setup'

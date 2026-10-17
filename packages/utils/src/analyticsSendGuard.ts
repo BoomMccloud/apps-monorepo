@@ -13,8 +13,11 @@
  * what it carried is gone.
  *
  * The SDK keeps the `fetch` it finds when its module loads, so this module has
- * to be the first import of each app's client entry, the Manager's client.tsx
- * and the Explorer's main.tsx. It installs itself in a browser only, once.
+ * to run before the SDK's. In each app the one module that imports the SDK,
+ * lib/posthog/client.ts, imports this first, which holds in a production
+ * bundle as well; the guard cannot be the first import of the app's entry
+ * instead, because the bundler may run a shared chunk that holds the SDK
+ * before the entry's own chunk. It installs itself in a browser only, once.
  */
 
 /** The part of the SDK the guard reads: where it sends, and the visitor's choice. */

@@ -1,9 +1,9 @@
 import { createStore } from '@xstate/store-react'
 import type { AppRouter } from 'api-worker/hc'
 import { hc } from 'hono/client'
-import posthog from 'posthog-js/dist/module.full.no-external'
 import * as v from 'valibot'
 import { envConfig, isTestnet } from '@/config'
+import posthog from '@/lib/posthog/client'
 import { DEBUG_FEATURES_ENABLED } from './debug-features'
 import { persist } from './xstate-store'
 

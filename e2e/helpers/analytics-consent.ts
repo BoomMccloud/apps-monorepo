@@ -336,7 +336,12 @@ export const expectNothingSent = (standIn: PostHogStandIn, since = 0): void => {
   const sent = standIn
     .browserRequests()
     .filter((request) => request.receivedAt >= since)
-    .map((request) => `${request.method} ${request.path}`)
+    .map((request) =>
+      [
+        `${request.method} ${request.path}`,
+        ...request.events.map((event) => event.event),
+      ].join(' '),
+    )
   expect(sent, 'requests from the browser to PostHog').toEqual([])
 }
 

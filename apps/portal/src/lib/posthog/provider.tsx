@@ -15,9 +15,9 @@ import { PostHogProvider } from '@posthog/react'
 // incompatible even though they're the same runtime SDK). Import that type to
 // cast our instance at the provider boundary below.
 import type { PostHog } from 'posthog-js'
-import posthog from 'posthog-js/dist/module.full.no-external'
 import { useState } from 'react'
 import { useConnection } from 'wagmi'
+import posthog from './client'
 import { linkSupportChat } from './supportChat'
 import { usePostHogStart } from './usePostHogStart'
 import { useWalletAnalytics } from './useWalletAnalytics'

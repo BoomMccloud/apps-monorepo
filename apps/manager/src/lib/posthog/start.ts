@@ -1,10 +1,6 @@
 import { startAnalyticsChoice } from '@ens-apps/utils/analyticsConsent'
 import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
-// Fully-bundled, no-external build so PostHog never lazy-loads extension
-// bundles via runtime <script> tags — our strict CSP blocks those. Same
-// approach as portal; see PostHog's CSP guide:
-// https://posthog.com/docs/advanced/content-security-policy
-import posthog from 'posthog-js/dist/module.full.no-external'
+import posthog from './client'
 import { startupConfig } from './config'
 import type { FeatureSwitches } from './feature-flags'
 

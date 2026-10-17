@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import posthog from 'posthog-js/dist/module.full.no-external'
 import { useEffect } from 'react'
+import posthog from './client'
 import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
