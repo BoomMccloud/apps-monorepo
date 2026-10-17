@@ -190,8 +190,10 @@ jobs:
       # ── local blockchain stack ────────────────────────────────────
       # Only start the services each job needs to reduce memory pressure.
       # Anvil on a GitHub Actions runner (7 GB RAM) can OOM (exit 139)
-      # when too many containers run alongside Node + Chromium.
+      # when too many containers run alongside Node + Chromium. The cross-app
+      # walks use no chain, so that job starts none.
       - name: Start E2E stack
+        if: matrix.config.project != 'cross-app'
         run: |
           if [[ "${{ steps.box.outputs.available }}" == "true" ]]; then
             echo "Using ENS V2 snapshot (no live Sepolia fork)"
@@ -279,6 +281,7 @@ jobs:
             APPS="manager:3000"
           fi
 
+          # Start every dev server, then wait for each in turn.
           APP_PIDS=""
           for APP in $APPS; do
             APP_FILTER=${APP%%:*}
@@ -286,20 +289,26 @@ jobs:
             # Enable Vite dep optimization logging to catch late-discovered deps
             DEBUG=vite:deps pnpm --filter "$APP_FILTER" dev -- --port ${APP_PORT} >> /tmp/app-dev.log 2>&1 &
             APP_PIDS="$APP_PIDS $!"
+          done
+          for APP in $APPS; do
+            APP_FILTER=${APP%%:*}
+            APP_PORT=${APP##*:}
             timeout 60 bash -c "until curl -sf http://localhost:${APP_PORT} > /dev/null 2>&1; do sleep 2; done"
             echo "✅ ${APP_FILTER} dev server on :${APP_PORT}"
           done
 
-          # Verify Anvil is still reachable and the app's env is correct
-          echo "Verifying Anvil RPC..."
-          curl -sf -X POST http://127.0.0.1:8545 \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
-            && echo " ✅ Anvil RPC OK" || echo " ❌ Anvil RPC FAILED"
+          if [[ "${{ matrix.config.project }}" != "cross-app" ]]; then
+            # Verify Anvil is still reachable and the app's env is correct
+            echo "Verifying Anvil RPC..."
+            curl -sf -X POST http://127.0.0.1:8545 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
+              && echo " ✅ Anvil RPC OK" || echo " ❌ Anvil RPC FAILED"
 
-          # Check what RPC URL the app is using (grep the served JS bundle)
-          echo "Checking app RPC URL..."
-          curl -s http://localhost:${APP_PORT}/ | grep -oE 'http://[^"]+:8545[^"]*' | head -3 || echo "(RPC URL not found in HTML — may be in JS chunks)"
+            # Check what RPC URL the app is using (grep the served JS bundle)
+            echo "Checking app RPC URL..."
+            curl -s http://localhost:${APP_PORT}/ | grep -oE 'http://[^"]+:8545[^"]*' | head -3 || echo "(RPC URL not found in HTML — may be in JS chunks)"
+          fi
 
           # Map project name to its playwright config path
           if [[ "${{ matrix.config.project }}" == "manager-premium" ]]; then
@@ -377,7 +386,7 @@ jobs:
           retention-days: 7
 
       - name: Stop E2E stack
-        if: always()
+        if: always() && matrix.config.project != 'cross-app'
         run: |
           if [[ "${{ steps.box.outputs.available }}" == "true" ]]; then
             PANOPTES_CONTRACTS_FILE="./panoptes/contracts.snapshot.json" \
