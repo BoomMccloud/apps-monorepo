@@ -1,4 +1,7 @@
-import { isRecord } from '@ens-apps/utils/isRecord'
+// By path, not by package name: vite.config.ts loads this module through the
+// build check before any workspace package can be resolved, as it loads
+// packages/config.
+import { isRecord } from '../../../../../packages/utils/src/isRecord'
 import type { SwitchRules } from './switchRules'
 
 /**
