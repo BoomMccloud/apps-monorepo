@@ -1,22 +1,50 @@
 import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import {
   ANALYTICS_CHOICE_STATUS,
-  ANALYTICS_NOTICE_COLLECTED,
-  ANALYTICS_NOTICE_COLLECTED_HEADING,
-  ANALYTICS_NOTICE_COLLECTED_LEAD,
-  ANALYTICS_NOTICE_DELETION,
-  ANALYTICS_NOTICE_DELETION_EMAIL,
-  ANALYTICS_NOTICE_DELETION_HEADING,
   ANALYTICS_NOTICE_HEADING,
   ANALYTICS_NOTICE_INTRO,
-  ANALYTICS_NOTICE_PROCESSOR,
-  ANALYTICS_NOTICE_PROCESSOR_HEADING,
-  ANALYTICS_NOTICE_SHARING,
-  ANALYTICS_NOTICE_SHARING_HEADING,
+  ANALYTICS_NOTICE_SECTIONS,
   ANALYTICS_SWITCH_LABEL,
+  type NoticeSection,
 } from '@ens-apps/utils/analyticsConsentWording'
 import { useId } from 'react'
 import { Switch } from '@/components/ui/switch'
+
+const NoticeSectionView = ({
+  section,
+}: {
+  readonly section: NoticeSection
+}) => (
+  <>
+    <h3 className="mt-6 font-semibold text-ens-blue-dark text-lg">
+      {section.heading}
+    </h3>
+    {section.paragraphs.map((paragraph) => (
+      <p className="mt-4 text-gray-700" key={paragraph}>
+        {paragraph}
+      </p>
+    ))}
+    {section.items.length > 0 ? (
+      <ul className="mt-4 list-disc space-y-2 pl-6 text-gray-700">
+        {section.items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    ) : null}
+    {section.mail ? (
+      <p className="mt-4 text-gray-700">
+        {section.mail.before}{' '}
+        <a
+          className="text-ens-blue hover:underline"
+          href={`mailto:${section.mail.address}`}
+        >
+          {section.mail.address}
+        </a>
+        {section.mail.after}
+      </p>
+    ) : null}
+  </>
+)
 
 /** The privacy policy's analytics section: what is collected, and the visitor's choice. */
 export const AnalyticsNotice = () => {
@@ -54,43 +82,9 @@ export const AnalyticsNotice = () => {
         {consent === 'unknown' ? null : ANALYTICS_CHOICE_STATUS[consent]}
       </p>
 
-      <h3 className="mt-6 font-semibold text-ens-blue-dark text-lg">
-        {ANALYTICS_NOTICE_COLLECTED_HEADING}
-      </h3>
-      <p className="mt-4 text-gray-700">{ANALYTICS_NOTICE_COLLECTED_LEAD}</p>
-      <ul className="mt-4 list-disc space-y-2 pl-6 text-gray-700">
-        {ANALYTICS_NOTICE_COLLECTED.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-
-      <h3 className="mt-6 font-semibold text-ens-blue-dark text-lg">
-        {ANALYTICS_NOTICE_SHARING_HEADING}
-      </h3>
-      {ANALYTICS_NOTICE_SHARING.map((paragraph) => (
-        <p className="mt-4 text-gray-700" key={paragraph}>
-          {paragraph}
-        </p>
+      {ANALYTICS_NOTICE_SECTIONS.map((section) => (
+        <NoticeSectionView key={section.heading} section={section} />
       ))}
-
-      <h3 className="mt-6 font-semibold text-ens-blue-dark text-lg">
-        {ANALYTICS_NOTICE_PROCESSOR_HEADING}
-      </h3>
-      <p className="mt-4 text-gray-700">{ANALYTICS_NOTICE_PROCESSOR}</p>
-
-      <h3 className="mt-6 font-semibold text-ens-blue-dark text-lg">
-        {ANALYTICS_NOTICE_DELETION_HEADING}
-      </h3>
-      <p className="mt-4 text-gray-700">
-        {ANALYTICS_NOTICE_DELETION.before}{' '}
-        <a
-          className="text-ens-blue hover:underline"
-          href={`mailto:${ANALYTICS_NOTICE_DELETION_EMAIL}`}
-        >
-          {ANALYTICS_NOTICE_DELETION_EMAIL}
-        </a>
-        {ANALYTICS_NOTICE_DELETION.after}
-      </p>
     </section>
   )
 }

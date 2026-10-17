@@ -2,6 +2,7 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
+import { NOTICE_STATEMENTS } from '@ens-apps/utils/analyticsNoticeStatements'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -27,31 +28,8 @@ describe('AnalyticsNotice', () => {
     renderNotice('pending')
     const text = notice().textContent ?? ''
 
-    for (const statement of [
-      /wallet address/i,
-      /pages you visit/i,
-      /page addresses can contain the names and wallet addresses/i,
-      /clicks and other interactions/i,
-      /performance timings/i,
-      /campaign and referrer details/i,
-      /session recordings, which show what is on the page/i,
-      /survey answers/i,
-      /usage events/i,
-      /failed transaction/i,
-      /support chat/i,
-      /backend/i,
-      /which features are on/i,
-      /error reports/i,
-      /IP address, time zone and browser details/i,
-      /to understand how the apps are used/i,
-      /PostHog processes this data for ENS as its processor/i,
-      /applies to all ENS apps that share it/i,
-      /kept in cookies that these apps share/i,
-      /your visitor id is your wallet address/i,
-      /the ENS sites on the same domain can read it/i,
-      /wallet addresses and \.eth names are cut from error messages, but other names may remain/i,
-    ]) {
-      expect(text).toMatch(statement)
+    for (const [statement, pattern] of NOTICE_STATEMENTS) {
+      expect(text, statement).toMatch(pattern)
     }
     expect(
       screen.getByRole('link', { name: 'privacy@ens.domains' }),
