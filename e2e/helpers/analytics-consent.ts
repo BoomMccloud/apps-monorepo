@@ -1,5 +1,6 @@
 import {
   type BrowserContext,
+  type Cookie,
   expect,
   type Locator,
   type Page,
@@ -19,7 +20,7 @@ import type {
  */
 export const CONSENT_COOKIE_NAME = 'ens.analytics.consent'
 
-export const BANNER_HEADING = 'Help us improve ENS'
+const BANNER_HEADING = 'Help us improve ENS'
 const FRIENDLY_SENTENCE =
   /Optional analytics help ENS understand how the apps are used, find problems and improve the experience/
 // The statement of what is collected names, at least, these.
@@ -33,7 +34,7 @@ const COLLECTED = [
 /** Events leave the browser in batches a few seconds after they happen. */
 export const FLUSH_TIMEOUT = 30_000
 /** How long a check of "nothing was sent" waits for a batch that never comes. */
-export const QUIET_PERIOD = 8_000
+const QUIET_PERIOD = 8_000
 /** How far from the screen's edges a card in a bottom corner may sit. */
 const CORNER_GAP_PX = 64
 
@@ -45,6 +46,10 @@ export const acceptButton = (page: Page): Locator =>
 
 export const declineButton = (page: Page): Locator =>
   consentBanner(page).getByRole('button', { name: 'Decline' })
+
+/** The banner's link to the privacy notice. */
+export const noticeLink = (page: Page): Locator =>
+  consentBanner(page).getByRole('link', { name: 'Privacy notice' })
 
 export const analyticsNotice = (page: Page): Locator =>
   page.getByRole('region', { name: 'Analytics', exact: true })
@@ -76,18 +81,22 @@ export const forgetConsent = async (context: BrowserContext): Promise<void> => {
   await context.clearCookies({ name: CONSENT_COOKIE_NAME })
 }
 
-export const storedConsent = async (
+export const consentCookie = async (
   context: BrowserContext,
-): Promise<string | undefined> =>
+): Promise<Cookie | undefined> =>
   (await context.cookies()).find(
     (cookie) => cookie.name === CONSENT_COOKIE_NAME,
-  )?.value
+  )
+
+export const storedConsent = async (
+  context: BrowserContext,
+): Promise<string | undefined> => (await consentCookie(context))?.value
 
 /** PostHog keeps its visitor id under `ph_<key>_posthog`; its own consent key under `__ph_opt_in_out_<key>`. */
 const isPostHogKey = (key: string): boolean => /^(__)?ph_/.test(key)
 
 /** Every PostHog entry the browser holds, in cookies or either storage. */
-export const postHogStorageKeys = async (page: Page): Promise<string[]> => {
+const postHogStorageKeys = async (page: Page): Promise<string[]> => {
   const cookieNames = (await page.context().cookies()).map(
     (cookie) => cookie.name,
   )
@@ -274,17 +283,31 @@ export const keepScreenshot = async (
   await page.screenshot({ path: testInfo.outputPath(`${name}.png`) })
 }
 
-/** Throw an uncaught error and an unhandled rejection in the page. */
+/**
+ * Throw an uncaught error and an unhandled rejection in the page, and return
+ * once the page has seen both, after the SDK's own handlers have run.
+ */
 export const throwPageErrors = async (
   page: Page,
   messages: { readonly error: string; readonly rejection: string },
 ): Promise<void> => {
-  await page.evaluate(({ error, rejection }) => {
-    window.setTimeout(() => {
-      throw new Error(error)
-    }, 0)
-    void Promise.reject(new Error(rejection))
-  }, messages)
+  await page.evaluate(
+    ({ error, rejection }) =>
+      new Promise<void>((resolve) => {
+        let unseen = 2
+        const seen = () => {
+          unseen -= 1
+          if (unseen === 0) resolve()
+        }
+        window.addEventListener('error', seen, { once: true })
+        window.addEventListener('unhandledrejection', seen, { once: true })
+        window.setTimeout(() => {
+          throw new Error(error)
+        }, 0)
+        void Promise.reject(new Error(rejection))
+      }),
+    messages,
+  )
 }
 
 export const eventsNamed = (
@@ -308,18 +331,26 @@ export const expectEventsSent = async (
   }
 }
 
-/** Wait out a full batch interval, then confirm the browser sent nothing. */
+/** The browser has sent PostHog nothing at or after a moment. */
+export const expectNothingSent = (standIn: PostHogStandIn, since = 0): void => {
+  const sent = standIn
+    .browserRequests()
+    .filter((request) => request.receivedAt >= since)
+    .map((request) => `${request.method} ${request.path}`)
+  expect(sent, 'requests from the browser to PostHog').toEqual([])
+}
+
+/**
+ * Wait out the longest wait the SDK has before it sends, then confirm the
+ * browser sent nothing.
+ */
 export const expectBrowserSilent = async (
   page: Page,
   standIn: PostHogStandIn,
   since = 0,
 ): Promise<void> => {
   await page.waitForTimeout(QUIET_PERIOD)
-  const sent = standIn
-    .browserRequests()
-    .filter((request) => request.receivedAt >= since)
-    .map((request) => `${request.method} ${request.path}`)
-  expect(sent, 'requests from the browser to PostHog').toEqual([])
+  expectNothingSent(standIn, since)
 }
 
 /**
@@ -448,10 +479,7 @@ export const browserRequestsSince = (
  * A Vite dev server always serves its client; a production build never does.
  * Recordings are off on a dev server, as they were before the pause.
  */
-export const isDevServer = async (
-  page: Page,
-  origin: string,
-): Promise<boolean> => {
+const isDevServer = async (page: Page, origin: string): Promise<boolean> => {
   const response = await page.request
     .get(`${origin}/@vite/client`, { failOnStatusCode: false })
     .catch(() => null)

@@ -1,9 +1,11 @@
 import { expect, type Page, test } from '@playwright/test'
 import {
+  acceptButton,
   analyticsNotice,
   analyticsSwitch,
-  CONSENT_COOKIE_NAME,
   consentBanner,
+  consentCookie,
+  declineButton,
   waitForAnalyticsReady,
 } from '../../../helpers/analytics-consent.js'
 import {
@@ -80,16 +82,24 @@ const open = async (page: Page, url: string): Promise<void> => {
   await waitForAnalyticsReady(page)
 }
 
-/** The choice the app's notice reports once reloaded: its switch, and its words. */
+/**
+ * Load a page afresh. A tab already on that page, or on another fragment of
+ * it, is only moved to the fragment by `goto`, so it is loaded again.
+ */
+const load = async (page: Page, url: string): Promise<void> => {
+  const isOnPage = page.url().split('#')[0] === url.split('#')[0]
+  await page.goto(url)
+  if (isOnPage) await page.reload()
+  await waitForAnalyticsReady(page)
+}
+
+/** The choice the app's notice reports once loaded: its switch, and its words. */
 const expectNoticeReports = async (
   page: Page,
   url: string,
   choice: 'accepted' | 'declined',
 ): Promise<void> => {
-  await page.goto(url)
-  // A tab already on the notice only moves to its fragment: load it again.
-  await page.reload()
-  await waitForAnalyticsReady(page)
+  await load(page, url)
   await expect(analyticsNotice(page)).toContainText(new RegExp(choice, 'i'))
   if (choice === 'accepted') {
     await expect(analyticsSwitch(page)).toBeChecked()
@@ -97,11 +107,6 @@ const expectNoticeReports = async (
     await expect(analyticsSwitch(page)).not.toBeChecked()
   }
 }
-
-const sharedConsentCookie = async (page: Page) =>
-  (await page.context().cookies()).find(
-    (cookie) => cookie.name === CONSENT_COOKIE_NAME,
-  )
 
 test.describe('One analytics choice for both apps', () => {
   test.beforeEach(async ({ context }) => {
@@ -114,11 +119,9 @@ test.describe('One analytics choice for both apps', () => {
   }) => {
     await open(page, MANAGER)
     await expect(consentBanner(page)).toBeVisible()
-    await consentBanner(page)
-      .getByRole('button', { name: 'Accept Analytics' })
-      .click()
+    await acceptButton(page).click()
     await expect(consentBanner(page)).toBeHidden()
-    expect((await sharedConsentCookie(page))?.domain).toBe(`.${SHARED_PARENT}`)
+    expect((await consentCookie(context))?.domain).toBe(`.${SHARED_PARENT}`)
 
     const explorer = await context.newPage()
     await open(explorer, EXPLORER)
@@ -140,9 +143,9 @@ test.describe('One analytics choice for both apps', () => {
   }) => {
     await open(page, EXPLORER)
     await expect(consentBanner(page)).toBeVisible()
-    await consentBanner(page).getByRole('button', { name: 'Decline' }).click()
+    await declineButton(page).click()
     await expect(consentBanner(page)).toBeHidden()
-    expect((await sharedConsentCookie(page))?.domain).toBe(`.${SHARED_PARENT}`)
+    expect((await consentCookie(context))?.domain).toBe(`.${SHARED_PARENT}`)
 
     const manager = await context.newPage()
     await open(manager, MANAGER)
@@ -163,9 +166,7 @@ test.describe('One analytics choice for both apps', () => {
     context,
   }) => {
     await open(page, MANAGER)
-    await consentBanner(page)
-      .getByRole('button', { name: 'Accept Analytics' })
-      .click()
+    await acceptButton(page).click()
     const explorer = await context.newPage()
     await expectNoticeReports(
       explorer,

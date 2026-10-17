@@ -1,0 +1,266 @@
+import { NOTICE_STATEMENTS } from '@ens-apps/utils/analyticsNoticeStatements'
+import {
+  type BrowserContext,
+  expect,
+  type Locator,
+  type Page,
+} from '@playwright/test'
+import {
+  acceptButton,
+  analyticsNotice,
+  analyticsSwitch,
+  browserRequestsSince,
+  consentBanner,
+  exceptionEventsWith,
+  exceptionMessagesOf,
+  expectBrowserSilent,
+  expectNoPostHogStorage,
+  expectRecordingsWhereBuilt,
+  FLUSH_TIMEOUT,
+  forgetConsent,
+  identifiesWallet,
+  noticeLink,
+  pageDistinctId,
+  requestText,
+  storedConsent,
+  throwPageErrors,
+  waitForAnalyticsReady,
+} from './analytics-consent.js'
+import { type PostHogStandIn, TEST_WALLET } from './posthog-stand-in.js'
+
+/**
+ * The walks both apps' specs share: the same visitor doing the same things,
+ * with each app's own way in (its page, its wallet connection) passed in.
+ */
+
+export const DESKTOP = { width: 1280, height: 800 } as const
+export const PHONE = { width: 360, height: 780 } as const
+export const SEARCHED_NAME = 'nick.eth'
+const ERROR_NAME = 'vitalik.eth'
+
+/** Open the app at a path in a tab, and wait for its SDK. */
+type OpenPage = (page: Page, path: string) => Promise<void>
+
+/** The notice says everything it must, in the words a reader would look for. */
+const expectNoticeSays = async (notice: Locator): Promise<void> => {
+  const text = (await notice.textContent()) ?? ''
+  for (const [statement, pattern] of NOTICE_STATEMENTS) {
+    expect(text, statement).toMatch(pattern)
+  }
+}
+
+/** The banner's link opens the notice, which shows that nothing is chosen yet. */
+export const expectNoticeOpenedFromBanner = async ({
+  page,
+  context,
+  open,
+  origin,
+  noticePath,
+}: {
+  readonly page: Page
+  readonly context: BrowserContext
+  readonly open: OpenPage
+  readonly origin: string
+  readonly noticePath: string
+}): Promise<void> => {
+  await forgetConsent(context)
+  await open(page, '/')
+  await noticeLink(page).click()
+  await expect(page).toHaveURL(`${origin}${noticePath}`)
+
+  const notice = analyticsNotice(page)
+  await expect(notice).toBeVisible()
+  await expectNoticeSays(notice)
+  await expect(analyticsSwitch(page)).toBeVisible()
+  await expect(analyticsSwitch(page)).not.toBeChecked()
+  await expect(notice).toContainText(/not chosen/i)
+}
+
+/**
+ * A pressed button hides the banner for good: through a reload, a wallet
+ * connect and disconnect, and another reload.
+ */
+export const expectChoiceKept = async ({
+  page,
+  context,
+  open,
+  press,
+  stored,
+  connectButton,
+  connect,
+  disconnect,
+}: {
+  readonly page: Page
+  readonly context: BrowserContext
+  readonly open: OpenPage
+  readonly press: (page: Page) => Locator
+  /** What the shared cookie holds once the button is pressed. */
+  readonly stored: string
+  readonly connectButton: (page: Page) => Locator
+  readonly connect: () => Promise<void>
+  readonly disconnect: () => Promise<void>
+}): Promise<void> => {
+  await forgetConsent(context)
+  await open(page, '/')
+  await press(page).click()
+  await expect(consentBanner(page)).toBeHidden()
+  expect(await storedConsent(context)).toBe(stored)
+
+  await page.reload()
+  await waitForAnalyticsReady(page)
+  await expect(connectButton(page)).toBeVisible()
+  await expect(consentBanner(page)).toBeHidden()
+
+  await connect()
+  await expect(consentBanner(page)).toBeHidden()
+
+  await disconnect()
+  await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
+  await expect(consentBanner(page)).toBeHidden()
+  expect(await storedConsent(context)).toBe(stored)
+
+  await page.reload()
+  await waitForAnalyticsReady(page)
+  await expect(connectButton(page)).toBeVisible()
+  await expect(consentBanner(page)).toBeHidden()
+  expect(await storedConsent(context)).toBe(stored)
+}
+
+/**
+ * Error reports after Accept reach PostHog with the address and the .eth name
+ * cut out; one thrown before the press never does. No CSP report reaches the
+ * host.
+ */
+export const expectErrorReportsCutDown = async (
+  page: Page,
+  standIn: PostHogStandIn,
+): Promise<void> => {
+  await throwPageErrors(page, {
+    error: `after-consent-error for ${TEST_WALLET} on ${ERROR_NAME}`,
+    rejection: `after-consent-rejection for ${TEST_WALLET} on ${ERROR_NAME}`,
+  })
+  await expect
+    .poll(() => exceptionEventsWith(standIn, 'after-consent-error').length, {
+      timeout: FLUSH_TIMEOUT,
+    })
+    .toBe(1)
+  await expect
+    .poll(
+      () => exceptionEventsWith(standIn, 'after-consent-rejection').length,
+      { timeout: FLUSH_TIMEOUT },
+    )
+    .toBe(1)
+  for (const message of exceptionMessagesOf([
+    ...exceptionEventsWith(standIn, 'after-consent-error'),
+    ...exceptionEventsWith(standIn, 'after-consent-rejection'),
+  ])) {
+    expect(message.toLowerCase()).not.toContain(TEST_WALLET.toLowerCase())
+    expect(message).not.toContain(ERROR_NAME)
+  }
+  expect(exceptionEventsWith(standIn, 'before-consent')).toEqual([])
+  expect(
+    standIn
+      .browserRequests()
+      .filter((request) => /csp|report/i.test(request.path)),
+  ).toEqual([])
+}
+
+/**
+ * Switching to Decline on the notice stops analytics at once: no page view,
+ * no click, no error report, nothing about the wallet. Switching back
+ * resumes events and recordings.
+ */
+export const expectNoticeSwitchStopsAndResumes = async ({
+  page,
+  context,
+  standIn,
+  open,
+  origin,
+  noticePath,
+  afterDeclinePath,
+  resumedPath,
+  connect,
+}: {
+  readonly page: Page
+  readonly context: BrowserContext
+  readonly standIn: PostHogStandIn
+  readonly open: OpenPage
+  readonly origin: string
+  readonly noticePath: string
+  /** A page opened after the Decline, with a query that marks its requests. */
+  readonly afterDeclinePath: string
+  readonly resumedPath: string
+  readonly connect: () => Promise<void>
+}): Promise<void> => {
+  await forgetConsent(context)
+  await page.setViewportSize(DESKTOP)
+  await open(page, '/')
+  await acceptButton(page).click()
+  await connect()
+  await expect
+    .poll(() => identifiesWallet(standIn, TEST_WALLET), {
+      timeout: FLUSH_TIMEOUT,
+    })
+    .toBe(true)
+
+  await open(page, noticePath)
+  const notice = analyticsNotice(page)
+  const toggle = analyticsSwitch(page)
+  await expect(toggle).toBeChecked()
+  await expect(notice).toContainText(/accepted/i)
+
+  // Decline.
+  await toggle.click()
+  const declinedAt = Date.now()
+  await expect(toggle).not.toBeChecked()
+  await expect(notice).toContainText(/declined/i)
+  expect(await storedConsent(context)).toBe('0')
+  await expectNoPostHogStorage(page)
+  // The visitor id no longer carries the wallet address.
+  expect((await pageDistinctId(page))?.toLowerCase()).not.toBe(
+    TEST_WALLET.toLowerCase(),
+  )
+
+  // Nothing that happens after the press is sent: no page view, no click, no
+  // error report. The press's own click may have been sent before it took
+  // effect, so the silence is measured from here.
+  const quietFrom = Date.now()
+  await throwPageErrors(page, {
+    error: 'after-decline-error',
+    rejection: 'after-decline-rejection',
+  })
+  await page.mouse.click(DESKTOP.width / 2, DESKTOP.height / 2)
+  await open(page, afterDeclinePath)
+  await expectBrowserSilent(page, standIn, quietFrom)
+  const sentSinceDecline = browserRequestsSince(standIn, declinedAt)
+  expect(
+    sentSinceDecline.filter((request) =>
+      /after-decline/.test(requestText(request)),
+    ),
+  ).toEqual([])
+  expect(
+    sentSinceDecline.filter((request) =>
+      requestText(request).toLowerCase().includes(TEST_WALLET.toLowerCase()),
+    ),
+  ).toEqual([])
+
+  // Switch back: events and recordings resume.
+  await open(page, noticePath)
+  await expect(analyticsSwitch(page)).not.toBeChecked()
+  const resumedAt = Date.now()
+  await analyticsSwitch(page).click()
+  await expect(analyticsSwitch(page)).toBeChecked()
+  await expect(analyticsNotice(page)).toContainText(/accepted/i)
+  expect(await storedConsent(context)).toBe('1')
+  await open(page, resumedPath)
+  await expect
+    .poll(
+      () =>
+        browserRequestsSince(standIn, resumedAt).some((request) =>
+          request.events.some((event) => event.event === '$pageview'),
+        ),
+      { timeout: FLUSH_TIMEOUT },
+    )
+    .toBe(true)
+  await expectRecordingsWhereBuilt(page, standIn, origin, resumedAt)
+}

@@ -6,6 +6,7 @@ import {
 } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { gunzipSync } from 'node:zlib'
+import { isRecord } from '@ens-apps/utils/isRecord'
 
 /**
  * A stand-in for the PostHog host that records every request it receives.
@@ -20,14 +21,21 @@ import { gunzipSync } from 'node:zlib'
  * port): a request that names no PostHog project is from neither app.
  */
 
-export const POSTHOG_STAND_IN_PORT = Number(
-  process.env.POSTHOG_STAND_IN_PORT ?? 4973,
-)
+const POSTHOG_STAND_IN_PORT = Number(process.env.POSTHOG_STAND_IN_PORT ?? 4973)
 
 export type CapturedEvent = {
   readonly event: string
   readonly properties: Readonly<Record<string, unknown>>
 }
+
+/**
+ * Where a request came from: the browser (it carries an `Origin`), the
+ * Manager's server (no `Origin`, and a PostHog project named: every call the
+ * apps make to PostHog carries the project's key `phc_…` in its path, query
+ * or body, or the project's secret key as `Authorization`), or another
+ * program on the machine.
+ */
+export type RequestSource = 'browser' | 'server' | 'elsewhere'
 
 export type RecordedRequest = {
   readonly method: string
@@ -38,13 +46,7 @@ export type RecordedRequest = {
   readonly body: string
   /** The PostHog events the body carries, if it carries any. */
   readonly events: readonly CapturedEvent[]
-  readonly isFromBrowser: boolean
-  /**
-   * From neither app: no `Origin`, and no PostHog project named. Every call
-   * the apps make to PostHog carries the project's key (`phc_…`) in its
-   * path, query or body, or the project's secret key as `Authorization`.
-   */
-  readonly isFromElsewhere: boolean
+  readonly source: RequestSource
   readonly receivedAt: number
 }
 
@@ -111,8 +113,15 @@ const decodeBody = (raw: Buffer): string => {
   return text
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+const sourceOf = (
+  headers: Readonly<Record<string, string | undefined>>,
+  namesProject: boolean,
+): RequestSource =>
+  headers.origin !== undefined
+    ? 'browser'
+    : namesProject
+      ? 'server'
+      : 'elsewhere'
 
 const toEvent = (value: unknown): CapturedEvent | null =>
   isRecord(value) && typeof value.event === 'string'
@@ -226,8 +235,7 @@ export const startPostHogStandIn = async (
       const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
       const body = decodeBody(raw)
       const headers = flatHeaders(request)
-      const isFromBrowser = headers.origin !== undefined
-      const hasProjectKey =
+      const namesProject =
         PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
         headers.authorization !== undefined
       recorded.push({
@@ -237,8 +245,7 @@ export const startPostHogStandIn = async (
         headers,
         body,
         events: eventsIn(body),
-        isFromBrowser,
-        isFromElsewhere: !isFromBrowser && !hasProjectKey,
+        source: sourceOf(headers, namesProject),
         receivedAt: Date.now(),
       })
 
@@ -270,16 +277,15 @@ export const startPostHogStandIn = async (
   })
   const { port } = server.address() as AddressInfo
 
-  const browserRequests = () => recorded.filter((entry) => entry.isFromBrowser)
+  const requestsFrom = (source: RequestSource) =>
+    recorded.filter((entry) => entry.source === source)
+  const browserRequests = () => requestsFrom('browser')
 
   return {
     url: `http://127.0.0.1:${port}`,
     requests: () => [...recorded],
     browserRequests,
-    serverRequests: () =>
-      recorded.filter(
-        (entry) => !entry.isFromBrowser && !entry.isFromElsewhere,
-      ),
+    serverRequests: () => requestsFrom('server'),
     browserEvents: () => browserRequests().flatMap((entry) => entry.events),
     failEventRequests: (marker, status = 502) => {
       eventBehaviors.push({ marker, status, released: Promise.resolve() })

@@ -7,13 +7,10 @@ import {
 import {
   acceptButton,
   analyticsNotice,
-  analyticsSwitch,
   browserRequestsSince,
   consentBanner,
   declineButton,
   eventsNamed,
-  exceptionEventsWith,
-  exceptionMessagesOf,
   expectBannerWording,
   expectBrowserSilent,
   expectCardClearOf,
@@ -24,19 +21,27 @@ import {
   expectNoPostHogStorage,
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
+  expectNothingSent,
   expectRecordingsWhereBuilt,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
   keepScreenshot,
-  pageDistinctId,
+  noticeLink,
   presentAsVisitorBrowser,
-  QUIET_PERIOD,
-  requestText,
   storedConsent,
   throwPageErrors,
   waitForAnalyticsReady,
 } from '../../../helpers/analytics-consent.js'
+import {
+  DESKTOP,
+  expectChoiceKept,
+  expectErrorReportsCutDown,
+  expectNoticeOpenedFromBanner,
+  expectNoticeSwitchStopsAndResumes,
+  PHONE,
+  SEARCHED_NAME,
+} from '../../../helpers/analytics-walks.js'
 import {
   type PostHogStandIn,
   STAND_IN_FLAG_RULES,
@@ -53,10 +58,6 @@ import {
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
 const ORIGIN = new URL(PORTAL_APP_URL).origin
-const DESKTOP = { width: 1280, height: 800 }
-const PHONE = { width: 360, height: 780 }
-const SEARCHED_NAME = 'nick.eth'
-const ERROR_NAME = 'vitalik.eth'
 const FULL_POLICY = 'https://app.ens.domains/legal/privacy-policy'
 // Any resolver address: the page's sidebar holds the Help and Settings menus.
 const RESOLVER_PAGE = '/resolver/0x8FADE66B79cC9f707aB26799354482EB93a5B7dD'
@@ -198,45 +199,31 @@ test.describe('Explorer analytics choice', () => {
 
     // The link opens the notice inside the Explorer, and the banner stays
     // until the visitor chooses.
-    await banner.getByRole('link', { name: 'Privacy notice' }).click()
+    await noticeLink(page).click()
     await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
     await expect(analyticsNotice(page)).toBeVisible()
     await expect(banner).toBeVisible()
   })
 
-  for (const [button, stored] of [
-    ['Accept Analytics', '1'],
-    ['Decline', '0'],
+  for (const [button, press, stored] of [
+    ['Accept Analytics', acceptButton, '1'],
+    ['Decline', declineButton, '0'],
   ] as const) {
     test(`C1: pressing ${button} hides the banner through a reload and a wallet connect and disconnect`, async ({
       page,
       context,
       wallet,
     }) => {
-      await forgetConsent(context)
-      await openFresh(page)
-      await consentBanner(page).getByRole('button', { name: button }).click()
-      await expect(consentBanner(page)).toBeHidden()
-      expect(await storedConsent(context)).toBe(stored)
-
-      await page.reload()
-      await waitForAnalyticsReady(page)
-      await expect(connectButton(page)).toBeVisible()
-      await expect(consentBanner(page)).toBeHidden()
-
-      await connectWithHeadlessWallet(page, wallet)
-      await expect(consentBanner(page)).toBeHidden()
-
-      await wallet.changeAccounts([])
-      await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
-      await expect(consentBanner(page)).toBeHidden()
-      expect(await storedConsent(context)).toBe(stored)
-
-      await page.reload()
-      await waitForAnalyticsReady(page)
-      await expect(connectButton(page)).toBeVisible()
-      await expect(consentBanner(page)).toBeHidden()
-      expect(await storedConsent(context)).toBe(stored)
+      await expectChoiceKept({
+        page,
+        context,
+        open: openFresh,
+        press,
+        stored,
+        connectButton,
+        connect: () => connectWithHeadlessWallet(page, wallet),
+        disconnect: () => wallet.changeAccounts([]),
+      })
     })
   }
 
@@ -261,9 +248,9 @@ test.describe('Explorer analytics choice', () => {
       await expect(connectButton(page)).toBeVisible({ timeout: 30_000 })
     }
 
-    // Before any choice.
+    // Before any choice. The silence after Decline covers this walk too.
     await walk()
-    await expectBrowserSilent(page, standIn)
+    expectNothingSent(standIn)
     expect(await storedConsent(context)).toBeUndefined()
     await expectNoPostHogStorage(page)
 
@@ -294,7 +281,6 @@ test.describe('Explorer analytics choice', () => {
       error: 'before-consent-error',
       rejection: 'before-consent-rejection',
     })
-    await page.waitForTimeout(1_000)
 
     const acceptedAt = Date.now()
     await acceptButton(page).click()
@@ -335,34 +321,7 @@ test.describe('Explorer analytics choice', () => {
       .toBe(true)
     await expectRecordingsWhereBuilt(page, standIn, ORIGIN, acceptedAt)
 
-    await throwPageErrors(page, {
-      error: `after-consent-error for ${TEST_WALLET} on ${ERROR_NAME}`,
-      rejection: `after-consent-rejection for ${TEST_WALLET} on ${ERROR_NAME}`,
-    })
-    await expect
-      .poll(() => exceptionEventsWith(standIn, 'after-consent-error').length, {
-        timeout: FLUSH_TIMEOUT,
-      })
-      .toBe(1)
-    await expect
-      .poll(
-        () => exceptionEventsWith(standIn, 'after-consent-rejection').length,
-        { timeout: FLUSH_TIMEOUT },
-      )
-      .toBe(1)
-    for (const message of exceptionMessagesOf([
-      ...exceptionEventsWith(standIn, 'after-consent-error'),
-      ...exceptionEventsWith(standIn, 'after-consent-rejection'),
-    ])) {
-      expect(message.toLowerCase()).not.toContain(TEST_WALLET.toLowerCase())
-      expect(message).not.toContain(ERROR_NAME)
-    }
-    expect(exceptionEventsWith(standIn, 'before-consent')).toEqual([])
-    expect(
-      standIn
-        .browserRequests()
-        .filter((request) => /csp|report/i.test(request.path)),
-    ).toEqual([])
+    await expectErrorReportsCutDown(page, standIn)
 
     // Disconnecting: analytics go on and the choice is still Accept.
     const disconnectedAt = Date.now()
@@ -410,72 +369,17 @@ test.describe('Explorer analytics choice', () => {
     wallet,
   }) => {
     test.setTimeout(600_000)
-    await forgetConsent(context)
-    await page.setViewportSize(DESKTOP)
-    await openFresh(page)
-    await acceptButton(page).click()
-    await connectWithHeadlessWallet(page, wallet)
-    await expect
-      .poll(() => identifiesWallet(standIn, TEST_WALLET), {
-        timeout: FLUSH_TIMEOUT,
-      })
-      .toBe(true)
-
-    await openFresh(page, NOTICE_PATH)
-    const notice = analyticsNotice(page)
-    const toggle = analyticsSwitch(page)
-    await expect(toggle).toBeChecked()
-    await expect(notice).toContainText(/accepted/i)
-
-    await toggle.click()
-    const declinedAt = Date.now()
-    await expect(toggle).not.toBeChecked()
-    await expect(notice).toContainText(/declined/i)
-    expect(await storedConsent(context)).toBe('0')
-    await expectNoPostHogStorage(page)
-    expect((await pageDistinctId(page))?.toLowerCase()).not.toBe(
-      TEST_WALLET.toLowerCase(),
-    )
-
-    await throwPageErrors(page, {
-      error: 'after-decline-error',
-      rejection: 'after-decline-rejection',
+    await expectNoticeSwitchStopsAndResumes({
+      page,
+      context,
+      standIn,
+      open: openFresh,
+      origin: ORIGIN,
+      noticePath: NOTICE_PATH,
+      afterDeclinePath: '/?after-decline',
+      resumedPath: '/',
+      connect: () => connectWithHeadlessWallet(page, wallet),
     })
-    await page.mouse.click(DESKTOP.width / 2, DESKTOP.height / 2)
-    await openFresh(page, '/?after-decline')
-    await page.waitForTimeout(QUIET_PERIOD)
-    const quietFrom = Date.now()
-    await expectBrowserSilent(page, standIn, quietFrom)
-    const sentSinceDecline = browserRequestsSince(standIn, declinedAt)
-    expect(
-      sentSinceDecline.filter((request) =>
-        /after-decline/.test(requestText(request)),
-      ),
-    ).toEqual([])
-    expect(
-      sentSinceDecline.filter((request) =>
-        requestText(request).toLowerCase().includes(TEST_WALLET.toLowerCase()),
-      ),
-    ).toEqual([])
-
-    await openFresh(page, NOTICE_PATH)
-    await expect(analyticsSwitch(page)).not.toBeChecked()
-    const resumedAt = Date.now()
-    await analyticsSwitch(page).click()
-    await expect(analyticsSwitch(page)).toBeChecked()
-    await expect(analyticsNotice(page)).toContainText(/accepted/i)
-    expect(await storedConsent(context)).toBe('1')
-    await openFresh(page)
-    await expect
-      .poll(
-        () =>
-          browserRequestsSince(standIn, resumedAt).some((request) =>
-            request.events.some((event) => event.event === '$pageview'),
-          ),
-        { timeout: FLUSH_TIMEOUT },
-      )
-      .toBe(true)
-    await expectRecordingsWhereBuilt(page, standIn, ORIGIN, resumedAt)
   })
 
   test('C4: after a Decline nothing in flight, waiting to be tried again or sent by a page that closes reaches PostHog, and Accept sends again', async ({
@@ -494,22 +398,13 @@ test.describe('Explorer analytics choice', () => {
     page,
     context,
   }) => {
-    await forgetConsent(context)
-    await openFresh(page)
-    await consentBanner(page)
-      .getByRole('link', { name: 'Privacy notice' })
-      .click()
-    await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
-
-    const notice = analyticsNotice(page)
-    await expect(notice).toBeVisible()
-    const text = (await notice.textContent()) ?? ''
-    for (const [statement, pattern] of NOTICE_STATEMENTS) {
-      expect(text, statement).toMatch(pattern)
-    }
-    await expect(analyticsSwitch(page)).toBeVisible()
-    await expect(analyticsSwitch(page)).not.toBeChecked()
-    await expect(notice).toContainText(/not chosen/i)
+    await expectNoticeOpenedFromBanner({
+      page,
+      context,
+      open: openFresh,
+      origin: ORIGIN,
+      noticePath: NOTICE_PATH,
+    })
 
     // The full policy stays one click away.
     await expect(
@@ -517,38 +412,3 @@ test.describe('Explorer analytics choice', () => {
     ).toHaveAttribute('href', FULL_POLICY)
   })
 })
-
-/** What C5 asks the notice to say, each as the words a reader would look for. */
-const NOTICE_STATEMENTS: readonly (readonly [string, RegExp])[] = [
-  ['wallet addresses', /wallet address/i],
-  ['the IP address sent with every request', /IP address/i],
-  ['the time zone', /time zone/i],
-  ['browser details', /browser details/i],
-  ['page visits', /pages you visit/i],
-  ['names and addresses in page addresses', /page addresses/i],
-  ['clicks and other interactions', /clicks and other interactions/i],
-  ['performance timings', /performance timings/i],
-  ['campaign and referrer details', /campaign and referrer/i],
-  ['session recordings, which show what is on the page', /session recordings/i],
-  ['survey answers', /survey answers/i],
-  ['the usage events', /usage events/i],
-  ['the failed-transaction report', /failed transaction/i],
-  ['the support-chat link-up', /support chat/i],
-  ["the header that carries the visitor id to ENS's backend", /backend/i],
-  ['which features are on', /which features are on/i],
-  ['error reports', /error reports/i],
-  ['why it is collected', /\bto (understand|find|improve)\b/i],
-  ['PostHog as processor', /PostHog/],
-  ['PostHog as processor', /processor/i],
-  ['how to ask for deletion', /privacy@ens\.domains/],
-  ['how to ask for deletion', /delet/i],
-  ['the choice applies across the ENS apps that share it', /ENS apps/i],
-  ['the shared cookie holds the visitor id', /cookie/i],
-  [
-    'the visitor id is the wallet address once a wallet is connected',
-    /visitor id/i,
-  ],
-  ['the ENS sites on the shared domain can read it', /ENS sites/i],
-  ['addresses and .eth names are cut from error messages', /\.eth names/i],
-  ['other names may remain', /other names may remain/i],
-]
