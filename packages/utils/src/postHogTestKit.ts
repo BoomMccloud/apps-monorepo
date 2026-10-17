@@ -89,8 +89,8 @@ const decodeBody = async (
         ? fromBase64(decodeURIComponent(raw.slice('data='.length)))
         : raw,
     )
-  } catch {
-    return undefined
+  } catch (cause) {
+    throw new Error('the test kit cannot decode a body the SDK sent', { cause })
   }
 }
 

@@ -90,10 +90,11 @@ describe('decideFeatureSwitches', () => {
       ),
     ).resolves.toMatchObject({ migration: true })
     expect(fetchRules).toHaveBeenCalledOnce()
-    // The download carries the keys and nothing about the wallet.
-    expect(String(fetchRules.mock.calls[0]?.[0])).not.toContain(
-      TEST_WALLET.slice(2),
-    )
+    // The download carries the keys and nothing about the wallet, in its
+    // address, its headers or its body.
+    expect(
+      JSON.stringify(fetchRules.mock.calls[0]).toLowerCase(),
+    ).not.toContain(TEST_WALLET.slice(2).toLowerCase())
     expect(contents().size).toBe(0)
   })
 

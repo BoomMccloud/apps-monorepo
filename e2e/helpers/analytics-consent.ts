@@ -1,3 +1,4 @@
+import { isRecord } from '@ens-apps/utils/isRecord'
 import {
   type BrowserContext,
   type Cookie,
@@ -407,9 +408,7 @@ const exceptionMessages = (event: CapturedEvent): string[] => {
   const list = event.properties.$exception_list
   if (!Array.isArray(list)) return []
   return list.map((entry) =>
-    typeof entry === 'object' && entry !== null && 'value' in entry
-      ? String((entry as { value: unknown }).value)
-      : '',
+    isRecord(entry) && 'value' in entry ? String(entry.value) : '',
   )
 }
 

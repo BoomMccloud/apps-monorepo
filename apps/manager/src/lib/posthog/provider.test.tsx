@@ -206,6 +206,18 @@ describe('PHProvider', () => {
     expect(screen.getByText('granted')).not.toBeNull()
   })
 
+  it('boots the support chat, with no banner, even when PostHog fails to start', () => {
+    vi.mocked(posthog.init).mockImplementationOnce(() => {
+      throw new Error('init failed')
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    renderProvider()
+
+    expect(boot).toHaveBeenCalledWith({ app_id: 're9q5yti' })
+    expect(screen.getByText('unknown')).not.toBeNull()
+  })
+
   it('boots the support chat with the analytics link when the visitor accepted earlier', () => {
     vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
     renderProvider()
@@ -490,16 +502,24 @@ describe('PHProvider', () => {
 
   it('reports failed transaction runs until unmount', () => {
     const unsubscribe = vi.fn()
+    const unsubscribeLive = vi.fn()
     vi.mocked(transactionManager.onFailedRunTelemetry).mockReturnValueOnce(
       unsubscribe,
+    )
+    vi.mocked(transactionManager.onRunTelemetryEvent).mockReturnValueOnce(
+      unsubscribeLive,
     )
     const { unmount } = renderProvider()
     const listener = vi.mocked(transactionManager.onFailedRunTelemetry).mock
       .calls[0]?.[0]
     if (!listener) throw new Error('Missing failure telemetry listener')
-    vi.spyOn(console, 'groupCollapsed').mockImplementation(() => undefined)
-    vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    vi.spyOn(console, 'groupEnd').mockImplementation(() => undefined)
+    const groupCollapsed = vi
+      .spyOn(console, 'groupCollapsed')
+      .mockImplementation(() => undefined)
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const groupEnd = vi
+      .spyOn(console, 'groupEnd')
+      .mockImplementation(() => undefined)
 
     listener({
       run: { txId: 'tx', runId: 'run', status: 'error' },
@@ -516,7 +536,17 @@ describe('PHProvider', () => {
         source_app: 'manager',
       }),
     )
+    // On a development build the run is also written to the console.
+    expect(groupCollapsed).toHaveBeenCalledWith(
+      '[TM-RUN] failed tx status=error stage=submission',
+    )
+    expect(info).toHaveBeenCalledWith(
+      'summary',
+      expect.objectContaining({ runId: 'run', txId: 'tx' }),
+    )
+    expect(groupEnd).toHaveBeenCalledOnce()
     unmount()
     expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(unsubscribeLive).toHaveBeenCalledOnce()
   })
 })
