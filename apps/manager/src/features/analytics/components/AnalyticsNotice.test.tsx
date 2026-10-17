@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { NOT_CAPTURED_CLASS } from '@ens-apps/utils/analyticsConsent'
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
@@ -59,6 +60,12 @@ describe('AnalyticsNotice', () => {
     fireEvent.click(analyticsSwitch())
     expect(on.decline).toHaveBeenCalledOnce()
     expect(on.accept).not.toHaveBeenCalled()
+  })
+
+  it('keeps the switch out of what PostHog captures, so the press that declines is not sent as a click', () => {
+    renderNotice('granted')
+
+    expect(analyticsSwitch().closest(`.${NOT_CAPTURED_CLASS}`)).not.toBeNull()
   })
 
   it('cannot be switched before analytics have started', () => {

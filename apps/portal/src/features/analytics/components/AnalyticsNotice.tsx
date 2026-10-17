@@ -1,3 +1,4 @@
+import { NOT_CAPTURED_CLASS } from '@ens-apps/utils/analyticsConsent'
 import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import {
   ANALYTICS_CHOICE_STATUS,
@@ -61,7 +62,7 @@ export const AnalyticsNotice = () => {
         </p>
       ))}
 
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-3 ${NOT_CAPTURED_CLASS}`}>
         <Switch
           checked={consent === 'granted'}
           disabled={consent === 'unknown'}

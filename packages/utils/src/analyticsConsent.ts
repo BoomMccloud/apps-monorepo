@@ -178,6 +178,13 @@ export interface AnalyticsClient {
   ): void
 }
 
+/**
+ * The class PostHog neither captures nor records anything inside of. The
+ * notice's switch has it: the SDK sees the press that declines before the
+ * choice takes effect, so without it that click would leave as an event.
+ */
+export const NOT_CAPTURED_CLASS = 'ph-no-capture'
+
 /** Where the SDK itself reads the project's settings from. */
 export const projectSettingsUrl = (client: AnalyticsClient): string =>
   `${client.config.api_host.replace(/\/+$/, '')}/array/${client.config.token}/config`

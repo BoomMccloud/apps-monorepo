@@ -210,6 +210,7 @@ export const expectNoticeSwitchStopsAndResumes = async ({
   await expect(notice).toContainText(/accepted/i)
 
   // Decline.
+  const pressedAt = Date.now()
   await toggle.click()
   const declinedAt = Date.now()
   await expect(toggle).not.toBeChecked()
@@ -232,6 +233,14 @@ export const expectNoticeSwitchStopsAndResumes = async ({
   await page.mouse.click(DESKTOP.width / 2, DESKTOP.height / 2)
   await open(page, afterDeclinePath)
   await expectBrowserSilent(page, standIn, quietFrom)
+  // PostHog sees the press before the choice takes effect, so the switch is
+  // marked as not captured: the press that declines is not sent as a click.
+  expect(
+    browserRequestsSince(standIn, pressedAt)
+      .flatMap((request) => request.events)
+      .filter((event) => event.event === '$autocapture'),
+    'the press that declines, sent as a click',
+  ).toEqual([])
   const sentSinceDecline = browserRequestsSince(standIn, declinedAt)
   expect(
     sentSinceDecline.filter((request) =>
