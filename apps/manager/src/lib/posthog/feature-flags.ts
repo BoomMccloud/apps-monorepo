@@ -4,7 +4,8 @@ import type { EnsNetwork } from '@ens-apps/config'
  * Every feature switch the Manager reads from PostHog. The server decides
  * each one from PostHog's rules (`decideFeatureSwitches`), the page reads the
  * answers, and the rules check fails a deploy whose rules cannot decide one;
- * a new switch needs a name here and rules in PostHog, nothing else.
+ * a new switch needs a name here, an off answer in `ALL_SWITCHES_OFF` (the
+ * type checker asks for it) and rules in PostHog, nothing else.
  */
 export const POSTHOG_FEATURE_FLAGS = {
   I18N: 'i18n',

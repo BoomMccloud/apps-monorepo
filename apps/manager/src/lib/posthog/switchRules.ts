@@ -3,6 +3,9 @@ import type {
   FlagDefinitionCacheData,
   FlagDefinitionCacheProvider,
 } from 'posthog-node/experimental'
+// By path, not by package name: vite.config.ts loads this module through the
+// build check before any workspace package can be resolved.
+import { isRecord } from '../../../../../packages/utils/src/isRecord'
 import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
 
 /**
@@ -14,7 +17,7 @@ import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
 export type SwitchRules = FlagDefinitionCacheData
 
 /** Who the switches are decided for. */
-export type SwitchVisitor = {
+type SwitchVisitor = {
   readonly distinctId: string
   readonly address: string
 }
@@ -47,6 +50,13 @@ const ruleProblems = (
 ): readonly string[] => {
   const rule = rules.flags.find((flag) => flag.key === name)
   if (!rule) return [`${name}: missing from the rules`]
+  // PostHog's download holds objects; rules that do not are refused, not read.
+  if (
+    !(rule.filters?.groups ?? []).every(isRecord) ||
+    !propertiesOf(rule).every(isRecord)
+  ) {
+    return [`${name}: holds a condition or a property that is not an object`]
+  }
   const groupTypeIndex = rule.filters?.aggregation_group_type_index
   return [
     ...(rule.ensure_experience_continuity
@@ -94,9 +104,7 @@ const refuseNetwork = (): never => {
 const NO_POLLING_MS = 60 * 60 * 1000
 
 /** The switches the rules decided; one they could not decide is absent. */
-export type SwitchAnswers = Readonly<
-  Partial<Record<FeatureSwitchName, boolean>>
->
+type SwitchAnswers = Readonly<Partial<Record<FeatureSwitchName, boolean>>>
 
 /**
  * Decide each switch for one visitor from the rules alone. Nothing is ever

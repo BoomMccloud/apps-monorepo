@@ -44,6 +44,7 @@ describe('decideFeatureSwitches', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
+    vi.doUnmock('./switchRules')
   })
 
   it('decides from the stored rules, downloading nothing', async () => {
@@ -133,6 +134,31 @@ describe('decideFeatureSwitches', () => {
       message: expect.stringContaining(
         'the downloaded rules fail the rules check: migration: uses the is_set operator',
       ),
+    })
+  })
+
+  it('answers every switch off, and logs it once per instance, when deciding fails in any way', async () => {
+    vi.doMock('./switchRules', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('./switchRules')>()),
+      evaluateSwitches: vi
+        .fn()
+        .mockRejectedValue(new Error('the client failed')),
+    }))
+    const decide = await loadDecide()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { space } = storedSpace(switchRules())
+    const env = {
+      POSTHOG_SWITCH_RULES: space,
+      POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
+    }
+
+    await expect(decide(env, TEST_WALLET)).resolves.toEqual(ALL_SWITCHES_OFF)
+    await expect(decide(env, null)).resolves.toEqual(ALL_SWITCHES_OFF)
+
+    expect(errors).toHaveBeenCalledOnce()
+    expect(errors.mock.calls[0]?.[0]).toMatchObject({
+      _tag: 'FeatureSwitchesUndecided',
+      message: 'deciding the switches failed',
     })
   })
 

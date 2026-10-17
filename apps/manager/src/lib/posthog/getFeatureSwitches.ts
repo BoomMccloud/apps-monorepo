@@ -1,10 +1,12 @@
+import { isRecord } from '@ens-apps/utils/isRecord'
+import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { createServerFn } from '@tanstack/react-start'
 import { isAddress } from 'viem'
 import { getConnectionCookie } from '@/lib/connection-cookie'
 import { decideFeatureSwitches } from './decideFeatureSwitches'
 import type { DecidedFeatureSwitches } from './feature-flags'
 
-export type FeatureSwitchesInput = {
+type FeatureSwitchesInput = {
   /**
    * The wallet to decide for, null for none. When absent, the wallet in the
    * connection cookie. The browser passes it right after a connect, before
@@ -13,12 +15,17 @@ export type FeatureSwitchesInput = {
   readonly wallet?: string | null
 }
 
-const invalidInput = () => new Error('Invalid feature switches input')
+class InvalidFeatureSwitchesInput extends TaggedError(
+  'InvalidFeatureSwitchesInput',
+)<{ readonly message: string }> {}
+
+const invalidInput = () =>
+  new InvalidFeatureSwitchesInput({ message: 'Invalid feature switches input' })
 
 const validateFeatureSwitchesInput = (input: unknown): FeatureSwitchesInput => {
   if (input === undefined) return {}
-  if (typeof input !== 'object' || input === null) throw invalidInput()
-  if (!('wallet' in input) || input.wallet === undefined) return {}
+  if (!isRecord(input)) throw invalidInput()
+  if (input.wallet === undefined) return {}
   if (input.wallet === null || typeof input.wallet === 'string') {
     return { wallet: input.wallet }
   }

@@ -4,7 +4,7 @@ import { downloadSwitchRules } from './switchRulesDownload'
 
 const SECRET_KEY_NAME = 'POSTHOG_PROJECT_SECRET_API_KEY'
 
-export type SwitchRulesBuildCheck = {
+type SwitchRulesBuildCheck = {
   readonly status: 'passed' | 'skipped' | 'failed'
   readonly message: string
 }

@@ -447,6 +447,21 @@ describe('PHProvider', () => {
       )
     })
 
+    it("follows a choice removed in another tab or app, and blanks the support chat's link", async () => {
+      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+      renderRestored(WALLET)
+      await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+      const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+
+      act(() => following?.onChange('pending'))
+
+      expect(screen.getByText('pending')).not.toBeNull()
+      expect(update).toHaveBeenCalledWith({
+        posthog_distinct_id: '',
+        recent_replay: '',
+      })
+    })
+
     it('follows a Decline made in another tab or app, and has the switches written again from what is known for the connected wallet', async () => {
       vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
       renderRestored(WALLET)

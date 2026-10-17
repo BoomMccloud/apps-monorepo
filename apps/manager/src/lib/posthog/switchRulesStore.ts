@@ -9,7 +9,7 @@ import type { SwitchRules } from './switchRules'
  */
 export const SWITCH_RULES_KEY = 'switch-rules'
 
-export type StoredSwitchRules = {
+type StoredSwitchRules = {
   readonly rules: SwitchRules
   readonly etag: string | null
 }

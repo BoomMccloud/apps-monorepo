@@ -130,16 +130,10 @@ const rulesForRequest = async (
     .exhaustive()
 }
 
-/**
- * Every switch for one visitor, decided on the server from PostHog's rules:
- * for the wallet when there is one, and alike for every visitor without one.
- * The wallet never leaves the Worker. When the rules cannot decide every
- * switch, every switch is off and the reason is logged.
- */
-export const decideFeatureSwitches = async (
+const decide = async (
   env: SwitchRulesEnv,
   wallet: string | null,
-  options: { readonly fetchRules?: typeof fetch } = {},
+  options: { readonly fetchRules?: typeof fetch },
 ): Promise<FeatureSwitches> => {
   const rules = await rulesForRequest(env, options.fetchRules)
   if (rules.status === 'unusable') {
@@ -160,3 +154,25 @@ export const decideFeatureSwitches = async (
   }
   return { ...ALL_SWITCHES_OFF, ...answers }
 }
+
+/**
+ * Every switch for one visitor, decided on the server from PostHog's rules:
+ * for the wallet when there is one, and alike for every visitor without one.
+ * The wallet never leaves the Worker. When the rules cannot decide every
+ * switch, or deciding fails in any way, every switch is off and the reason is
+ * logged: the switches are never a reason for a page not to render.
+ */
+export const decideFeatureSwitches = (
+  env: SwitchRulesEnv,
+  wallet: string | null,
+  options: { readonly fetchRules?: typeof fetch } = {},
+): Promise<FeatureSwitches> =>
+  decide(env, wallet, options).catch((cause: unknown) => {
+    reportOnce(
+      new FeatureSwitchesUndecided({
+        message: 'deciding the switches failed',
+        cause,
+      }),
+    )
+    return ALL_SWITCHES_OFF
+  })

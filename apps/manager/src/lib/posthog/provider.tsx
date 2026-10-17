@@ -1,4 +1,5 @@
 import {
+  type AnalyticsConsent,
   acceptAnalytics,
   declineAnalytics,
 } from '@ens-apps/utils/analyticsConsent'
@@ -16,9 +17,14 @@ import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 // boundary below.
 import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
+import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
 import posthog from './client'
-import { linkSupportChat, unlinkSupportChat } from './supportChat'
+import {
+  linkSupportChat,
+  relinkSupportChat,
+  unlinkSupportChat,
+} from './supportChat'
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'
 import { usePostHogStart } from './usePostHogStart'
@@ -43,25 +49,33 @@ export const PHProvider = ({
   const [resetCount, setResetCount] = useState(0)
   const recordReset = () => setResetCount((count) => count + 1)
 
+  // What the page does about a choice, whether the visitor pressed it here or
+  // it was made in another tab or app.
+  const applyChoice = (choice: AnalyticsConsent) => {
+    setConsent(choice)
+    match(choice)
+      .with('granted', linkSupportChat)
+      .with('denied', () => {
+        unlinkSupportChat()
+        // The reset that clears the visitor id also empties the switches.
+        recordReset()
+      })
+      .with('pending', unlinkSupportChat)
+      .exhaustive()
+  }
+
   usePostHogStart(isHydrated, pageStart.switches, setConsent)
   useFollowedChoice(
     posthog,
     consent !== 'unknown',
     import.meta.env.DEV,
-    (followed) => {
-      setConsent(followed)
-      if (followed === 'granted') linkSupportChat()
-      if (followed === 'denied') {
-        unlinkSupportChat()
-        // The Decline followed here reset the SDK.
-        recordReset()
-      }
-    },
+    applyChoice,
   )
   useWalletIdentity(
     posthog,
     consent,
     address ? { address, chainId, connectorName: connector?.name } : null,
+    relinkSupportChat,
   )
   useFeatureSwitchSync({
     wallet: address ?? null,
@@ -74,16 +88,12 @@ export const PHProvider = ({
 
   const accept = () => {
     void acceptAnalytics(posthog, { isDev: import.meta.env.DEV })
-    linkSupportChat()
-    setConsent('granted')
+    applyChoice('granted')
   }
 
   const decline = () => {
     declineAnalytics(posthog)
-    unlinkSupportChat()
-    // The reset that clears the visitor id also empties the switches.
-    recordReset()
-    setConsent('denied')
+    applyChoice('denied')
   }
 
   const content = isHydrated ? (

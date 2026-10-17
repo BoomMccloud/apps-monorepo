@@ -2,6 +2,7 @@
 // build check before any workspace package can be resolved, as it loads
 // packages/config.
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
+import { TaggedError } from '../../../../../packages/utils/src/neverthrow'
 import type { SwitchRules } from './switchRules'
 
 /**
@@ -15,7 +16,7 @@ export type SwitchRulesSource = {
   readonly secretKey: string
 }
 
-export type SwitchRulesDownload =
+type SwitchRulesDownload =
   | {
       readonly status: 'downloaded'
       readonly rules: SwitchRules
@@ -56,10 +57,15 @@ const failed = (reason: string): SwitchRulesDownload => ({
   reason,
 })
 
+/** The request did not complete: the network failed, or it timed out. */
+class SwitchRulesDownloadFailed extends TaggedError(
+  'SwitchRulesDownloadFailed',
+)<{ readonly message: string; readonly cause: unknown }> {}
+
 const requestRules = async (
   source: SwitchRulesSource,
   options: { readonly etag: string | null; readonly fetchRules?: typeof fetch },
-): Promise<Response | Error> => {
+): Promise<Response | SwitchRulesDownloadFailed> => {
   const fetchRules = options.fetchRules ?? fetch
   return fetchRules(switchRulesUrl(source), {
     headers: {
@@ -68,8 +74,12 @@ const requestRules = async (
       ...(options.etag ? { 'If-None-Match': options.etag } : {}),
     },
     signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-  }).catch((cause: unknown) =>
-    cause instanceof Error ? cause : new Error(String(cause)),
+  }).catch(
+    (cause: unknown) =>
+      new SwitchRulesDownloadFailed({
+        message: cause instanceof Error ? cause.message : String(cause),
+        cause,
+      }),
   )
 }
 
@@ -89,7 +99,7 @@ const readRules = async (response: Response): Promise<SwitchRulesDownload> => {
   }
 }
 
-const failedRequest = (error: Error): SwitchRulesDownload =>
+const failedRequest = (error: SwitchRulesDownloadFailed): SwitchRulesDownload =>
   failed(`the download failed: ${error.message}`)
 
 /**
@@ -101,7 +111,7 @@ export const downloadSwitchRules = async (
   options: { readonly fetchRules?: typeof fetch } = {},
 ): Promise<SwitchRulesDownload> => {
   const response = await requestRules(source, { etag: null, ...options })
-  return response instanceof Error
+  return response instanceof SwitchRulesDownloadFailed
     ? failedRequest(response)
     : readRules(response)
 }
@@ -117,6 +127,8 @@ export const downloadSwitchRulesIfChanged = async (
   options: { readonly fetchRules?: typeof fetch } = {},
 ): Promise<SwitchRulesRecheck> => {
   const response = await requestRules(source, { etag, ...options })
-  if (response instanceof Error) return failedRequest(response)
+  if (response instanceof SwitchRulesDownloadFailed) {
+    return failedRequest(response)
+  }
   return response.status === 304 ? { status: 'unchanged' } : readRules(response)
 }

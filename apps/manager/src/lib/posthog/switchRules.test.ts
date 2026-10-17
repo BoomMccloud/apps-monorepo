@@ -163,6 +163,23 @@ describe('checkSwitchRules', () => {
     )
   })
 
+  it('refuses a rule whose conditions or properties are not objects, instead of reading them', async () => {
+    const problems = await checkSwitchRules(
+      switchRules({
+        i18n: flagRule('i18n', [null as never]),
+        migration: flagRule('migration', [
+          { properties: [null as never], rollout_percentage: 100 },
+        ]),
+      }),
+    )
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        'i18n: holds a condition or a property that is not an object',
+        'migration: holds a condition or a property that is not an object',
+      ]),
+    )
+  })
+
   it('rejects empty rules', async () => {
     const problems = await checkSwitchRules({
       flags: [],
