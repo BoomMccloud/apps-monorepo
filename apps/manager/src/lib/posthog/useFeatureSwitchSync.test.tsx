@@ -50,8 +50,8 @@ const lastWrite = () => vi.mocked(posthog.updateFlags).mock.calls.at(-1)
 /** A server answer the test settles when it chooses. */
 const pendingAnswer = () => {
   const answer = Promise.withResolvers<{
-    wallet: string
-    switches: FeatureSwitches
+    readonly wallet: string
+    readonly switches: FeatureSwitches
   }>()
   return {
     promise: answer.promise,
