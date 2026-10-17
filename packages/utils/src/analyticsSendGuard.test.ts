@@ -147,3 +147,20 @@ describe('the send guard', () => {
     })
   })
 })
+
+describe('a second evaluation of the guard module', () => {
+  beforeEach(() => {
+    network.reset()
+  })
+
+  it('hands its client to the wrappers the first evaluation installed', async () => {
+    vi.resetModules()
+    const again = await import('./analyticsSendGuard')
+
+    again.guardPostHogSends(clientWith('denied'))
+    const response = await fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+
+    expect(response.status).toBe(200)
+    expect(network.fetch).not.toHaveBeenCalled()
+  })
+})

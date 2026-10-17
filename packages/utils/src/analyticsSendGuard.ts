@@ -56,6 +56,8 @@ const isToHostOf = (
       (target.pathname === prefix || target.pathname.startsWith(`${prefix}/`))
     )
   } catch {
+    // A request to an address that does not parse cannot be sent, and a host
+    // that does not parse is one the SDK cannot send to: nothing to hold.
     return false
   }
 }
@@ -67,6 +69,8 @@ const INSTALLED = '__ensAnalyticsSendGuardInstalled'
  * that tells the wrappers which client to consult. They go in when this module
  * loads, before the SDK's module does, and the SDK is started later, so the
  * client reaches them through that call and lives in the closure that reads it.
+ * A module evaluated again (a hot reload, a second copy in a bundle) hands its
+ * client to the wrappers already in place, through the first call.
  */
 const install = (): ((client: GuardedClient) => void) => {
   let consulted: GuardedClient | undefined
@@ -78,9 +82,13 @@ const install = (): ((client: GuardedClient) => void) => {
     isToHostOf(consulted, input) &&
     !isGranted(consulted)
 
-  const page = globalThis as typeof globalThis & { [INSTALLED]?: true }
-  if (typeof window === 'undefined' || page[INSTALLED]) return consult
-  page[INSTALLED] = true
+  const page = globalThis as typeof globalThis & {
+    [INSTALLED]?: (client: GuardedClient) => void
+  }
+  if (typeof window === 'undefined') return consult
+  const installed = page[INSTALLED]
+  if (installed) return installed
+  page[INSTALLED] = consult
 
   const send = globalThis.fetch?.bind(globalThis)
   if (send) {

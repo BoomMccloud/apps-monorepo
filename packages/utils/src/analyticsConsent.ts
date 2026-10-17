@@ -201,8 +201,14 @@ const projectSettingsUrl = (client: AnalyticsClient): string =>
  */
 const loadProjectSettings = async (client: AnalyticsClient): Promise<void> => {
   const settings = await fetch(projectSettingsUrl(client))
-    .then((response) => (response.ok ? response.json() : undefined))
-    .catch(() => undefined)
+    .then((response) => {
+      if (!response.ok) throw new Error(`the host answered ${response.status}`)
+      return response.json()
+    })
+    .catch((cause: unknown) => {
+      console.warn('[posthog] project settings failed to load', cause)
+      return undefined
+    })
   if (client.get_explicit_consent_status() !== 'granted') return
   client._onRemoteConfig(
     isRecord(settings) ? { ok: true, config: settings } : { ok: false },

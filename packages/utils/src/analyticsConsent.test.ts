@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type AnalyticsClient,
+  acceptAnalytics,
   collectionOff,
   collectionOn,
   declineAnalytics,
@@ -266,5 +267,61 @@ describe('declineAnalytics', () => {
     const [reset] = client.reset.mock.invocationCallOrder
     expect(client.reset).toHaveBeenCalledWith(true)
     expect(secondOptOut).toBeGreaterThan(reset ?? 0)
+  })
+})
+
+describe('acceptAnalytics, when the project settings cannot be loaded', () => {
+  const acceptedClient = () => ({
+    config: { token: 'test-key', api_host: 'https://posthog.example' },
+    get_explicit_consent_status: vi.fn(() => 'granted' as const),
+    get_distinct_id: vi.fn(() => 'visitor'),
+    identify: vi.fn(),
+    register: vi.fn(),
+    opt_in_capturing: vi.fn(),
+    opt_out_capturing: vi.fn(),
+    reset: vi.fn(),
+    set_config: vi.fn(),
+    _onRemoteConfig: vi.fn(),
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('tells the SDK there are none, and says so in the console', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    )
+    const client = acceptedClient()
+
+    await acceptAnalytics(client satisfies AnalyticsClient, { isDev: false })
+
+    expect(client._onRemoteConfig).toHaveBeenCalledWith({ ok: false })
+    expect(warn).toHaveBeenCalledWith(
+      '[posthog] project settings failed to load',
+      expect.any(Error),
+    )
+  })
+
+  it('does the same when the host answers with an error', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 503 })),
+    )
+    const client = acceptedClient()
+
+    await acceptAnalytics(client, { isDev: false })
+
+    expect(client._onRemoteConfig).toHaveBeenCalledWith({ ok: false })
+    expect(warn).toHaveBeenCalledWith(
+      '[posthog] project settings failed to load',
+      new Error('the host answered 503'),
+    )
   })
 })
