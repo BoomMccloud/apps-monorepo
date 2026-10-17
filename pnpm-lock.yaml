@@ -195,7 +195,7 @@ catalogs:
       specifier: ^6.0.0
       version: 6.2.12
     posthog-js:
-      specifier: ^1.398.3
+      specifier: 1.404.1
       version: 1.404.1
     typescript:
       specifier: ^7.0.2
@@ -1254,6 +1254,12 @@ importers:
       '@types/react':
         specifier: ^19.1.12
         version: 19.2.7
+      happy-dom:
+        specifier: 'catalog:'
+        version: 20.13.2
+      posthog-js:
+        specifier: 'catalog:'
+        version: 1.404.1
       react:
         specifier: ^19.2.5
         version: 19.2.5
