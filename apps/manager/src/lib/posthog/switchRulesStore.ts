@@ -1,3 +1,4 @@
+import { isRecord } from '@ens-apps/utils/isRecord'
 import type { SwitchRules } from './switchRules'
 
 /**
@@ -11,11 +12,7 @@ export const SWITCH_RULES_KEY = 'switch-rules'
 export type StoredSwitchRules = {
   readonly rules: SwitchRules
   readonly etag: string | null
-  readonly storedAt: string
 }
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isStoredRules = (value: unknown): value is StoredSwitchRules =>
   isRecord(value) &&
@@ -23,8 +20,7 @@ const isStoredRules = (value: unknown): value is StoredSwitchRules =>
   Array.isArray(value.rules.flags) &&
   isRecord(value.rules.groupTypeMapping) &&
   isRecord(value.rules.cohorts) &&
-  (value.etag === null || typeof value.etag === 'string') &&
-  typeof value.storedAt === 'string'
+  (value.etag === null || typeof value.etag === 'string')
 
 /** The stored rules, or null when none are stored or they cannot be read. */
 export const readStoredRules = async (

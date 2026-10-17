@@ -49,24 +49,23 @@ const lastWrite = () => vi.mocked(posthog.updateFlags).mock.calls.at(-1)
 
 /** A server answer the test settles when it chooses. */
 const pendingAnswer = () => {
-  const answer: {
-    resolve: (switches: FeatureSwitches) => void
-    reject: (cause: unknown) => void
-  } = { resolve: () => {}, reject: () => {} }
-  const promise = new Promise<{ wallet: string; switches: FeatureSwitches }>(
-    (resolve, reject) => {
-      answer.resolve = (switches) => resolve({ wallet: OTHER_WALLET, switches })
-      answer.reject = reject
-    },
-  )
-  return { promise, ...answer }
+  const answer = Promise.withResolvers<{
+    wallet: string
+    switches: FeatureSwitches
+  }>()
+  return {
+    promise: answer.promise,
+    resolve: (switches: FeatureSwitches) =>
+      answer.resolve({ wallet: OTHER_WALLET, switches }),
+    reject: answer.reject,
+  }
 }
 
 const renderSync = (input: FeatureSwitchSyncInput) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  const wrapper = ({ children }: { children: ReactNode }) => (
+  const wrapper = ({ children }: { readonly children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
   return renderHook(

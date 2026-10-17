@@ -9,7 +9,7 @@ class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
 }> {}
 
 /** The server's switch answers for a wallet, or for a visitor with none. */
-export const fetchFeatureSwitches = (wallet: string | null) =>
+const fetchFeatureSwitches = (wallet: string | null) =>
   fromPromise(
     getFeatureSwitches({ data: { wallet } }).then(({ switches }) => switches),
     (cause) => new GetFeatureSwitchesError({ cause }),

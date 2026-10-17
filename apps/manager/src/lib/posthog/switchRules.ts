@@ -104,7 +104,6 @@ export type SwitchAnswers = Readonly<
 export const evaluateSwitches = async (
   rules: SwitchRules,
   visitor: SwitchVisitor,
-  names: readonly FeatureSwitchName[] = FEATURE_SWITCH_NAMES,
 ): Promise<SwitchAnswers> => {
   const client = new PostHog('switch-rules', {
     host: 'http://switch-rules.invalid',
@@ -119,10 +118,10 @@ export const evaluateSwitches = async (
     const flags = await client.getAllFlags(visitor.distinctId, {
       personProperties: { address: visitor.address },
       onlyEvaluateLocally: true,
-      flagKeys: [...names],
+      flagKeys: [...FEATURE_SWITCH_NAMES],
     })
     return Object.fromEntries(
-      names.flatMap((name) => {
+      FEATURE_SWITCH_NAMES.flatMap((name) => {
         const value = flags[name]
         return typeof value === 'boolean' ? [[name, value]] : []
       }),
@@ -140,19 +139,20 @@ export const evaluateSwitches = async (
  */
 export const checkSwitchRules = async (
   rules: SwitchRules,
-  names: readonly FeatureSwitchName[] = FEATURE_SWITCH_NAMES,
 ): Promise<readonly string[]> => {
-  const structural = names.flatMap((name) => ruleProblems(rules, name))
+  const structural = FEATURE_SWITCH_NAMES.flatMap((name) =>
+    ruleProblems(rules, name),
+  )
   const visitors = [
     { label: 'a wallet', visitor: switchVisitor(SAMPLE_WALLET) },
     { label: 'no wallet', visitor: NO_WALLET_VISITOR },
   ] as const
   const undecided = await Promise.all(
     visitors.map(async ({ label, visitor }) => {
-      const answers = await evaluateSwitches(rules, visitor, names)
-      return names
-        .filter((name) => answers[name] === undefined)
-        .map((name) => `${name}: no yes or no for ${label}`)
+      const answers = await evaluateSwitches(rules, visitor)
+      return FEATURE_SWITCH_NAMES.filter(
+        (name) => answers[name] === undefined,
+      ).map((name) => `${name}: no yes or no for ${label}`)
     }),
   )
   return [...structural, ...undecided.flat()]

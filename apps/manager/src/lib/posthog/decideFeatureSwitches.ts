@@ -115,13 +115,6 @@ const rulesForRequest = async (
         reason: `no rules are stored and ${reason}`,
       }),
     )
-    .with(
-      { status: 'unchanged' },
-      (): RequestRules => ({
-        status: 'unusable',
-        reason: 'no rules are stored and the download had nothing new',
-      }),
-    )
     .exhaustive()
 }
 

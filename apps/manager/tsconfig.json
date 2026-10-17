@@ -8,7 +8,7 @@
   "compilerOptions": {
     /* Language and Environment */
     "target": "ES2022",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": ["DOM", "DOM.Iterable", "ES2022", "ES2024.Promise"],
     "jsx": "react-jsx",
     "allowJs": true,
     "resolveJsonModule": true,

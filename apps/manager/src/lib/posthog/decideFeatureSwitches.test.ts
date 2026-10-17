@@ -16,7 +16,6 @@ const storedSpace = (rules: SwitchRules) =>
     [SWITCH_RULES_KEY]: JSON.stringify({
       rules,
       etag: '"v1"',
-      storedAt: '2026-10-16T00:00:00.000Z',
     }),
   })
 
@@ -75,7 +74,7 @@ describe('decideFeatureSwitches', () => {
 
   it('before the refresh has stored any rules, downloads its own for the request and stores nothing', async () => {
     const decide = await loadDecide()
-    const { space, values } = memoryKv()
+    const { space, contents } = memoryKv()
     const fetchRules = downloadAnswering(switchRules())
 
     await expect(
@@ -93,7 +92,7 @@ describe('decideFeatureSwitches', () => {
     expect(String(fetchRules.mock.calls[0]?.[0])).not.toContain(
       TEST_WALLET.slice(2),
     )
-    expect(values.size).toBe(0)
+    expect(contents().size).toBe(0)
   })
 
   it('decides from its own download when the stored rules cannot be read, and logs that once per instance', async () => {

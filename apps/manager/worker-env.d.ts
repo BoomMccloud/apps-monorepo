@@ -11,8 +11,8 @@ declare namespace Cloudflare {
     RHINESTONE_KEY_ID?: string
     RHINESTONE_TOKEN_RATE_LIMIT?: RateLimit
     /** PostHog project secret key limited to reading feature flags. */
-    POSTHOG_PROJECT_SECRET_API_KEY?: string
+    readonly POSTHOG_PROJECT_SECRET_API_KEY?: string
     /** The last good feature-switch rules, refreshed by the scheduled job. */
-    POSTHOG_SWITCH_RULES: KVNamespace
+    readonly POSTHOG_SWITCH_RULES: KVNamespace
   }
 }

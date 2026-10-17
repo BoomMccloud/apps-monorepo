@@ -5,7 +5,6 @@ import { memoryKv, switchRules } from './switchRules.mock'
 import { SWITCH_RULES_KEY } from './switchRulesStore'
 
 const SECRET_KEY = 'phs_secret_value'
-const NOW = () => new Date('2026-10-16T12:00:00.000Z')
 
 const answering =
   (response: () => Response) =>
@@ -22,8 +21,8 @@ const rulesResponse = (rules: SwitchRules, etag: string) =>
     { headers: { ETag: etag } },
   )
 
-const storedValue = (values: Map<string, string>) => {
-  const value = values.get(SWITCH_RULES_KEY)
+const storedValue = (contents: ReadonlyMap<string, string>) => {
+  const value = contents.get(SWITCH_RULES_KEY)
   return value === undefined ? undefined : JSON.parse(value)
 }
 
@@ -38,7 +37,7 @@ describe('refreshSwitchRules', () => {
   })
 
   it('stores rules that pass the check, with their ETag', async () => {
-    const { space, values } = memoryKv()
+    const { space, contents } = memoryKv()
     const env = {
       POSTHOG_SWITCH_RULES: space,
       POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
@@ -47,18 +46,16 @@ describe('refreshSwitchRules', () => {
     await expect(
       refreshSwitchRules(env, {
         fetchRules: answering(() => rulesResponse(switchRules(), '"v1"')),
-        now: NOW,
       }),
     ).resolves.toBe('stored')
-    expect(storedValue(values)).toEqual({
+    expect(storedValue(contents())).toEqual({
       rules: switchRules(),
       etag: '"v1"',
-      storedAt: '2026-10-16T12:00:00.000Z',
     })
   })
 
   it('replaces a stored value it cannot read, downloading the rules whole', async () => {
-    const { space, values } = memoryKv({ [SWITCH_RULES_KEY]: 'not json' })
+    const { space, contents } = memoryKv({ [SWITCH_RULES_KEY]: 'not json' })
     const fetchRules = vi.fn(
       answering(() => rulesResponse(switchRules(), '"v2"')),
     )
@@ -67,25 +64,24 @@ describe('refreshSwitchRules', () => {
       POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
     }
 
-    await expect(
-      refreshSwitchRules(env, { fetchRules, now: NOW }),
-    ).resolves.toBe('stored')
+    await expect(refreshSwitchRules(env, { fetchRules })).resolves.toBe(
+      'stored',
+    )
     const headers = new Headers(fetchRules.mock.calls[0]?.[1]?.headers)
     expect(headers.has('If-None-Match')).toBe(false)
-    expect(storedValue(values)).toMatchObject({ etag: '"v2"' })
+    expect(storedValue(contents())).toMatchObject({ etag: '"v2"' })
   })
 
   it('asks with the stored ETag and keeps the stored rules when they are unchanged', async () => {
-    const { space, values } = memoryKv()
+    const { space, contents } = memoryKv()
     const env = {
       POSTHOG_SWITCH_RULES: space,
       POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
     }
     await refreshSwitchRules(env, {
       fetchRules: answering(() => rulesResponse(switchRules(), '"v1"')),
-      now: NOW,
     })
-    const before = values.get(SWITCH_RULES_KEY)
+    const before = contents().get(SWITCH_RULES_KEY)
     const fetchRules = vi.fn(
       answering(() => new Response(null, { status: 304 })),
     )
@@ -96,20 +92,19 @@ describe('refreshSwitchRules', () => {
     expect(fetchRules.mock.calls[0]?.[1]?.headers).toMatchObject({
       'If-None-Match': '"v1"',
     })
-    expect(values.get(SWITCH_RULES_KEY)).toBe(before)
+    expect(contents().get(SWITCH_RULES_KEY)).toBe(before)
   })
 
   it('throws on rules that fail the check and leaves the last good rules in place', async () => {
-    const { space, values } = memoryKv()
+    const { space, contents } = memoryKv()
     const env = {
       POSTHOG_SWITCH_RULES: space,
       POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
     }
     await refreshSwitchRules(env, {
       fetchRules: answering(() => rulesResponse(switchRules(), '"v1"')),
-      now: NOW,
     })
-    const lastGood = values.get(SWITCH_RULES_KEY)
+    const lastGood = contents().get(SWITCH_RULES_KEY)
 
     await expect(
       refreshSwitchRules(env, {
@@ -121,11 +116,11 @@ describe('refreshSwitchRules', () => {
       _tag: 'SwitchRulesRefreshFailed',
       message: expect.stringContaining('migration: missing from the rules'),
     })
-    expect(values.get(SWITCH_RULES_KEY)).toBe(lastGood)
+    expect(contents().get(SWITCH_RULES_KEY)).toBe(lastGood)
   })
 
   it('throws when the download fails, and stores nothing', async () => {
-    const { space, values } = memoryKv()
+    const { space, contents } = memoryKv()
 
     await expect(
       refreshSwitchRules(
@@ -136,7 +131,7 @@ describe('refreshSwitchRules', () => {
         { fetchRules: answering(() => new Response('', { status: 403 })) },
       ),
     ).rejects.toMatchObject({ message: 'the download answered 403' })
-    expect(values.size).toBe(0)
+    expect(contents().size).toBe(0)
   })
 
   it('throws when the key or the space is missing', async () => {

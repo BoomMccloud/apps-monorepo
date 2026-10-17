@@ -74,8 +74,5 @@ export const checkSwitchRulesForBuild = async (
   return match(download)
     .with({ status: 'downloaded' }, ({ rules }) => checkRules(rules))
     .with({ status: 'failed' }, ({ reason }) => failed(reason))
-    .with({ status: 'unchanged' }, () =>
-      failed('the download answered 304 to a request without an ETag'),
-    )
     .exhaustive()
 }

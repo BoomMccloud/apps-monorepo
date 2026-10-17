@@ -1,3 +1,4 @@
+import { isRecord } from '@ens-apps/utils/isRecord'
 import type { SwitchRules } from './switchRules'
 
 /**
@@ -17,17 +18,16 @@ export type SwitchRulesDownload =
       readonly rules: SwitchRules
       readonly etag: string | null
     }
-  | { readonly status: 'unchanged' }
   | { readonly status: 'failed'; readonly reason: string }
+
+/** A download made with the ETag of the rules already held. */
+type SwitchRulesRecheck = SwitchRulesDownload | { readonly status: 'unchanged' }
 
 const DOWNLOAD_TIMEOUT_MS = 5_000
 
 /** The same request posthog-node makes for local evaluation. */
 export const switchRulesUrl = (source: SwitchRulesSource): string =>
   `${source.host.replace(/\/+$/, '')}/api/feature_flag/local_evaluation?token=${encodeURIComponent(source.projectKey)}&send_cohorts`
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 type RulesResponse = {
   readonly flags: SwitchRules['flags']
@@ -53,21 +53,12 @@ const failed = (reason: string): SwitchRulesDownload => ({
   reason,
 })
 
-/**
- * Download the project's switch rules. With the ETag of the rules already
- * held, an unchanged set answers 304, which PostHog bills as one request
- * instead of ten. Never throws: a failure is a value with its reason, which
- * never includes the secret key.
- */
-export const downloadSwitchRules = async (
+const requestRules = async (
   source: SwitchRulesSource,
-  options: {
-    readonly etag?: string | null
-    readonly fetchRules?: typeof fetch
-  } = {},
-): Promise<SwitchRulesDownload> => {
+  options: { readonly etag: string | null; readonly fetchRules?: typeof fetch },
+): Promise<Response | Error> => {
   const fetchRules = options.fetchRules ?? fetch
-  const response = await fetchRules(switchRulesUrl(source), {
+  return fetchRules(switchRulesUrl(source), {
     headers: {
       Authorization: `Bearer ${source.secretKey}`,
       'Content-Type': 'application/json',
@@ -77,10 +68,9 @@ export const downloadSwitchRules = async (
   }).catch((cause: unknown) =>
     cause instanceof Error ? cause : new Error(String(cause)),
   )
-  if (response instanceof Error) {
-    return failed(`the download failed: ${response.message}`)
-  }
-  if (response.status === 304) return { status: 'unchanged' }
+}
+
+const readRules = async (response: Response): Promise<SwitchRulesDownload> => {
   if (!response.ok) return failed(`the download answered ${response.status}`)
 
   const body: unknown = await response.json().catch(() => undefined)
@@ -94,4 +84,36 @@ export const downloadSwitchRules = async (
       cohorts: body.cohorts ?? {},
     },
   }
+}
+
+const failedRequest = (error: Error): SwitchRulesDownload =>
+  failed(`the download failed: ${error.message}`)
+
+/**
+ * Download the project's switch rules. Never throws: a failure is a value
+ * with its reason, which never includes the secret key.
+ */
+export const downloadSwitchRules = async (
+  source: SwitchRulesSource,
+  options: { readonly fetchRules?: typeof fetch } = {},
+): Promise<SwitchRulesDownload> => {
+  const response = await requestRules(source, { etag: null, ...options })
+  return response instanceof Error
+    ? failedRequest(response)
+    : readRules(response)
+}
+
+/**
+ * Download the rules again with the ETag of the rules already held: an
+ * unchanged set answers 304, which PostHog bills as one request instead of
+ * ten. Never throws, as `downloadSwitchRules`.
+ */
+export const downloadSwitchRulesIfChanged = async (
+  source: SwitchRulesSource,
+  etag: string,
+  options: { readonly fetchRules?: typeof fetch } = {},
+): Promise<SwitchRulesRecheck> => {
+  const response = await requestRules(source, { etag, ...options })
+  if (response instanceof Error) return failedRequest(response)
+  return response.status === 304 ? { status: 'unchanged' } : readRules(response)
 }

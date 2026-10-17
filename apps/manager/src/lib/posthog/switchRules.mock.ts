@@ -61,19 +61,24 @@ export const switchRules = (
   }
 }
 
-/** A Workers KV space held in memory. */
+/** A Workers KV space held in memory; `contents` reads what it holds now. */
 export const memoryKv = (initial: Readonly<Record<string, string>> = {}) => {
-  const values = new Map(Object.entries(initial))
+  // The one piece of state a fake of a store exists to keep: each write
+  // replaces the whole record.
+  let held: ReadonlyMap<string, string> = new Map(Object.entries(initial))
   const space = {
     get: async (key: string, type?: string) => {
-      const value = values.get(key)
+      const value = held.get(key)
       if (value === undefined) return null
       return type === 'json' ? JSON.parse(value) : value
     },
     put: async (key: string, value: string) => {
-      values.set(key, value)
+      held = new Map([...held, [key, value]])
     },
   }
   // Only `get` and `put` are used; the rest of the binding is not modelled.
-  return { space: space as unknown as KVNamespace, values }
+  return {
+    space: space as unknown as KVNamespace,
+    contents: (): ReadonlyMap<string, string> => held,
+  }
 }

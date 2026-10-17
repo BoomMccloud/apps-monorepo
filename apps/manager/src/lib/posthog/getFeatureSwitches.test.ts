@@ -12,8 +12,8 @@ vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({
     validator: (validate: (input: unknown) => unknown) => ({
       handler:
-        (handler: (options: { data: unknown }) => unknown) =>
-        ({ data }: { data: unknown }) =>
+        (handler: (options: { readonly data: unknown }) => unknown) =>
+        ({ data }: { readonly data: unknown }) =>
           handler({ data: validate(data) }),
     }),
   }),

@@ -6,13 +6,17 @@ import {
   switchRulesSource,
 } from './decideFeatureSwitches'
 import { checkSwitchRules, type SwitchRules } from './switchRules'
-import { downloadSwitchRules } from './switchRulesDownload'
+import {
+  downloadSwitchRules,
+  downloadSwitchRulesIfChanged,
+} from './switchRulesDownload'
 import { readStoredRules, writeStoredRules } from './switchRulesStore'
 
 /** A refresh that could not store new rules; the last good rules stay. */
-export class SwitchRulesRefreshFailed extends TaggedError(
-  'SwitchRulesRefreshFailed',
-)<{ readonly message: string; readonly cause: unknown }> {}
+class SwitchRulesRefreshFailed extends TaggedError('SwitchRulesRefreshFailed')<{
+  readonly message: string
+  readonly cause: unknown
+}> {}
 
 const refreshFailed = (message: string) =>
   new SwitchRulesRefreshFailed({ message, cause: undefined })
@@ -21,7 +25,6 @@ const refreshFailed = (message: string) =>
 const storeCheckedRules = async (
   space: KVNamespace,
   download: { readonly rules: SwitchRules; readonly etag: string | null },
-  now: () => Date,
 ): Promise<'stored'> => {
   const problems = await checkSwitchRules(download.rules)
   if (problems.length > 0) {
@@ -32,7 +35,6 @@ const storeCheckedRules = async (
   await writeStoredRules(space, {
     rules: download.rules,
     etag: download.etag,
-    storedAt: now().toISOString(),
   })
   return 'stored'
 }
@@ -45,10 +47,7 @@ const storeCheckedRules = async (
  */
 export const refreshSwitchRules = async (
   env: SwitchRulesEnv,
-  options: {
-    readonly fetchRules?: typeof fetch
-    readonly now?: () => Date
-  } = {},
+  options: { readonly fetchRules?: typeof fetch } = {},
 ): Promise<'stored' | 'unchanged'> => {
   const space = env.POSTHOG_SWITCH_RULES
   const source = switchRulesSource(env)
@@ -69,17 +68,16 @@ export const refreshSwitchRules = async (
     )
     return null
   })
-  const download = await downloadSwitchRules(source, {
-    etag: stored?.etag,
-    fetchRules: options.fetchRules,
-  })
+  const download = stored?.etag
+    ? await downloadSwitchRulesIfChanged(source, stored.etag, options)
+    : await downloadSwitchRules(source, options)
   return match(download)
     .with({ status: 'unchanged' }, () => 'unchanged' as const)
     .with({ status: 'failed' }, ({ reason }) => {
       throw refreshFailed(reason)
     })
     .with({ status: 'downloaded' }, (downloaded) =>
-      storeCheckedRules(space, downloaded, options.now ?? (() => new Date())),
+      storeCheckedRules(space, downloaded),
     )
     .exhaustive()
 }

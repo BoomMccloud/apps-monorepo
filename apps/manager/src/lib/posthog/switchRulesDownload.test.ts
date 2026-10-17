@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { switchRules } from './switchRules.mock'
 import {
   downloadSwitchRules,
+  downloadSwitchRulesIfChanged,
   type SwitchRulesSource,
   switchRulesUrl,
 } from './switchRulesDownload'
@@ -67,7 +68,7 @@ describe('downloadSwitchRules', () => {
     const fetchRules = vi.fn(answering(new Response(null, { status: 304 })))
 
     await expect(
-      downloadSwitchRules(SOURCE, { etag: '"v1"', fetchRules }),
+      downloadSwitchRulesIfChanged(SOURCE, '"v1"', { fetchRules }),
     ).resolves.toEqual({ status: 'unchanged' })
     expect(fetchRules.mock.calls[0]?.[1]?.headers).toMatchObject({
       'If-None-Match': '"v1"',
@@ -79,6 +80,11 @@ describe('downloadSwitchRules', () => {
       'a refused key',
       answering(new Response('nope', { status: 401 })),
       /answered 401/,
+    ],
+    [
+      'a 304 to a request that held no ETag',
+      answering(new Response(null, { status: 304 })),
+      /answered 304/,
     ],
     [
       'an unreachable host',
