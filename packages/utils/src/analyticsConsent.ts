@@ -10,6 +10,7 @@
  * `analyticsSendGuard`. Each app keeps its own banner, notice and wiring.
  */
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
+import type { Address } from 'viem'
 import { guardPostHogSends } from './analyticsSendGuard'
 import { isRecord } from './isRecord'
 
@@ -365,7 +366,7 @@ export const followStoredChoice = (
 }
 
 export type ConnectedWallet = {
-  readonly address: string
+  readonly address: Address
   readonly chainId: number | undefined
   readonly connectorName: string | undefined
 }

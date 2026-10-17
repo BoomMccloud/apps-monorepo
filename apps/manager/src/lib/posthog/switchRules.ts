@@ -3,6 +3,7 @@ import type {
   FlagDefinitionCacheData,
   FlagDefinitionCacheProvider,
 } from 'posthog-node/experimental'
+import type { Address } from 'viem'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
@@ -19,7 +20,8 @@ export type SwitchRules = FlagDefinitionCacheData
 /** Who the switches are decided for. */
 type SwitchVisitor = {
   readonly distinctId: string
-  readonly address: string
+  /** Empty for a visitor without a wallet, which posthog-node counts as set. */
+  readonly address: Address | ''
 }
 
 /**
@@ -32,7 +34,7 @@ export const NO_WALLET_VISITOR: SwitchVisitor = {
   address: '',
 }
 
-export const switchVisitor = (wallet: string | null): SwitchVisitor =>
+export const switchVisitor = (wallet: Address | null): SwitchVisitor =>
   wallet ? { distinctId: wallet, address: wallet } : NO_WALLET_VISITOR
 
 /** A wallet the rules check decides every switch for, besides no wallet. */

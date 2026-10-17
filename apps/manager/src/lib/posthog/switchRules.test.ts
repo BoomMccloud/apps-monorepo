@@ -34,7 +34,7 @@ describe('evaluateSwitches', () => {
   it('matches a wallet whatever the case of its address', async () => {
     const answers = await evaluateSwitches(
       switchRules(),
-      switchVisitor(TEST_WALLET.toUpperCase().replace('0X', '0x')),
+      switchVisitor(`0x${TEST_WALLET.slice(2).toUpperCase()}`),
     )
     expect(answers.migration).toBe(true)
   })

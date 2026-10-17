@@ -1,5 +1,6 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { match } from 'ts-pattern'
+import type { Address } from 'viem'
 import {
   ALL_SWITCHES_OFF,
   FEATURE_SWITCH_NAMES,
@@ -132,7 +133,7 @@ const rulesForRequest = async (
 
 const decide = async (
   env: SwitchRulesEnv,
-  wallet: string | null,
+  wallet: Address | null,
   options: { readonly fetchRules?: typeof fetch },
 ): Promise<FeatureSwitches> => {
   const rules = await rulesForRequest(env, options.fetchRules)
@@ -164,7 +165,7 @@ const decide = async (
  */
 export const decideFeatureSwitches = (
   env: SwitchRulesEnv,
-  wallet: string | null,
+  wallet: Address | null,
   options: { readonly fetchRules?: typeof fetch } = {},
 ): Promise<FeatureSwitches> =>
   decide(env, wallet, options).catch((cause: unknown) => {
