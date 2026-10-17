@@ -28,15 +28,6 @@ interface GuardedClient {
   get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
 }
 
-// The client the guard consults, set when the SDK starts. This module's own
-// record, read by nothing else (no-mutation).
-const guarded: { client: GuardedClient | undefined } = { client: undefined }
-
-/** Hold back every request to the client's host while its visitor has not accepted. */
-export const guardPostHogSends = (client: GuardedClient): void => {
-  guarded.client = client
-}
-
 const isGranted = (client: GuardedClient): boolean => {
   try {
     return client.get_explicit_consent_status() === 'granted'
@@ -69,16 +60,26 @@ const isToHostOf = (
   }
 }
 
-const isHeld = (input: RequestInfo | URL): boolean => {
-  const { client } = guarded
-  return client !== undefined && isToHostOf(client, input) && !isGranted(client)
-}
-
 const INSTALLED = '__ensAnalyticsSendGuardInstalled'
 
-const install = (): void => {
+/**
+ * Wrap `fetch` and `sendBeacon` once, in a browser only, and return the call
+ * that tells the wrappers which client to consult. They go in when this module
+ * loads, before the SDK's module does, and the SDK is started later, so the
+ * client reaches them through that call and lives in the closure that reads it.
+ */
+const install = (): ((client: GuardedClient) => void) => {
+  let consulted: GuardedClient | undefined
+  const consult = (client: GuardedClient): void => {
+    consulted = client
+  }
+  const isHeld = (input: RequestInfo | URL): boolean =>
+    consulted !== undefined &&
+    isToHostOf(consulted, input) &&
+    !isGranted(consulted)
+
   const page = globalThis as typeof globalThis & { [INSTALLED]?: true }
-  if (typeof window === 'undefined' || page[INSTALLED]) return
+  if (typeof window === 'undefined' || page[INSTALLED]) return consult
   page[INSTALLED] = true
 
   const send = globalThis.fetch?.bind(globalThis)
@@ -93,6 +94,8 @@ const install = (): void => {
     globalThis.navigator.sendBeacon = (url, data) =>
       isHeld(url) ? true : beacon(url, data)
   }
+  return consult
 }
 
-install()
+/** Hold back every request to the client's host while its visitor has not accepted. */
+export const guardPostHogSends = install()
