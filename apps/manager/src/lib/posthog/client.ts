@@ -6,7 +6,7 @@
 import '@ens-apps/utils/analyticsSendGuard'
 import { reactClientOf } from '@ens-apps/utils/postHogReactClient'
 // Pre-bundled build so PostHog never injects runtime <script> tags that our
-// CSP would block. See provider.tsx for the full rationale.
+// CSP would block. The Explorer's lib/posthog/client.ts has the full rationale.
 import posthog from 'posthog-js/dist/module.full.no-external'
 
 export default posthog

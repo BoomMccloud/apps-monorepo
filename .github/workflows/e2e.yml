@@ -87,7 +87,7 @@ jobs:
           # each project gets the right number of shards:
           #   manager — 5 active test files → 3 shards
           #   portal  — 2 active test files → 2 shards
-          #   cross-app — both apps on one parent domain → 1 shard
+          #   cross-app: both apps on one parent domain → 1 shard
           #   (temporaryPremium skipped until snapshot is rebuilt)
           configs=()
           if [[ "$MANAGER_CHANGED" == "true" ]]; then

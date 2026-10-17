@@ -1,6 +1,7 @@
-// Must come from the same module as provider.tsx: mixing the default
-// `posthog-js` build with `module.full.no-external` would bundle PostHog twice
-// and run two separate SDK instances. See provider.tsx for why we use this build.
+// Must come from ./client, the one module that imports the SDK: mixing the
+// default `posthog-js` build with `module.full.no-external` would bundle
+// PostHog twice and run two separate SDK instances. See client.ts for why we
+// use this build.
 import type { CaptureOptions } from 'posthog-js/dist/module.full.no-external'
 import posthog from './client'
 
