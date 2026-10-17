@@ -26,7 +26,7 @@ export type AnalyticsConsent = 'granted' | 'denied' | 'pending'
  * server decides the switches, and the project's settings are loaded after
  * Accept (`acceptAnalytics`).
  */
-export const ANALYTICS_CONSENT_SETTINGS = {
+const analyticsConsentSettings = {
   opt_out_capturing_by_default: true,
   opt_out_persistence_by_default: true,
   consent_persistence_name: ANALYTICS_CONSENT_COOKIE_NAME,
@@ -75,7 +75,7 @@ export type CollectionSettings = {
  * of them can start, and unset is the only value that hands them back to the
  * project's settings afterwards.
  */
-export const COLLECTION_OFF: CollectionSettings = {
+export const collectionOff: CollectionSettings = {
   capture_pageview: 'history_change',
   capture_pageleave: false,
   autocapture: false,
@@ -90,7 +90,7 @@ export const COLLECTION_OFF: CollectionSettings = {
 }
 
 /** Error reports: uncaught errors and unhandled rejections, never the console. */
-export const ERROR_REPORTS_ON = {
+export const errorReportsOn = {
   capture_unhandled_errors: true,
   capture_unhandled_rejections: true,
   capture_console_errors: false,
@@ -110,7 +110,7 @@ export const collectionOn = ({
   capture_pageview: 'history_change',
   capture_pageleave: 'if_capture_pageview',
   autocapture: true,
-  capture_exceptions: ERROR_REPORTS_ON,
+  capture_exceptions: errorReportsOn,
   save_campaign_params: true,
   save_referrer: true,
   disable_surveys: false,
@@ -137,8 +137,8 @@ export const analyticsStartupConfig = ({
   api_host: apiHost,
   defaults: '2025-11-30',
   person_profiles: 'identified_only',
-  ...ANALYTICS_CONSENT_SETTINGS,
-  ...COLLECTION_OFF,
+  ...analyticsConsentSettings,
+  ...collectionOff,
   ...(bootstrapSwitches
     ? { bootstrap: { featureFlags: bootstrapSwitches } }
     : {}),
@@ -186,7 +186,7 @@ export interface AnalyticsClient {
 export const NOT_CAPTURED_CLASS = 'ph-no-capture'
 
 /** Where the SDK itself reads the project's settings from. */
-export const projectSettingsUrl = (client: AnalyticsClient): string =>
+const projectSettingsUrl = (client: AnalyticsClient): string =>
   `${client.config.api_host.replace(/\/+$/, '')}/array/${client.config.token}/config`
 
 /**
@@ -198,9 +198,7 @@ export const projectSettingsUrl = (client: AnalyticsClient): string =>
  * the request the SDK makes itself when it starts with consent, so a cache,
  * a retry or a refetch on focus would be behaviour the SDK does not have.
  */
-export const loadProjectSettings = async (
-  client: AnalyticsClient,
-): Promise<void> => {
+const loadProjectSettings = async (client: AnalyticsClient): Promise<void> => {
   const settings = await fetch(projectSettingsUrl(client))
     .then((response) => (response.ok ? response.json() : undefined))
     .catch(() => undefined)
@@ -262,7 +260,7 @@ export const declineAnalytics = (client: AnalyticsClient): void => {
   guardPostHogSends(client)
   appliedChoice.set(client, 'denied')
   client.opt_out_capturing()
-  client.set_config(COLLECTION_OFF)
+  client.set_config(collectionOff)
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)
@@ -324,7 +322,7 @@ const FOLLOW_STORED_CHOICE: Readonly<
   // and the send guard holds back what is still waiting.
   pending: (client) => {
     appliedChoice.set(client, 'pending')
-    client.set_config(COLLECTION_OFF)
+    client.set_config(collectionOff)
     forgetTabSession(client)
   },
 }

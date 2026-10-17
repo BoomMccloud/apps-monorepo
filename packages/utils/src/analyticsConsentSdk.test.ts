@@ -31,9 +31,9 @@ const {
   ANALYTICS_CONSENT_COOKIE_NAME,
   acceptAnalytics,
   analyticsStartupConfig,
-  COLLECTION_OFF,
+  collectionOff,
   declineAnalytics,
-  ERROR_REPORTS_ON,
+  errorReportsOn,
   followStoredChoice,
   identifyWallet,
   resetVisitor,
@@ -143,7 +143,7 @@ describe('the analytics choice on the installed SDK', () => {
     expect(client.config).toMatchObject({
       capture_pageview: 'history_change',
       autocapture: true,
-      capture_exceptions: ERROR_REPORTS_ON,
+      capture_exceptions: errorReportsOn,
       disable_surveys: false,
     })
     // Recordings and surveys start from the project's settings.
@@ -205,7 +205,7 @@ describe('the analytics choice on the installed SDK', () => {
       'capture_exceptions',
       'disable_session_recording',
     ])
-    for (const key of Object.keys(COLLECTION_OFF)) {
+    for (const key of Object.keys(collectionOff)) {
       if (changedOnPurpose.has(key)) continue
       expect(client.config[key as keyof typeof client.config], key).toEqual(
         defaults.config[key as keyof typeof defaults.config],

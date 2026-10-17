@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   type AnalyticsClient,
-  COLLECTION_OFF,
+  collectionOff,
   collectionOn,
   declineAnalytics,
   ERROR_MESSAGE_MAX_LENGTH,
@@ -195,12 +195,12 @@ describe('scrubErrorReport', () => {
 describe('collection settings', () => {
   it('switch the same settings off and on', () => {
     expect(Object.keys(collectionOn({ isDev: false })).sort()).toEqual(
-      Object.keys(COLLECTION_OFF).sort(),
+      Object.keys(collectionOff).sort(),
     )
   })
 
   it('collect nothing before Accept, and keep watching page changes for after it', () => {
-    expect(COLLECTION_OFF).toMatchObject({
+    expect(collectionOff).toMatchObject({
       capture_pageview: 'history_change',
       capture_pageleave: false,
       autocapture: false,
@@ -238,7 +238,7 @@ describe('declineAnalytics', () => {
     const [firstOptOut] = client.opt_out_capturing.mock.invocationCallOrder
     const [turnedOff] = client.set_config.mock.invocationCallOrder
     expect(firstOptOut).toBeLessThan(turnedOff ?? 0)
-    expect(client.set_config).toHaveBeenCalledWith(COLLECTION_OFF)
+    expect(client.set_config).toHaveBeenCalledWith(collectionOff)
   })
 
   it('puts the choice back after the reset that erases it', () => {

@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { urlOf } from './inputUrl'
 import { isRecord } from './isRecord'
 
 /**
@@ -45,13 +46,6 @@ export type NetworkAnswers = {
   readonly events?: () => Response | Promise<Response>
   readonly projectSettings?: object
 }
-
-const urlOf = (input: RequestInfo | URL): string =>
-  typeof input === 'string'
-    ? input
-    : input instanceof URL
-      ? input.href
-      : input.url
 
 /** The answers of PostHog's host, by path. */
 export const answering =
@@ -186,8 +180,6 @@ export const installPostHogNetwork = (answers: NetworkAnswers = {}) => {
 
   return { fetch: fetchStub, sendBeacon: beaconStub, wire, reset }
 }
-
-export type PostHogNetwork = ReturnType<typeof installPostHogNetwork>
 
 /** The events a list of requests carries, in order. */
 export const eventsOf = (

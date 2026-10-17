@@ -20,8 +20,10 @@
  * before the entry's own chunk. It installs itself in a browser only, once.
  */
 
+import { urlOf } from './inputUrl'
+
 /** The part of the SDK the guard reads: where it sends, and the visitor's choice. */
-export interface GuardedClient {
+interface GuardedClient {
   readonly config: { readonly api_host: string }
   get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
 }
@@ -43,13 +45,6 @@ const isGranted = (client: GuardedClient): boolean => {
     return false
   }
 }
-
-const urlOf = (input: RequestInfo | URL): string =>
-  typeof input === 'string'
-    ? input
-    : input instanceof URL
-      ? input.href
-      : input.url
 
 const isToHostOf = (
   client: GuardedClient,
