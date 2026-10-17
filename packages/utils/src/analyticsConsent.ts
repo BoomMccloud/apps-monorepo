@@ -247,7 +247,9 @@ const forgetTabSession = (client: AnalyticsClient): void => {
 /**
  * Decline: collection stops at once, and nothing captured before it is sent
  * after it, since the send guard holds back every request while the choice is
- * not Accept. The SDK keeps the visitor id in memory after an opt-out, and
+ * not Accept. The choice goes first, so that what stopping a part of the
+ * collection would still send, such as the recorder's last chunk, is held
+ * back too. The SDK keeps the visitor id in memory after an opt-out, and
  * only a reset clears it; the reset forgets the device too, so a later Accept
  * does not tie new events to old ones, and it erases the choice, so the
  * choice is put back.
@@ -255,8 +257,8 @@ const forgetTabSession = (client: AnalyticsClient): void => {
 export const declineAnalytics = (client: AnalyticsClient): void => {
   guardPostHogSends(client)
   appliedChoice.set(client, 'denied')
-  client.set_config(COLLECTION_OFF)
   client.opt_out_capturing()
+  client.set_config(COLLECTION_OFF)
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)

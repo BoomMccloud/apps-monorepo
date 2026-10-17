@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  type AnalyticsClient,
   COLLECTION_OFF,
   collectionOn,
+  declineAnalytics,
   ERROR_MESSAGE_MAX_LENGTH,
   scrubErrorMessage,
   scrubErrorReport,
@@ -211,5 +213,42 @@ describe('collection settings', () => {
   it('keep recordings off on a development build, as before the pause', () => {
     expect(collectionOn({ isDev: true }).disable_session_recording).toBe(true)
     expect(collectionOn({ isDev: false }).disable_session_recording).toBe(false)
+  })
+})
+
+describe('declineAnalytics', () => {
+  const fakeClient = () => ({
+    config: { token: 'test-key', api_host: 'https://posthog.example' },
+    get_explicit_consent_status: vi.fn(() => 'denied' as const),
+    get_distinct_id: vi.fn(() => 'visitor'),
+    identify: vi.fn(),
+    register: vi.fn(),
+    opt_in_capturing: vi.fn(),
+    opt_out_capturing: vi.fn(),
+    reset: vi.fn(),
+    set_config: vi.fn(),
+    _onRemoteConfig: vi.fn(),
+  })
+
+  it('opts out before it turns any collection off, so what stopping a part would still send is held back', () => {
+    const client = fakeClient()
+
+    declineAnalytics(client satisfies AnalyticsClient)
+
+    const [firstOptOut] = client.opt_out_capturing.mock.invocationCallOrder
+    const [turnedOff] = client.set_config.mock.invocationCallOrder
+    expect(firstOptOut).toBeLessThan(turnedOff ?? 0)
+    expect(client.set_config).toHaveBeenCalledWith(COLLECTION_OFF)
+  })
+
+  it('puts the choice back after the reset that erases it', () => {
+    const client = fakeClient()
+
+    declineAnalytics(client)
+
+    const [, secondOptOut] = client.opt_out_capturing.mock.invocationCallOrder
+    const [reset] = client.reset.mock.invocationCallOrder
+    expect(client.reset).toHaveBeenCalledWith(true)
+    expect(secondOptOut).toBeGreaterThan(reset ?? 0)
   })
 })
