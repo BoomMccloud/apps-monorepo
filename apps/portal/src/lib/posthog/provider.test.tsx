@@ -174,6 +174,20 @@ describe('PHProvider', () => {
     expect(screen.getByText('denied')).toBeInTheDocument()
   })
 
+  it("follows a choice removed in another tab or app, and blanks the support chat's link", async () => {
+    renderProvider()
+    await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
+    const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
+
+    act(() => following?.onChange('pending'))
+
+    expect(screen.getByText('pending')).toBeInTheDocument()
+    expect(update).toHaveBeenCalledWith({
+      posthog_distinct_id: '',
+      recent_replay: '',
+    })
+  })
+
   it("follows a Decline made in another tab or app, and blanks the support chat's link", async () => {
     renderProvider()
     await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
@@ -242,14 +256,22 @@ describe('PHProvider', () => {
       { address: WALLET },
       { initial_address: WALLET },
     )
+    // Tied once on Accept, and again once the wallet was identified.
+    expect(update).toHaveBeenCalledTimes(2)
   })
 
-  it('on disconnect, records it, then forgets the visitor and keeps the choice', () => {
+  it('on disconnect, records it, then forgets the visitor, keeps the choice and ties the chat to the new visitor', () => {
+    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
     renderProvider()
+    vi.mocked(update).mockClear()
 
     connectionCallbacks().onDisconnect?.()
 
     expect(posthog.capture).toHaveBeenCalledWith('wallet:disconnect', undefined)
     expect(resetVisitor).toHaveBeenCalledWith(posthog)
+    expect(update).toHaveBeenCalledExactlyOnceWith({
+      posthog_distinct_id: 'anonymous-visitor',
+      recent_replay: 'https://replay.example/1',
+    })
   })
 })

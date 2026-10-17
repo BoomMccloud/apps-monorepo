@@ -1,4 +1,5 @@
 import {
+  type AnalyticsConsent,
   acceptAnalytics,
   declineAnalytics,
 } from '@ens-apps/utils/analyticsConsent'
@@ -16,9 +17,14 @@ import { PostHogProvider } from '@posthog/react'
 // cast our instance at the provider boundary below.
 import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
+import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
 import posthog from './client'
-import { linkSupportChat, unlinkSupportChat } from './supportChat'
+import {
+  linkSupportChat,
+  relinkSupportChat,
+  unlinkSupportChat,
+} from './supportChat'
 import { usePostHogStart } from './usePostHogStart'
 import { useWalletAnalytics } from './useWalletAnalytics'
 
@@ -35,35 +41,40 @@ export const PHProvider = ({
   const { address, chainId, connector } = useConnection()
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
 
+  // What the page does about a choice, whether the visitor pressed it here or
+  // it was made in another tab or app.
+  const applyChoice = (choice: AnalyticsConsent) => {
+    setConsent(choice)
+    match(choice)
+      .with('granted', linkSupportChat)
+      .with('denied', 'pending', unlinkSupportChat)
+      .exhaustive()
+  }
+
   usePostHogStart(setConsent)
   useFollowedChoice(
     posthog,
     consent !== 'unknown',
     import.meta.env.DEV,
-    (followed) => {
-      setConsent(followed)
-      if (followed === 'granted') linkSupportChat()
-      if (followed === 'denied') unlinkSupportChat()
-    },
+    applyChoice,
   )
   useWalletIdentity(
     posthog,
     consent,
     address ? { address, chainId, connectorName: connector?.name } : null,
+    relinkSupportChat,
   )
 
   useWalletAnalytics()
 
   const accept = () => {
     void acceptAnalytics(posthog, { isDev: import.meta.env.DEV })
-    linkSupportChat()
-    setConsent('granted')
+    applyChoice('granted')
   }
 
   const decline = () => {
     declineAnalytics(posthog)
-    unlinkSupportChat()
-    setConsent('denied')
+    applyChoice('denied')
   }
 
   return (

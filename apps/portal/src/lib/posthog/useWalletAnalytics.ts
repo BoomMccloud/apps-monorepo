@@ -3,6 +3,7 @@ import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { useConnectionEffect } from 'wagmi'
 import posthog from './client'
 import { track } from './events'
+import { relinkSupportChat } from './supportChat'
 
 /**
  * What a wallet connecting and disconnecting tells PostHog and the support
@@ -17,6 +18,7 @@ export const useWalletAnalytics = (): void => {
           chainId: data.chainId,
           connectorName: data.connector.name,
         })
+        relinkSupportChat()
         track('wallet:connect', {
           wallet_address: data.address,
           chain_id: data.chainId,
@@ -41,6 +43,7 @@ export const useWalletAnalytics = (): void => {
       try {
         track('wallet:disconnect')
         resetVisitor(posthog)
+        relinkSupportChat()
       } catch (error) {
         console.warn('[posthog] reset on disconnect failed', error)
       }

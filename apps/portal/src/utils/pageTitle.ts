@@ -10,7 +10,7 @@ import {
   truncateAddress,
 } from './routePaths'
 
-export const TITLE_SUFFIX = 'ENS Explorer App'
+const TITLE_SUFFIX = 'ENS Explorer App'
 
 const withSuffix = (subject: string, subpage = '') =>
   subpage
