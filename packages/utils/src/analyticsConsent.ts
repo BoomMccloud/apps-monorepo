@@ -193,6 +193,10 @@ export const projectSettingsUrl = (client: AnalyticsClient): string =>
  * Load the project's settings and hand them to the SDK, as it would at
  * start-up had the visitor already accepted. Settings that arrive after the
  * visitor has declined are dropped.
+ *
+ * A plain `fetch`, not a query: no component reads the answer. This replays
+ * the request the SDK makes itself when it starts with consent, so a cache,
+ * a retry or a refetch on focus would be behaviour the SDK does not have.
  */
 export const loadProjectSettings = async (
   client: AnalyticsClient,
