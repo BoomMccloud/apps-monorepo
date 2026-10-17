@@ -897,6 +897,9 @@ importers:
       '@types/node':
         specifier: ^24.10.2
         version: 24.10.2
+      neverthrow:
+        specifier: ^8.2.0
+        version: 8.2.0
       tsx:
         specifier: ^4.20.6
         version: 4.21.0

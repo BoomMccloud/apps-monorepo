@@ -7,6 +7,7 @@ import {
 import type { AddressInfo } from 'node:net'
 import { gunzipSync } from 'node:zlib'
 import { isRecord } from '@ens-apps/utils/isRecord'
+import { fromThrowable } from 'neverthrow'
 
 /**
  * A stand-in for the PostHog host that records every request it receives.
@@ -115,11 +116,11 @@ const decodeBody = (raw: Buffer): string => {
 
 const sourceOf = (
   headers: Readonly<Record<string, string | undefined>>,
-  namesProject: boolean,
+  hasProjectKey: boolean,
 ): RequestSource =>
   headers.origin !== undefined
     ? 'browser'
-    : namesProject
+    : hasProjectKey
       ? 'server'
       : 'elsewhere'
 
@@ -131,22 +132,30 @@ const toEvent = (value: unknown): CapturedEvent | null =>
       }
     : null
 
-const eventsIn = (body: string): readonly CapturedEvent[] => {
-  if (!body.startsWith('[') && !body.startsWith('{')) return []
-  try {
-    const parsed: unknown = JSON.parse(body)
-    const items = Array.isArray(parsed)
-      ? parsed
-      : isRecord(parsed) && Array.isArray(parsed.batch)
-        ? parsed.batch
-        : [parsed]
-    return items
-      .map(toEvent)
-      .filter((event): event is CapturedEvent => event !== null)
-  } catch {
-    return []
-  }
-}
+const parseJson = fromThrowable(
+  (text: string): unknown => JSON.parse(text),
+  (): 'not JSON' => 'not JSON',
+)
+
+const itemsIn = (parsed: unknown): readonly unknown[] =>
+  Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.batch)
+      ? parsed.batch
+      : [parsed]
+
+// A body that is not JSON holds no events: another program on the port, or
+// a beacon in an encoding the stand-in does not read.
+const eventsIn = (body: string): readonly CapturedEvent[] =>
+  !body.startsWith('[') && !body.startsWith('{')
+    ? []
+    : parseJson(body).match(
+        (parsed) =>
+          itemsIn(parsed)
+            .map(toEvent)
+            .filter((event): event is CapturedEvent => event !== null),
+        () => [],
+      )
 
 const readBody = (request: IncomingMessage): Promise<Buffer> =>
   new Promise((resolve, reject) => {
@@ -235,7 +244,7 @@ export const startPostHogStandIn = async (
       const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
       const body = decodeBody(raw)
       const headers = flatHeaders(request)
-      const namesProject =
+      const hasProjectKey =
         PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
         headers.authorization !== undefined
       recorded.push({
@@ -245,7 +254,7 @@ export const startPostHogStandIn = async (
         headers,
         body,
         events: eventsIn(body),
-        source: sourceOf(headers, namesProject),
+        source: sourceOf(headers, hasProjectKey),
         receivedAt: Date.now(),
       })
 
