@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import type { Address } from 'viem'
 import posthog from './client'
 import {
   ALL_SWITCHES_OFF,
@@ -20,7 +21,7 @@ const writeFeatureSwitches = (switches: FeatureSwitches): void => {
 
 export type FeatureSwitchSyncInput = {
   /** The wallet connected now, or null for none. */
-  readonly wallet: string | null
+  readonly wallet: Address | null
   /** Whether wagmi has finished restoring the stored connection. */
   readonly isConnectionSettled: boolean
   /** The answers the server rendered the page with, and the wallet they were decided for. */

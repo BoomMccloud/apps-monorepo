@@ -7,6 +7,7 @@ import type { Address } from 'viem'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
+import { TaggedError } from '../../../../../packages/utils/src/neverthrow'
 import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
 
 /**
@@ -98,8 +99,15 @@ const heldRules = (rules: SwitchRules): FlagDefinitionCacheProvider => ({
   shutdown: () => {},
 })
 
+/** What posthog-node meets if it ever asks for the network, which it is never given. */
+class SwitchRulesNetworkRefused extends TaggedError(
+  'SwitchRulesNetworkRefused',
+)<{ readonly message: string }> {}
+
 const refuseNetwork = (): never => {
-  throw new Error('Feature switches are decided from stored rules only')
+  throw new SwitchRulesNetworkRefused({
+    message: 'Feature switches are decided from stored rules only',
+  })
 }
 
 /** Long enough that the client never refreshes within one evaluation. */

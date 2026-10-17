@@ -3,7 +3,11 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ALL_SWITCHES_OFF, type FeatureSwitches } from './feature-flags'
+import {
+  ALL_SWITCHES_OFF,
+  type DecidedFeatureSwitches,
+  type FeatureSwitches,
+} from './feature-flags'
 import { getFeatureSwitches } from './getFeatureSwitches'
 import {
   type FeatureSwitchSyncInput,
@@ -49,10 +53,7 @@ const lastWrite = () => vi.mocked(posthog.updateFlags).mock.calls.at(-1)
 
 /** A server answer the test settles when it chooses. */
 const pendingAnswer = () => {
-  const answer = Promise.withResolvers<{
-    readonly wallet: string
-    readonly switches: FeatureSwitches
-  }>()
+  const answer = Promise.withResolvers<DecidedFeatureSwitches>()
   return {
     promise: answer.promise,
     resolve: (switches: FeatureSwitches) =>

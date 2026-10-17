@@ -2,6 +2,7 @@ import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
 import { fromPromise } from 'neverthrow'
+import type { Address } from 'viem'
 import { getFeatureSwitches } from './getFeatureSwitches'
 
 class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
@@ -9,7 +10,7 @@ class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
 }> {}
 
 /** The server's switch answers for a wallet, or for a visitor with none. */
-const fetchFeatureSwitches = (wallet: string | null) =>
+const fetchFeatureSwitches = (wallet: Address | null) =>
   fromPromise(
     getFeatureSwitches({ data: { wallet } }).then(({ switches }) => switches),
     (cause) => new GetFeatureSwitchesError({ cause }),
@@ -18,7 +19,7 @@ const fetchFeatureSwitches = (wallet: string | null) =>
 /** The rules change rarely; a minute matches the server's refresh. */
 const FEATURE_SWITCHES_STALE_TIME_MS = 60_000
 
-export const getFeatureSwitchesQueryOptions = (wallet: string | null) =>
+export const getFeatureSwitchesQueryOptions = (wallet: Address | null) =>
   resultQueryOptions({
     queryKey: qk('posthog', 'feature_switches', { wallet }),
     queryFn: ({ queryKey: [{ wallet }] }) => fetchFeatureSwitches(wallet),

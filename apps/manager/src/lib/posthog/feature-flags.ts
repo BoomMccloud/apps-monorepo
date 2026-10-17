@@ -1,4 +1,5 @@
 import type { EnsNetwork } from '@ens-apps/config'
+import type { Address } from 'viem'
 
 /**
  * Every feature switch the Manager reads from PostHog. The server decides
@@ -29,7 +30,7 @@ export type FeatureSwitches = Readonly<Record<FeatureSwitchName, boolean>>
  * the wallet they were decided for and to no other.
  */
 export type DecidedFeatureSwitches = {
-  readonly wallet: string | null
+  readonly wallet: Address | null
   readonly switches: FeatureSwitches
 }
 
