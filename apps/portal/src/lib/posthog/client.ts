@@ -4,6 +4,7 @@
 // an import here puts the guard before the SDK wherever the bundle puts it.
 // Everything else gets the SDK from this module.
 import '@ens-apps/utils/analyticsSendGuard'
+import { reactClientOf } from '@ens-apps/utils/postHogReactClient'
 // The fully-bundled, no-external build, so PostHog never lazy-loads its
 // extension bundles (session recorder, surveys, dead-clicks, web-vitals,
 // exception autocapture) at runtime. The default `posthog-js` build injects
@@ -16,3 +17,6 @@ import '@ens-apps/utils/analyticsSendGuard'
 import posthog from 'posthog-js/dist/module.full.no-external'
 
 export default posthog
+
+/** The SDK as @posthog/react's types describe it, for its provider. */
+export const reactClient = reactClientOf(posthog)

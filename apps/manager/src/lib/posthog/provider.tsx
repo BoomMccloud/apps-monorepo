@@ -11,15 +11,10 @@ import {
 } from '@ens-apps/utils/analyticsConsentContext'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
-// @posthog/react types its `client` prop with the `PostHog` type from the
-// default `posthog-js` build, which is a *nominally* distinct declaration from
-// the no-external build's `PostHog`. Import that type to cast at the provider
-// boundary below.
-import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
 import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
-import posthog from './client'
+import posthog, { reactClient } from './client'
 import {
   linkSupportChat,
   relinkSupportChat,
@@ -96,15 +91,12 @@ export const PHProvider = ({
     applyChoice('denied')
   }
 
-  const content = isHydrated ? (
-    // Cast bridges the two posthog-js declaration files (see the type import
-    // note above); the runtime object is the real PostHog SDK either way.
-    <PostHogProvider client={posthog as unknown as PostHog}>
-      {children}
-    </PostHogProvider>
-  ) : (
-    children
-  )
+  const content =
+    isHydrated && reactClient ? (
+      <PostHogProvider client={reactClient}>{children}</PostHogProvider>
+    ) : (
+      children
+    )
 
   return (
     <AnalyticsConsentContext value={{ consent, accept, decline }}>

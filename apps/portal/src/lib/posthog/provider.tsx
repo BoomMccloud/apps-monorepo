@@ -10,16 +10,10 @@ import {
   useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
 import { PostHogProvider } from '@posthog/react'
-// @posthog/react types its `client` prop with the `PostHog` type from the
-// default `posthog-js` build, which is a *nominally* distinct declaration from
-// the no-external build's `PostHog` (private fields make them structurally
-// incompatible even though they're the same runtime SDK). Import that type to
-// cast our instance at the provider boundary below.
-import type { PostHog } from 'posthog-js'
 import { useState } from 'react'
 import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
-import posthog from './client'
+import posthog, { reactClient } from './client'
 import {
   linkSupportChat,
   relinkSupportChat,
@@ -77,13 +71,15 @@ export const PHProvider = ({
     applyChoice('denied')
   }
 
+  const content = reactClient ? (
+    <PostHogProvider client={reactClient}>{children}</PostHogProvider>
+  ) : (
+    children
+  )
+
   return (
     <AnalyticsConsentContext value={{ consent, accept, decline }}>
-      {/* Cast bridges the two posthog-js declaration files (see the type
-          import note above); the runtime object is the real PostHog SDK. */}
-      <PostHogProvider client={posthog as unknown as PostHog}>
-        {children}
-      </PostHogProvider>
+      {content}
     </AnalyticsConsentContext>
   )
 }
