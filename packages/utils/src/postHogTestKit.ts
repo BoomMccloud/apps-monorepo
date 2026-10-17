@@ -48,7 +48,7 @@ export const answering =
     events = () => Response.json({ status: 1 }),
     projectSettings = PROJECT_SETTINGS,
   }: NetworkAnswers = {}) =>
-  async (input: RequestInfo | URL): Promise<Response> => {
+  async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     const { pathname } = new URL(urlOf(input))
     if (/^\/array\/[^/]+\/config$/.test(pathname)) {
       return Response.json(projectSettings)
@@ -96,14 +96,12 @@ const decodeBody = async (
 
 const bodyText = async (
   body: BodyInit | null | undefined,
-): Promise<string | ArrayBuffer | ArrayBufferView | undefined> =>
-  body instanceof Blob
-    ? body.text()
-    : typeof body === 'string' || ArrayBuffer.isView(body)
-      ? body
-      : body instanceof ArrayBuffer
-        ? body
-        : undefined
+): Promise<string | ArrayBuffer | ArrayBufferView | undefined> => {
+  if (body instanceof Blob) return body.text()
+  if (typeof body === 'string' || ArrayBuffer.isView(body)) return body
+  if (body instanceof ArrayBuffer) return body
+  return undefined
+}
 
 /** One request that reached the network, with the order it was made in. */
 const wireRequest = async (
@@ -133,23 +131,20 @@ export const installPostHogNetwork = (answers: NetworkAnswers = {}) => {
   const beaconStub = vi.fn(
     (_url: string | URL, _data?: BodyInit | null): boolean => true,
   )
-  globalThis.fetch = fetchStub as unknown as typeof fetch
+  globalThis.fetch = fetchStub
   globalThis.navigator.sendBeacon = beaconStub
 
   const wire = async (): Promise<readonly WireRequest[]> => {
     const fetched = await Promise.all(
-      fetchStub.mock.calls.map(async ([input], index) => {
-        const init = (fetchStub.mock.calls[index] as unknown[])[1] as
-          | RequestInit
-          | undefined
-        return wireRequest(
+      fetchStub.mock.calls.map(async ([input, init], index) =>
+        wireRequest(
           'fetch',
           init?.method ?? 'GET',
           input,
           init?.body,
           fetchStub.mock.invocationCallOrder[index] ?? 0,
-        )
-      }),
+        ),
+      ),
     )
     const beaconed = await Promise.all(
       beaconStub.mock.calls.map(([url, data], index) =>
