@@ -240,42 +240,46 @@ export const startPostHogStandIn = async (
   }> = []
 
   const server: Server = createServer((request, response) => {
-    void readBody(request).then((raw) => {
-      const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
-      const body = decodeBody(raw)
-      const headers = flatHeaders(request)
-      const hasProjectKey =
-        PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
-        headers.authorization !== undefined
-      recorded.push({
-        method: request.method ?? 'GET',
-        path: url.pathname,
-        query: url.searchParams,
-        headers,
-        body,
-        events: eventsIn(body),
-        source: sourceOf(headers, hasProjectKey),
-        receivedAt: Date.now(),
-      })
+    void readBody(request).then(
+      (raw) => {
+        const url = new URL(request.url ?? '/', 'http://stand-in.invalid')
+        const body = decodeBody(raw)
+        const headers = flatHeaders(request)
+        const hasProjectKey =
+          PROJECT_KEY.test(`${url.pathname}${url.search}${body}`) ||
+          headers.authorization !== undefined
+        recorded.push({
+          method: request.method ?? 'GET',
+          path: url.pathname,
+          query: url.searchParams,
+          headers,
+          body,
+          events: eventsIn(body),
+          source: sourceOf(headers, hasProjectKey),
+          receivedAt: Date.now(),
+        })
 
-      if (request.method === 'OPTIONS') {
-        response.writeHead(204, corsHeaders(request))
-        response.end()
-        return
-      }
-      const isEventRequest =
-        request.method === 'POST' && /^\/e\/?$/.test(url.pathname)
-      const behavior = isEventRequest
-        ? eventBehaviors.find((entry) => body.includes(entry.marker))
-        : undefined
-      if (behavior) {
-        void behavior.released.then(() =>
-          sendJson(request, response, behavior.status, { status: 0 }),
-        )
-        return
-      }
-      sendJson(request, response, 200, answerFor(url.pathname, options))
-    })
+        if (request.method === 'OPTIONS') {
+          response.writeHead(204, corsHeaders(request))
+          response.end()
+          return
+        }
+        const isEventRequest =
+          request.method === 'POST' && /^\/e\/?$/.test(url.pathname)
+        const behavior = isEventRequest
+          ? eventBehaviors.find((entry) => body.includes(entry.marker))
+          : undefined
+        if (behavior) {
+          void behavior.released.then(() =>
+            sendJson(request, response, behavior.status, { status: 0 }),
+          )
+          return
+        }
+        sendJson(request, response, 200, answerFor(url.pathname, options))
+      },
+      // A client that goes away mid-upload has no answer to wait for.
+      () => response.destroy(),
+    )
   })
 
   await new Promise<void>((resolve, reject) => {

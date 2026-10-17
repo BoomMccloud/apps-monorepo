@@ -243,6 +243,7 @@ export const expectCardUnderHeader = async (
   ])
   expect(cardBox).not.toBeNull()
   expect(headerBox).not.toBeNull()
+  expect(viewport).not.toBeNull()
   if (!cardBox || !headerBox || !viewport) return
   expect(cardBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
   expect(cardBox.y).toBeLessThan(viewport.height / 2)
@@ -259,6 +260,7 @@ export const expectCardInBottomCorner = async (
   const viewport = page.viewportSize()
   const cardBox = await card.boundingBox()
   expect(cardBox).not.toBeNull()
+  expect(viewport).not.toBeNull()
   if (!cardBox || !viewport) return
   expect(viewport.height - (cardBox.y + cardBox.height)).toBeLessThanOrEqual(
     CORNER_GAP_PX,

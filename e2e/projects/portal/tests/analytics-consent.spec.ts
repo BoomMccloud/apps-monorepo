@@ -90,6 +90,9 @@ const openFresh = async (page: Page, path = '/'): Promise<void> => {
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^Connect( wallet)?$/ }).first()
 
+const walletMenu = (page: Page) =>
+  page.getByRole('button', { name: /^Wallet menu for / }).first()
+
 /**
  * A page load may or may not restore the wallet connection, and the walks
  * disconnect a connected wallet: connect it again when the load did not.
@@ -98,6 +101,10 @@ const connectUnlessRestored = async (
   page: Page,
   wallet: Parameters<typeof connectWithHeadlessWallet>[1],
 ): Promise<void> => {
+  // Decide only once the header shows one state or the other: a Connect button
+  // that is absent because the header has not rendered is not a restored
+  // connection.
+  await expect(connectButton(page).or(walletMenu(page)).first()).toBeVisible()
   const isRestored = await connectButton(page)
     .waitFor({ state: 'hidden', timeout: 5_000 })
     .then(
