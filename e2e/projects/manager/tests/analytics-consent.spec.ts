@@ -265,7 +265,7 @@ test.describe('Manager analytics choice', () => {
     await expect.poll(() => pageSwitch(page, 'migration')).toBe(true)
     expect(await pageSwitch(page, 'i18n')).toBe(true)
     expect(await pageSwitch(page, 'migration-nft')).toBe(false)
-    await page.goto(`${MANAGER_APP_URL}/upgrade`)
+    await openFresh(page, '/upgrade')
     await expect(page).toHaveURL(`${ORIGIN}/upgrade`)
     expect(await pageSwitch(page, 'migration')).toBe(true)
 
@@ -287,7 +287,7 @@ test.describe('Manager analytics choice', () => {
     // Until the server has answered for this wallet every switch is off.
     await expect.poll(() => pageSwitch(page, 'i18n')).toBe(true)
     expect(await pageSwitch(page, 'migration')).toBe(false)
-    await page.goto(`${MANAGER_APP_URL}/upgrade`)
+    await openFresh(page, '/upgrade')
     await expect(page).toHaveURL(`${ORIGIN}/dashboard`)
     expect(await pageSwitch(page, 'migration')).toBe(false)
 
@@ -298,7 +298,7 @@ test.describe('Manager analytics choice', () => {
       .toBeUndefined()
     await expect.poll(() => pageSwitch(page, 'i18n')).toBe(true)
     expect(await pageSwitch(page, 'migration')).toBe(false)
-    await page.goto(`${MANAGER_APP_URL}/upgrade`)
+    await openFresh(page, '/upgrade')
     await expect(page).not.toHaveURL(`${ORIGIN}/upgrade`)
     expect(await pageSwitch(page, 'migration')).toBe(false)
 
