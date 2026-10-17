@@ -35,7 +35,7 @@ export type CapturedEvent = {
  * or body, or the project's secret key as `Authorization`), or another
  * program on the machine.
  */
-export type RequestSource = 'browser' | 'server' | 'elsewhere'
+type RequestSource = 'browser' | 'server' | 'elsewhere'
 
 export type RecordedRequest = {
   readonly method: string
