@@ -43,6 +43,25 @@ describe('startAnalyticsSdk', () => {
     )
   })
 
+  it('forgets the projects the app has left before it starts the SDK, whatever the visitor chose', () => {
+    localStorage.setItem('ph_phc_left_posthog', '{"distinct_id":"0xvisitor"}')
+    const seenAtInit = vi.fn<(stored: string | null) => void>()
+    const client = startable({
+      init: () => seenAtInit(localStorage.getItem('ph_phc_left_posthog')),
+    })
+
+    startAnalyticsSdk(client, 'key', CONFIG, {
+      isDev: true,
+      legacyProjectKeys: ['phc_left'],
+    })
+
+    expect(seenAtInit).toHaveBeenCalledExactlyOnceWith(null)
+    expect(localStorage.getItem('ph_phc_left_posthog')).toBeNull()
+    expect(startAnalyticsChoice).toHaveBeenCalledExactlyOnceWith(client, {
+      isDev: true,
+    })
+  })
+
   it('applies no choice, and returns unknown, when the SDK did not load', () => {
     const client = startable({ __loaded: false })
 
