@@ -3,9 +3,13 @@ import { memoryKv, switchRules } from '@/lib/posthog/switchRules.mock'
 import { SWITCH_RULES_KEY } from '@/lib/posthog/switchRulesCache'
 import worker from './server'
 
-// The framework's own entry answers requests; these tests are about the cron.
+// The framework's own entry answers requests; these tests are about the Worker
+// around it. Its wrapper for the entry's `fetch` hands the callback through.
+const start = vi.hoisted(() => ({ fetch: vi.fn() }))
+
 vi.mock('@tanstack/react-start/server-entry', () => ({
-  default: { fetch: vi.fn() },
+  default: start,
+  createServerEntry: <Entry>(entry: Entry): Entry => entry,
 }))
 
 const cronRun = {
@@ -14,7 +18,7 @@ const cronRun = {
   noRetry: () => {},
 } satisfies ScheduledController
 
-describe("the Manager's scheduled run", () => {
+describe("the Manager's Worker", () => {
   beforeEach(() => {
     vi.stubEnv('VITE_PUBLIC_POSTHOG_KEY', 'phc_project')
     vi.stubEnv('VITE_PUBLIC_POSTHOG_HOST', 'https://posthog.example')
@@ -23,9 +27,22 @@ describe("the Manager's scheduled run", () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
+    start.fetch.mockReset()
   })
 
-  it('fails, so the Worker logs it, when the refresh cannot store rules', async () => {
+  it('answers a request through TanStack Start, which it gives the empty request context and nothing the runtime handed in', async () => {
+    const request = new Request('https://manager.example/')
+    const answer = new Response('page')
+    start.fetch.mockResolvedValue(answer)
+
+    await expect(worker.fetch(request)).resolves.toBe(answer)
+
+    expect(start.fetch).toHaveBeenCalledExactlyOnceWith(request, {
+      context: {},
+    })
+  })
+
+  it('fails the scheduled run, so the Worker logs it, when the refresh cannot store rules', async () => {
     const { space, contents } = memoryKv()
 
     await expect(
@@ -34,7 +51,7 @@ describe("the Manager's scheduled run", () => {
     expect(contents().size).toBe(0)
   })
 
-  it('ends without a word when the refresh stores the rules', async () => {
+  it('ends the scheduled run without a word when the refresh stores the rules', async () => {
     const { space, contents } = memoryKv()
     const rules = switchRules()
     vi.stubGlobal(
