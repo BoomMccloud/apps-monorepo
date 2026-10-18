@@ -38,7 +38,9 @@ describe('startAnalyticsSdk', () => {
       client,
       OPTIONS,
     )
-    expect((window as Window & { posthog?: unknown }).posthog).toBe(client)
+    expect((window as Window & { readonly posthog?: unknown }).posthog).toBe(
+      client,
+    )
   })
 
   it('applies no choice, and returns unknown, when the SDK did not load', () => {
