@@ -352,14 +352,19 @@ jobs:
           echo "=== Error context files ==="
           find e2e/test-results -name 'error-context.md' -exec echo "--- {} ---" \; -exec cat {} \; 2>/dev/null || echo "(none)"
           echo ""
+          # The env files, with the value of every secret hidden, so a real key
+          # put in a CI template later does not reach the log.
+          show_env() {
+            sed -E 's/^([A-Za-z0-9_]*(SECRET|PRIVATE|TOKEN|PASSWORD)[A-Za-z0-9_]*)=.*/\1=<hidden>/' "$1" 2>/dev/null || echo "(missing)"
+          }
           echo "=== e2e/.env ==="
-          cat e2e/.env 2>/dev/null || echo "(missing)"
+          show_env e2e/.env
           echo ""
           echo "=== apps/manager/.env ==="
-          cat apps/manager/.env 2>/dev/null || echo "(missing)"
+          show_env apps/manager/.env
           echo ""
           echo "=== apps/portal/.env ==="
-          cat apps/portal/.env 2>/dev/null || echo "(missing)"
+          show_env apps/portal/.env
 
       # ── artifacts & cleanup ───────────────────────────────────────
       - name: Upload test results
