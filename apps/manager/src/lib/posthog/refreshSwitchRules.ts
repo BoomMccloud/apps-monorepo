@@ -54,6 +54,10 @@ export const refreshSwitchRules = ResultFn(async function* (
     )
   }
 
+  // Every run writes, as PostHog's reference does, whether or not the rules
+  // changed. At one run a minute that is 1,440 writes a day per Worker, over
+  // the Workers Free plan's 1,000, so each Worker needs the Workers Paid plan.
+  // The schedule is Leon's decision; wrangler.jsonc holds it.
   const writer = switchRulesWriter((rules) =>
     space.put(SWITCH_RULES_KEY, JSON.stringify(rules)),
   )
