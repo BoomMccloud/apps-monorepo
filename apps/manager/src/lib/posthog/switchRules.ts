@@ -149,6 +149,11 @@ const evaluate = async (
     host: 'http://switch-rules.invalid',
     personalApiKey: 'switch-rules',
     enableLocalEvaluation: true,
+    // posthog-node warns once per client whenever the rules hold a flag that
+    // asks for experience continuity, the project's other flags included, and
+    // only this option silences it; `onlyEvaluateLocally` below already keeps
+    // a request from the server request the warning is about.
+    strictLocalEvaluation: true,
     flagDefinitionCacheProvider: provider,
     featureFlagsPollingInterval: NO_POLLING_MS,
     fetch: refuseNetwork,

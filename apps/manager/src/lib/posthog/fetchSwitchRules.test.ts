@@ -4,7 +4,8 @@ import type {
 } from 'posthog-node/experimental'
 import { describe, expect, it, vi } from 'vitest'
 import { fetchSwitchRules } from './fetchSwitchRules'
-import { switchRules } from './switchRules.mock'
+import type { SwitchRules } from './switchRules'
+import { flagRule, forEveryone, switchRules } from './switchRules.mock'
 
 const SECRET_KEY = 'phs_secret_value'
 const SOURCE = {
@@ -18,9 +19,8 @@ const answering =
   async (..._args: Parameters<typeof fetch>): Promise<Response> =>
     response()
 
-const rulesResponse = () => {
-  const rules = switchRules()
-  return Response.json(
+const rulesResponse = (rules: SwitchRules = switchRules()) =>
+  Response.json(
     {
       flags: rules.flags,
       group_type_mapping: rules.groupTypeMapping,
@@ -28,7 +28,6 @@ const rulesResponse = () => {
     },
     { headers: { ETag: '"v1"' } },
   )
-}
 
 /**
  * A provider that fetches and keeps what it is handed, after a pause: `handed`
@@ -88,6 +87,25 @@ describe('fetchSwitchRules', () => {
     expect(JSON.stringify(fetchRules.mock.calls[0])).not.toMatch(
       /0x[0-9a-f]{40}/i,
     )
+  })
+
+  it('logs nothing about experience continuity when the project has another flag that asks for it', async () => {
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rules = switchRules({
+      'unrelated-flag': flagRule('unrelated-flag', [forEveryone()], {
+        ensure_experience_continuity: true,
+      }),
+    })
+    const { provider, handed } = recordingProvider()
+
+    const fetched = await fetchSwitchRules(SOURCE, provider, {
+      fetchRules: answering(() => rulesResponse(rules)),
+    })
+
+    expect(fetched.isOk()).toBe(true)
+    expect(handed.mock.calls[0]?.[0].flags).toHaveLength(4)
+    expect(warnings).not.toHaveBeenCalled()
+    warnings.mockRestore()
   })
 
   it('fetches the rules whole on every call, since a client made for one run holds no ETag to ask with', async () => {

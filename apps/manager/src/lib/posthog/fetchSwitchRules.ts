@@ -62,6 +62,9 @@ export const fetchSwitchRules = ResultFn(async function* (
         // key; from 5.40 it is `secretKey`.
         personalApiKey: source.secretKey,
         enableLocalEvaluation: true,
+        // The warning about experience continuity is raised for fetched rules
+        // too, on every run; this client evaluates nothing.
+        strictLocalEvaluation: true,
         featureFlagsPollingInterval: NO_POLLING_MS,
         flagDefinitionCacheProvider: {
           ...provider,

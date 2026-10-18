@@ -111,6 +111,23 @@ describe('evaluateSwitches', () => {
     expect(recorded.networkAsked).not.toHaveBeenCalled()
   })
 
+  it('logs nothing about experience continuity when the project has another flag that asks for it', async () => {
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rules = switchRules({
+      'unrelated-flag': flagRule('unrelated-flag', [forEveryone()], {
+        ensure_experience_continuity: true,
+      }),
+    })
+
+    await expect(
+      evaluateSwitches(rules, switchVisitor(TEST_WALLET)),
+    ).resolves.toEqual({ migration: true, i18n: true, 'migration-nft': false })
+    await expect(
+      evaluateSwitches(rules, switchVisitor(OTHER_WALLET)),
+    ).resolves.toEqual({ migration: false, i18n: true, 'migration-nft': false })
+    expect(warnings).not.toHaveBeenCalled()
+  })
+
   it('matches a wallet whatever the case of its address', async () => {
     const answers = await evaluateSwitches(
       switchRules(),
