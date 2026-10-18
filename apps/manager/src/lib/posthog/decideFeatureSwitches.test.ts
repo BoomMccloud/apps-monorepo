@@ -148,6 +148,36 @@ describe('decideFeatureSwitches', () => {
     ).toHaveLength(1)
   })
 
+  it('answers every switch off, and logs what is stored once per instance, when the stored value is not switch rules', async () => {
+    const decide = await loadDecide()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { space } = memoryKv({
+      [SWITCH_RULES_KEY]: '{"rules":{"flags":[]},"etag":null}',
+    })
+    const env = {
+      POSTHOG_SWITCH_RULES: space,
+      POSTHOG_PROJECT_SECRET_API_KEY: SECRET_KEY,
+    }
+
+    await expect(decide(env, TEST_WALLET)).resolves.toEqual(ALL_SWITCHES_OFF)
+    await expect(decide(env, null)).resolves.toEqual(ALL_SWITCHES_OFF)
+
+    expect(network).not.toHaveBeenCalled()
+    const logged = errors.mock.calls.map(([problem]) => problem)
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        _tag: 'StoredSwitchRulesUnrecognized',
+        message:
+          'the value stored for the switch rules is an object with the keys etag, rules, not switch rules, so every switch is off until the scheduled refresh stores them',
+      }),
+    )
+    expect(
+      logged.filter(
+        (problem) => problem._tag === 'StoredSwitchRulesUnrecognized',
+      ),
+    ).toHaveLength(1)
+  })
+
   it('answers every switch off without a space bound for the rules, and logs why once per instance', async () => {
     const decide = await loadDecide()
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})

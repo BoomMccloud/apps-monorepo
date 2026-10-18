@@ -22,30 +22,47 @@ describe('the Reader, which a request reads the rules with', () => {
     expect(reader.shouldFetchFlagDefinitions()).toBe(false)
   })
 
-  it('reads nothing stored as no rules, without a word', async () => {
-    const { space } = memoryKv()
-    const onUnreadable = vi.fn()
+  it('reads nothing stored, or a stored null, as no rules, without a word', async () => {
+    const onProblem = vi.fn()
+    const stores: readonly Readonly<Record<string, string>>[] = [
+      {},
+      { [SWITCH_RULES_KEY]: 'null' },
+    ]
 
-    await expect(
-      switchRulesReader(space, onUnreadable).getFlagDefinitions(),
-    ).resolves.toBeUndefined()
-    expect(onUnreadable).not.toHaveBeenCalled()
-  })
-
-  it('reads a value of another shape as no rules', async () => {
-    const onUnreadable = vi.fn()
-    for (const value of [
-      '{"rules":{"flags":[]},"etag":null}',
-      '{"flags":"none","groupTypeMapping":{},"cohorts":{}}',
-      '[]',
-      'null',
-    ]) {
-      const { space } = memoryKv({ [SWITCH_RULES_KEY]: value })
+    for (const initial of stores) {
+      const { space } = memoryKv(initial)
       await expect(
-        switchRulesReader(space, onUnreadable).getFlagDefinitions(),
+        switchRulesReader(space, onProblem).getFlagDefinitions(),
       ).resolves.toBeUndefined()
     }
-    expect(onUnreadable).not.toHaveBeenCalled()
+    expect(onProblem).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'the removed store, which kept the rules and an ETag',
+      '{"rules":{"flags":[]},"etag":null}',
+      'an object with the keys etag, rules',
+    ],
+    [
+      'rules whose flags are not a list',
+      '{"flags":"none","groupTypeMapping":{},"cohorts":{}}',
+      'an object with the keys cohorts, flags, groupTypeMapping',
+    ],
+    ['a list', '[]', 'an array'],
+    ['a string', '"switch rules"', 'a string'],
+    ['a number', '7', 'a number'],
+  ])('says that a value of another shape is stored, %s, and reads it as no rules', async (_what, stored, found) => {
+    const { space } = memoryKv({ [SWITCH_RULES_KEY]: stored })
+    const onProblem = vi.fn()
+
+    await expect(
+      switchRulesReader(space, onProblem).getFlagDefinitions(),
+    ).resolves.toBeUndefined()
+    expect(onProblem).toHaveBeenCalledExactlyOnceWith({
+      status: 'unrecognized',
+      found,
+    })
   })
 
   it('says why KV could not be read, and reads it as no rules', async () => {
@@ -56,22 +73,27 @@ describe('the Reader, which a request reads the rules with', () => {
         throw failure
       },
     } as unknown as KVNamespace
-    const onUnreadable = vi.fn()
+    const onProblem = vi.fn()
 
     await expect(
-      switchRulesReader(unavailable, onUnreadable).getFlagDefinitions(),
+      switchRulesReader(unavailable, onProblem).getFlagDefinitions(),
     ).resolves.toBeUndefined()
-    expect(onUnreadable).toHaveBeenCalledExactlyOnceWith(failure)
+    expect(onProblem).toHaveBeenCalledExactlyOnceWith({
+      status: 'unreadable',
+      cause: failure,
+    })
   })
 
   it('reads a stored value that is not JSON as KV failing, since KV parses it', async () => {
     const { space } = memoryKv({ [SWITCH_RULES_KEY]: 'not json' })
-    const onUnreadable = vi.fn()
+    const onProblem = vi.fn()
 
     await expect(
-      switchRulesReader(space, onUnreadable).getFlagDefinitions(),
+      switchRulesReader(space, onProblem).getFlagDefinitions(),
     ).resolves.toBeUndefined()
-    expect(onUnreadable).toHaveBeenCalledOnce()
+    expect(onProblem).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ status: 'unreadable' }),
+    )
   })
 })
 

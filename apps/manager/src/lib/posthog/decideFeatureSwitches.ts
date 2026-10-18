@@ -1,4 +1,5 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
+import { match } from 'ts-pattern'
 import type { Address } from 'viem'
 import {
   ALL_SWITCHES_OFF,
@@ -6,7 +7,7 @@ import {
   type FeatureSwitches,
 } from './feature-flags'
 import { evaluateStoredSwitches, switchVisitor } from './switchRules'
-import { switchRulesReader } from './switchRulesCache'
+import { type ReaderProblem, switchRulesReader } from './switchRulesCache'
 
 /** The Worker bindings the switches need. */
 export type SwitchRulesEnv = {
@@ -31,12 +32,23 @@ class StoredSwitchRulesUnreadable extends TaggedError(
   'StoredSwitchRulesUnreadable',
 )<{ readonly message: string; readonly cause: unknown }> {}
 
+/**
+ * Logged when KV holds a value that is not switch rules, which would
+ * otherwise look like no rules stored.
+ */
+class StoredSwitchRulesUnrecognized extends TaggedError(
+  'StoredSwitchRulesUnrecognized',
+)<{ readonly message: string; readonly cause: unknown }> {}
+
 // One log line per problem and Worker instance. Remembering what was logged
 // is this module's own state, read by nothing else (no-mutation).
 const reportedProblems = new Set<string>()
 
 const reportOnce = (
-  problem: FeatureSwitchesUndecided | StoredSwitchRulesUnreadable,
+  problem:
+    | FeatureSwitchesUndecided
+    | StoredSwitchRulesUnreadable
+    | StoredSwitchRulesUnrecognized,
 ): void => {
   const key = `${problem._tag}: ${problem.message}`
   if (reportedProblems.has(key)) return
@@ -47,14 +59,26 @@ const reportOnce = (
 const switchesUndecided = (message: string) =>
   new FeatureSwitchesUndecided({ message, cause: undefined })
 
-const reportUnreadable = (cause: unknown): void =>
-  reportOnce(
-    new StoredSwitchRulesUnreadable({
-      message:
-        'the stored switch rules could not be read, so every switch is off until they can',
-      cause,
-    }),
-  )
+const reportReaderProblem = (problem: ReaderProblem): void =>
+  match(problem)
+    .with({ status: 'unreadable' }, ({ cause }) =>
+      reportOnce(
+        new StoredSwitchRulesUnreadable({
+          message:
+            'the stored switch rules could not be read, so every switch is off until they can',
+          cause,
+        }),
+      ),
+    )
+    .with({ status: 'unrecognized' }, ({ found }) =>
+      reportOnce(
+        new StoredSwitchRulesUnrecognized({
+          message: `the value stored for the switch rules is ${found}, not switch rules, so every switch is off until the scheduled refresh stores them`,
+          cause: undefined,
+        }),
+      ),
+    )
+    .exhaustive()
 
 const decide = async (
   env: SwitchRulesEnv,
@@ -69,7 +93,7 @@ const decide = async (
   // it has stored any, as on a new deploy or a preview, where crons do not
   // run, every switch is off and the reason is logged.
   const { answers, hasRules } = await evaluateStoredSwitches(
-    switchRulesReader(space, reportUnreadable),
+    switchRulesReader(space, reportReaderProblem),
     switchVisitor(wallet),
   )
   if (!hasRules) {

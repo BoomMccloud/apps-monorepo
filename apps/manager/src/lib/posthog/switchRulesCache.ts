@@ -1,4 +1,5 @@
 import type { FlagDefinitionCacheProvider } from 'posthog-node/experimental'
+import { match, P } from 'ts-pattern'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
@@ -19,20 +20,48 @@ const isSwitchRules = (value: unknown): value is SwitchRules =>
   isRecord(value.groupTypeMapping) &&
   isRecord(value.cohorts)
 
+/** What the Reader tells its caller when it hands the SDK no rules but KV holds something. */
+export type ReaderProblem =
+  | { readonly status: 'unreadable'; readonly cause: unknown }
+  | { readonly status: 'unrecognized'; readonly found: string }
+
+/** What a stored value is, in a few words and without its contents. */
+const describeValue = (value: unknown): string =>
+  match(value)
+    .with(P.array(), () => 'an array')
+    .when(isRecord, (record) => {
+      const keys = Object.keys(record).sort()
+      return `an object with ${keys.length > 0 ? `the keys ${keys.join(', ')}` : 'no keys'}`
+    })
+    .otherwise((other) => `a ${typeof other}`)
+
+const readStored = (
+  value: unknown,
+  onProblem: (problem: ReaderProblem) => void,
+): SwitchRules | undefined =>
+  match(value)
+    .with(P.nullish, () => undefined)
+    .when(isSwitchRules, (rules) => rules)
+    .otherwise((found) => {
+      onProblem({ status: 'unrecognized', found: describeValue(found) })
+      return undefined
+    })
+
 /**
- * The Reader, for a request: it reads KV and never fetches or writes. A value
- * KV cannot give back, or one of another shape, reads as nothing stored; a
- * failure of KV is reported to `onUnreadable` first.
+ * The Reader, for a request: it reads KV and never fetches or writes. Nothing
+ * stored reads as no rules, without a word. A value KV cannot give back, or
+ * one of another shape (the removed store's, say), reads as no rules too, and
+ * is reported to `onProblem` first, so it is not mistaken for nothing stored.
  */
 export const switchRulesReader = (
   space: KVNamespace,
-  onUnreadable: (cause: unknown) => void,
+  onProblem: (problem: ReaderProblem) => void,
 ): FlagDefinitionCacheProvider => ({
   getFlagDefinitions: () =>
     space.get(SWITCH_RULES_KEY, 'json').then(
-      (value: unknown) => (isSwitchRules(value) ? value : undefined),
+      (value: unknown) => readStored(value, onProblem),
       (cause: unknown) => {
-        onUnreadable(cause)
+        onProblem({ status: 'unreadable', cause })
         return undefined
       },
     ),
