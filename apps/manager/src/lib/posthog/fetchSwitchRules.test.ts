@@ -1,4 +1,7 @@
-import type { FlagDefinitionCacheProvider } from 'posthog-node/experimental'
+import type {
+  FlagDefinitionCacheData,
+  FlagDefinitionCacheProvider,
+} from 'posthog-node/experimental'
 import { describe, expect, it, vi } from 'vitest'
 import { fetchSwitchRules } from './fetchSwitchRules'
 import { switchRules } from './switchRules.mock'
@@ -27,33 +30,45 @@ const rulesResponse = () => {
   )
 }
 
-/** A provider that fetches and keeps what it is handed, after a pause. */
+/**
+ * A provider that fetches and keeps what it is handed, after a pause: `handed`
+ * records the rules it was given and `done` that it finished with them.
+ */
 const recordingProvider = (pauseMs = 0) => {
-  const log: string[] = []
+  const handed = vi.fn<(rules: FlagDefinitionCacheData) => void>()
+  const done = vi.fn<() => void>()
   const provider: FlagDefinitionCacheProvider = {
     getFlagDefinitions: () => undefined,
     shouldFetchFlagDefinitions: () => true,
     onFlagDefinitionsReceived: async (rules) => {
-      log.push(`handed ${rules.flags.length} rules`)
+      handed(rules)
       await new Promise((resolve) => setTimeout(resolve, pauseMs))
-      log.push('provider done')
+      done()
     },
     shutdown: () => {},
   }
-  return { provider, log }
+  return { provider, handed, done }
 }
+
+/** When a recorder was first called, counted across all of vitest's mocks; NaN when it never was. */
+const calledAt = (recorder: {
+  readonly mock: { readonly invocationCallOrder: readonly number[] }
+}): number => recorder.mock.invocationCallOrder[0] ?? Number.NaN
 
 describe('fetchSwitchRules', () => {
   it('has the SDK hand the provider the rules, and waits for the provider to finish with them', async () => {
-    const { provider, log } = recordingProvider(30)
+    const { provider, handed, done } = recordingProvider(30)
+    const resolved = vi.fn<() => void>()
 
     const fetched = await fetchSwitchRules(SOURCE, provider, {
       fetchRules: answering(rulesResponse),
     })
-    log.push('resolved')
+    resolved()
 
     expect(fetched.isOk()).toBe(true)
-    expect(log).toEqual(['handed 3 rules', 'provider done', 'resolved'])
+    expect(handed.mock.calls[0]?.[0].flags).toHaveLength(3)
+    expect(calledAt(handed)).toBeLessThan(calledAt(done))
+    expect(calledAt(done)).toBeLessThan(calledAt(resolved))
   })
 
   it('asks as the SDK asks, once, with the keys and nothing about a visitor', async () => {
@@ -88,7 +103,7 @@ describe('fetchSwitchRules', () => {
   })
 
   it('says what the SDK says when PostHog refuses the key', async () => {
-    const { provider, log } = recordingProvider()
+    const { provider, handed, done } = recordingProvider()
 
     const fetched = await fetchSwitchRules(SOURCE, provider, {
       fetchRules: answering(() => new Response('', { status: 403 })),
@@ -101,7 +116,8 @@ describe('fetchSwitchRules', () => {
         'PostHog sent no switch rules: ClientError: Your personal API key does not have permission',
       ),
     })
-    expect(log).toEqual([])
+    expect(handed).not.toHaveBeenCalled()
+    expect(done).not.toHaveBeenCalled()
   })
 
   it.each([
