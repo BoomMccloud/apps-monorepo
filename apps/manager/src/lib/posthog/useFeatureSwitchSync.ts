@@ -57,6 +57,8 @@ export const useFeatureSwitchSync = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: `resetCount` writes the answers again after a reset, which empties the SDK's switches though `data` has not changed
   useEffect(() => {
     if (!isConnectionSettled) return
+    // greptile: query-data-unwrapped: loading, an error and no data all mean
+    // the same here, every switch off, so the three states are not told apart.
     writeFeatureSwitches(data ?? ALL_SWITCHES_OFF)
   }, [data, isConnectionSettled, resetCount])
 }
