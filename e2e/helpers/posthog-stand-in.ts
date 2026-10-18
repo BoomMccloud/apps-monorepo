@@ -10,6 +10,10 @@ import {
   eventsIn as eventsOfBody,
   type SentEvent,
 } from '@ens-apps/utils/postHogEvents'
+import {
+  type RequestSource,
+  requestSourceOf,
+} from '@ens-apps/utils/postHogRequestSource'
 import { fromThrowable } from 'neverthrow'
 
 /**
@@ -18,25 +22,18 @@ import { fromThrowable } from 'neverthrow'
  * The apps under test are started with `VITE_PUBLIC_POSTHOG_HOST` pointing
  * here, so both the browser SDK and the Manager's server talk to this process
  * instead of PostHog. Browser requests are cross-origin (the apps run on their
- * own ports), so every one of them carries an `Origin` header; the Manager's
- * server fetches the switch rules with none. That is how a recorded request is
- * attributed to the browser or the server. Other programs on the machine may
- * call the port too (a remote-session tool sends `GET /` to each new local
- * port): a request that names no PostHog project is from neither app.
+ * own ports), so a fetch or a beacon carries an `Origin` header, and an image
+ * or a classic script, which carries none, carries the browser's fetch
+ * metadata (`Sec-Fetch-*`); the Manager's server fetches the switch rules with
+ * neither. That is how a recorded request is attributed to the browser or the
+ * server (`requestSourceOf`). Other programs on the machine may call the port
+ * too (a remote-session tool sends `GET /` to each new local port): a request
+ * that names no PostHog project and is no browser's is from neither app.
  */
 
 const POSTHOG_STAND_IN_PORT = Number(process.env.POSTHOG_STAND_IN_PORT ?? 4973)
 
 export type CapturedEvent = SentEvent
-
-/**
- * Where a request came from: the browser (it carries an `Origin`), the
- * Manager's server (no `Origin`, and a PostHog project named: every call the
- * apps make to PostHog carries the project's key `phc_…` in its path, query
- * or body, or the project's secret key as `Authorization`), or another
- * program on the machine.
- */
-type RequestSource = 'browser' | 'server' | 'elsewhere'
 
 export type RecordedRequest = {
   readonly method: string
@@ -122,14 +119,6 @@ const decodeBodyOrText = (raw: Buffer): string =>
     decodeBody,
     (cause) => new UndecodableBodyError({ cause }),
   )(raw).unwrapOr(raw.toString('utf8'))
-
-const sourceOf = (
-  headers: Readonly<Record<string, string | undefined>>,
-  hasProjectKey: boolean,
-): RequestSource => {
-  if (headers.origin !== undefined) return 'browser'
-  return hasProjectKey ? 'server' : 'elsewhere'
-}
 
 class NotJsonError extends TaggedError('NotJsonError')<{
   readonly cause: unknown
@@ -245,7 +234,7 @@ export const startPostHogStandIn = async (
           headers,
           body,
           events: eventsIn(body),
-          source: sourceOf(headers, hasProjectKey),
+          source: requestSourceOf(headers, hasProjectKey),
           receivedAt: Date.now(),
         })
 
