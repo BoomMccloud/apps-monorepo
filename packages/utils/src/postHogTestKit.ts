@@ -74,30 +74,43 @@ const gunzip = (bytes: BufferSource): Promise<string> =>
     new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')),
   ).text()
 
+const GZIP_MAGIC_BYTES = [0x1f, 0x8b] as const
+
+const isGzip = (bytes: Uint8Array): boolean =>
+  GZIP_MAGIC_BYTES.every((byte, index) => bytes[index] === byte)
+
+// Bytes are gzip when they start as gzip does, and text otherwise: a Blob
+// handed to `sendBeacon` holds either, according to the SDK's compression.
+const textOfBytes = async (bytes: Uint8Array): Promise<string> =>
+  isGzip(bytes)
+    ? gunzip(Uint8Array.from(bytes))
+    : new TextDecoder().decode(bytes)
+
+const parseBody = (text: string): unknown =>
+  JSON.parse(
+    text.startsWith('data=')
+      ? fromBase64(decodeURIComponent(text.slice('data='.length)))
+      : text,
+  )
+
 const decodeBody = async (
   raw: string | ArrayBuffer | ArrayBufferView,
 ): Promise<unknown> => {
   try {
-    if (typeof raw !== 'string') {
-      const bytes = ArrayBuffer.isView(raw)
-        ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
-        : new Uint8Array(raw)
-      return JSON.parse(await gunzip(Uint8Array.from(bytes)))
-    }
-    return JSON.parse(
-      raw.startsWith('data=')
-        ? fromBase64(decodeURIComponent(raw.slice('data='.length)))
-        : raw,
-    )
+    if (typeof raw === 'string') return parseBody(raw)
+    const bytes = ArrayBuffer.isView(raw)
+      ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+      : new Uint8Array(raw)
+    return parseBody(await textOfBytes(bytes))
   } catch (cause) {
     throw new Error('the test kit cannot decode a body the SDK sent', { cause })
   }
 }
 
-const bodyText = async (
+const rawBody = async (
   body: BodyInit | null | undefined,
 ): Promise<string | ArrayBuffer | ArrayBufferView | undefined> => {
-  if (body instanceof Blob) return body.text()
+  if (body instanceof Blob) return body.arrayBuffer()
   if (typeof body === 'string' || ArrayBuffer.isView(body)) return body
   if (body instanceof ArrayBuffer) return body
   return undefined
@@ -112,7 +125,7 @@ const wireRequest = async (
   order: number,
 ) => {
   const url = urlOf(address)
-  const raw = await bodyText(body)
+  const raw = await rawBody(body)
   return {
     order,
     request: {
