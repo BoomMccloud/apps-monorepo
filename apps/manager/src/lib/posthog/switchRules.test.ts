@@ -1,6 +1,6 @@
 import type { PostHogOptions } from 'posthog-node'
 import type { FlagDefinitionCacheProvider } from 'posthog-node/experimental'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   checkSwitchRules,
   evaluateStoredSwitches,
@@ -19,8 +19,10 @@ import {
 
 // What each posthog-node client was given, in the order they were made, and
 // each time one asked for the network through the `fetch` it was given.
-const clientOptions = vi.hoisted(() => [] as (PostHogOptions | undefined)[])
-const networkAsked = vi.hoisted(() => [] as string[])
+const recorded = vi.hoisted(() => ({
+  clientMade: vi.fn<(options: PostHogOptions | undefined) => void>(),
+  networkAsked: vi.fn<(url: string) => void>(),
+}))
 
 vi.mock('posthog-node', async (importOriginal) => {
   const actual = await importOriginal<typeof import('posthog-node')>()
@@ -34,12 +36,12 @@ vi.mock('posthog-node', async (importOriginal) => {
           given && {
             ...options,
             fetch: (url, init) => {
-              networkAsked.push(url)
+              recorded.networkAsked(url)
               return given(url, init)
             },
           },
         )
-        clientOptions.push(options)
+        recorded.clientMade(options)
       }
     },
   }
@@ -54,6 +56,11 @@ const holdingNothing: FlagDefinitionCacheProvider = {
 }
 
 describe('evaluateSwitches', () => {
+  beforeEach(() => {
+    recorded.clientMade.mockClear()
+    recorded.networkAsked.mockClear()
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -71,8 +78,6 @@ describe('evaluateSwitches', () => {
   })
 
   it('refuses the network posthog-node asks for when its provider holds no rules, and says it holds none', async () => {
-    const askedBefore = networkAsked.length
-
     const evaluation = await evaluateStoredSwitches(
       holdingNothing,
       switchVisitor(TEST_WALLET),
@@ -81,9 +86,9 @@ describe('evaluateSwitches', () => {
     expect(evaluation).toEqual({ answers: {}, hasRules: false })
     // An ordinary empty store, not a bug: the SDK falls back to its own
     // fetch, with a key, and the `fetch` it was given refuses.
-    expect(networkAsked.length).toBeGreaterThan(askedBefore)
-    const askNetwork = clientOptions
-      .at(-1)
+    expect(recorded.networkAsked).toHaveBeenCalled()
+    const askNetwork = recorded.clientMade.mock.calls
+      .at(-1)?.[0]
       ?.fetch?.('http://switch-rules.invalid', { method: 'GET', headers: {} })
     await expect(askNetwork).rejects.toMatchObject({
       _tag: 'SwitchRulesNetworkRefused',
@@ -92,7 +97,6 @@ describe('evaluateSwitches', () => {
   })
 
   it('reads the rules a provider holds, and asks nothing of the network for them', async () => {
-    const askedBefore = networkAsked.length
     const holding: FlagDefinitionCacheProvider = {
       ...holdingNothing,
       getFlagDefinitions: async () => switchRules(),
@@ -104,7 +108,7 @@ describe('evaluateSwitches', () => {
       answers: { migration: true, i18n: true, 'migration-nft': false },
       hasRules: true,
     })
-    expect(networkAsked).toHaveLength(askedBefore)
+    expect(recorded.networkAsked).not.toHaveBeenCalled()
   })
 
   it('matches a wallet whatever the case of its address', async () => {
