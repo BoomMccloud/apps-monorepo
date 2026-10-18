@@ -5,6 +5,7 @@ import {
   startAnalyticsChoice,
 } from './analyticsConsent'
 import { forgetLegacyProjects } from './analyticsLegacyStorage'
+import { guardPostHogSends } from './analyticsSendGuard'
 
 /** The part of the PostHog browser SDK that starts it, besides what the choice uses. */
 export interface StartableClient extends AnalyticsClient {
@@ -20,6 +21,10 @@ export interface StartableClient extends AnalyticsClient {
  *
  * `legacyProjectKeys` are the PostHog projects the app used before; what the
  * SDK left on the device for them goes first, whatever the visitor chose.
+ *
+ * The send guard is armed before the SDK starts, so what a start that fails
+ * or stops half way leaves running sends nothing either, and the SDK's own
+ * requests at start-up are held until the visitor has accepted.
  */
 export const startAnalyticsSdk = (
   client: StartableClient,
@@ -32,11 +37,13 @@ export const startAnalyticsSdk = (
 ): AnalyticsConsent | 'unknown' => {
   try {
     forgetLegacyProjects(options.legacyProjectKeys ?? [])
+    guardPostHogSends(client)
     client.init(token, config)
     // The ESM `posthog-js` build keeps the singleton in an internal registry
     // and never attaches it to `window` (unlike the script-tag snippet).
     // Expose it so the browser tests can read the page's state and override
-    // flags, and for debugging in the console.
+    // flags, and for debugging in the console. A script on the page can write
+    // the choice's cookie itself, so the handle gives it nothing more.
     ;(window as Window & { posthog?: StartableClient }).posthog = client
     if (!client.__loaded) return 'unknown'
     return startAnalyticsChoice(client, { isDev: options.isDev })

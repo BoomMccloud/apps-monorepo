@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startAnalyticsChoice } from './analyticsConsent'
+import { guardPostHogSends } from './analyticsSendGuard'
 import { type StartableClient, startAnalyticsSdk } from './analyticsStart'
 
 vi.mock('./analyticsConsent', () => ({
   startAnalyticsChoice: vi.fn(() => 'granted'),
 }))
+vi.mock('./analyticsSendGuard', () => ({ guardPostHogSends: vi.fn() }))
 
 const OPTIONS = { isDev: true } as const
 const CONFIG = { api_host: 'https://posthog.example' }
@@ -68,6 +70,30 @@ describe('startAnalyticsSdk', () => {
     expect(startAnalyticsSdk(client, 'key', CONFIG, OPTIONS)).toBe('unknown')
 
     expect(startAnalyticsChoice).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['starts', {}],
+    ['does not load', { __loaded: false }],
+    [
+      'fails',
+      {
+        init: () => {
+          throw new Error('blocked')
+        },
+      },
+    ],
+  ] as const)('holds back every request to the host before the SDK starts, so a start that %s sends nothing either', (_outcome, overrides) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = startable(overrides)
+    const init = vi.spyOn(client, 'init')
+
+    startAnalyticsSdk(client, 'key', CONFIG, OPTIONS)
+
+    expect(guardPostHogSends).toHaveBeenCalledExactlyOnceWith(client)
+    expect(
+      vi.mocked(guardPostHogSends).mock.invocationCallOrder[0],
+    ).toBeLessThan(init.mock.invocationCallOrder[0] ?? Number.NaN)
   })
 
   it('never lets a failing start crash the app', () => {

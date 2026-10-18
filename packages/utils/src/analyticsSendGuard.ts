@@ -10,7 +10,9 @@
  * counts as declined. It acts only on requests to the host the SDK was
  * configured with. A held request is answered as if it were delivered, 200 for
  * a fetch and `true` for a beacon, so the SDK neither retries nor logs it, and
- * what it carried is gone.
+ * what it carried is gone. The SDK sends with `XMLHttpRequest` only where
+ * there is no `fetch`, which the apps cannot run without, so that transport
+ * is left alone.
  *
  * The SDK keeps the `fetch` it finds when its module loads, so this module has
  * to run before the SDK's. In each app the one module that imports the SDK,
@@ -47,6 +49,7 @@ const isToHostOf = (
   input: RequestInfo | URL,
 ): boolean => {
   try {
+    if (client.config.api_host.trim() === '') return false
     const base = globalThis.location?.href
     const target = new URL(urlOf(input), base)
     const host = new URL(client.config.api_host, base)

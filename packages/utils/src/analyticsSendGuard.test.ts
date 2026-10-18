@@ -137,13 +137,18 @@ describe('the send guard', () => {
       )
     })
 
-    it('holds nothing of the page when the host is empty', async () => {
+    it.each([
+      'https://app.example/dashboard',
+      'https://app.example/',
+    ])('holds nothing of the page when the host is empty, on %s', async (pageUrl) => {
+      setPageUrl(pageUrl)
       guardPostHogSends(clientWith('denied', ''))
 
       await fetch('https://app.example/api/anything')
+      await fetch('https://app.example/dashboard/data')
       await fetch('https://app.example/_serverFn/x', { method: 'POST' })
 
-      expect(network.fetch).toHaveBeenCalledTimes(2)
+      expect(network.fetch).toHaveBeenCalledTimes(3)
     })
   })
 })
