@@ -108,8 +108,8 @@ export const errorReportsOn = {
 /**
  * Collection after Accept: what ran before the launch pause, the SDK's
  * defaults apart from page views on history changes and no recordings on a
- * development build, plus error reports, which are set here because the
- * project's own setting for them is never loaded.
+ * development build, plus error reports, which the code switches on itself,
+ * so the project's own setting for them does not apply.
  */
 export const collectionOn = ({
   isDev,

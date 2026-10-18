@@ -92,7 +92,7 @@ const decide = async (
   }
   // A request only reads. The scheduled refresh fetches and stores, so until
   // it has stored any, as for a Worker's first deploy (KV persists across the
-  // later ones) or on a preview, where crons do not run, every switch is off
+  // later ones) or on a dev server, which runs no cron, every switch is off
   // and the reason is logged.
   const { answers, hasRules } = await evaluateStoredSwitches(
     switchRulesReader(space, reportReaderProblem),
