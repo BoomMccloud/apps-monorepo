@@ -1,17 +1,13 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { err, ok, type Result } from 'neverthrow'
 import { match } from 'ts-pattern'
+import type { SwitchRulesEnv } from './decideFeatureSwitches'
 import {
-  StoredSwitchRulesUnreadable,
-  type SwitchRulesEnv,
-  switchRulesSource,
-} from './decideFeatureSwitches'
-import { checkSwitchRules, type SwitchRules } from './switchRules'
-import {
-  downloadSwitchRules,
-  downloadSwitchRulesIfChanged,
-} from './switchRulesDownload'
-import { readStoredRules, writeStoredRules } from './switchRulesStore'
+  type FetchSwitchRulesOptions,
+  fetchSwitchRules,
+  type SwitchRulesSource,
+} from './fetchSwitchRules'
+import { SWITCH_RULES_KEY, switchRulesWriter } from './switchRulesCache'
 
 /** A refresh that could not store new rules; the last good rules stay. */
 class SwitchRulesRefreshFailed extends TaggedError('SwitchRulesRefreshFailed')<{
@@ -22,37 +18,32 @@ class SwitchRulesRefreshFailed extends TaggedError('SwitchRulesRefreshFailed')<{
 const refreshFailed = (message: string) =>
   new SwitchRulesRefreshFailed({ message, cause: undefined })
 
-/** Store downloaded rules once they pass the rules check, and never before. */
-const storeCheckedRules = async (
-  space: KVNamespace,
-  download: { readonly rules: SwitchRules; readonly etag: string | null },
-): Promise<Result<'stored', SwitchRulesRefreshFailed>> => {
-  const problems = await checkSwitchRules(download.rules)
-  if (problems.length > 0) {
-    return err(
-      refreshFailed(
-        `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
-      ),
-    )
-  }
-  await writeStoredRules(space, {
-    rules: download.rules,
-    etag: download.etag,
-  })
-  return ok('stored')
+/** The project the switches belong to, or null when it is not configured. */
+const switchRulesSource = (env: SwitchRulesEnv): SwitchRulesSource | null => {
+  const projectKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY
+  const host = import.meta.env.VITE_PUBLIC_POSTHOG_HOST
+  const secretKey = env.POSTHOG_PROJECT_SECRET_API_KEY
+  return projectKey && host && secretKey
+    ? { host, projectKey, secretKey }
+    : null
 }
 
 /**
- * The scheduled job: download PostHog's switch rules and store them for the
- * requests to read, once they pass the rules check. Rules that fail the check
- * are never stored; the job returns why, and requests go on with the last
- * good rules. The Worker's entry point turns a failure into a failed run
- * (server.ts).
+ * The scheduled job, after PostHog's Cloudflare KV example: PostHog's SDK
+ * fetches the project's switch rules and hands them to the Writer, which
+ * stores them for the requests to read once they pass the rules check. Rules
+ * that fail the check are never stored; the job returns why, and requests go
+ * on with the last good rules. The Worker's entry point turns a failure into
+ * a failed run (server.ts).
+ *
+ * The SDK catches whatever the Writer throws, so the Writer's outcome is read
+ * from it once the SDK has finished. Every run fetches the rules whole: a
+ * client made for one run holds no ETag to ask with.
  */
 export const refreshSwitchRules = async (
   env: SwitchRulesEnv,
-  options: { readonly fetchRules?: typeof fetch } = {},
-): Promise<Result<'stored' | 'unchanged', SwitchRulesRefreshFailed>> => {
+  options: FetchSwitchRulesOptions = {},
+): Promise<Result<'stored', SwitchRulesRefreshFailed>> => {
   const space = env.POSTHOG_SWITCH_RULES
   const source = switchRulesSource(env)
   if (!space || !source) {
@@ -63,25 +54,31 @@ export const refreshSwitchRules = async (
     )
   }
 
-  // A stored value that cannot be read is replaced by a whole download.
-  const stored = await readStoredRules(space).catch((cause: unknown) => {
-    console.warn(
-      new StoredSwitchRulesUnreadable({
-        message:
-          'the stored switch rules could not be read, so the refresh replaces them',
-        cause,
-      }),
+  const writer = switchRulesWriter((rules) =>
+    space.put(SWITCH_RULES_KEY, JSON.stringify(rules)),
+  )
+  const fetched = await fetchSwitchRules(source, writer.provider, options)
+  if (fetched.isErr()) return err(refreshFailed(fetched.error.message))
+  return match(writer.outcome())
+    .with({ status: 'accepted' }, () => ok('stored' as const))
+    .with({ status: 'refused' }, ({ problems }) =>
+      err(
+        refreshFailed(
+          `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+        ),
+      ),
     )
-    return null
-  })
-  const download = stored?.etag
-    ? await downloadSwitchRulesIfChanged(source, stored.etag, options)
-    : await downloadSwitchRules(source, options)
-  return match(download)
-    .with({ status: 'unchanged' }, () => ok('unchanged' as const))
-    .with({ status: 'failed' }, ({ reason }) => err(refreshFailed(reason)))
-    .with({ status: 'downloaded' }, (downloaded) =>
-      storeCheckedRules(space, downloaded),
+    .with({ status: 'unwritten' }, ({ cause }) =>
+      err(
+        new SwitchRulesRefreshFailed({
+          message:
+            'the new rules pass the rules check and could not be written to KV',
+          cause,
+        }),
+      ),
+    )
+    .with(undefined, () =>
+      err(refreshFailed('the new rules arrived and could not be checked')),
     )
     .exhaustive()
 }

@@ -1,6 +1,9 @@
 import { match } from 'ts-pattern'
-import { checkSwitchRules, type SwitchRules } from './switchRules'
-import { downloadSwitchRules } from './switchRulesDownload'
+import {
+  type FetchSwitchRulesOptions,
+  fetchSwitchRules,
+} from './fetchSwitchRules'
+import { switchRulesWriter } from './switchRulesCache'
 
 const SECRET_KEY_NAME = 'POSTHOG_PROJECT_SECRET_API_KEY'
 
@@ -22,19 +25,12 @@ const failed = (message: string): SwitchRulesBuildCheck => ({
   message,
 })
 
-const checkRules = async (
-  rules: SwitchRules,
-): Promise<SwitchRulesBuildCheck> => {
-  const problems = await checkSwitchRules(rules)
-  return problems.length > 0
-    ? failed(problems.join('\n'))
-    : passed(`switch rules ok: ${rules.flags.length} rules decide every switch`)
-}
-
 /**
- * The rules check against the live project: download PostHog's switch rules
- * with the project secret key and fail when the server could not decide every
- * switch from them, so no switch turns off unnoticed after a deploy.
+ * The rules check against the live project: have PostHog's SDK fetch the
+ * switch rules with the project secret key, as the scheduled refresh does,
+ * and fail when the server could not decide every switch from them, so no
+ * switch turns off unnoticed after a deploy. The Writer of the refresh does
+ * the check, with nothing to write to.
  *
  * `env` is the environment of the build, so the check reads the project and
  * host the build will compile in, whichever Vite mode it runs in. A Cloudflare
@@ -44,10 +40,7 @@ const checkRules = async (
  */
 export const checkSwitchRulesForBuild = async (
   env: Readonly<Record<string, string | undefined>>,
-  options: {
-    readonly isSkippedWithoutKey: boolean
-    readonly fetchRules?: typeof fetch
-  },
+  options: FetchSwitchRulesOptions & { readonly isSkippedWithoutKey: boolean },
 ): Promise<SwitchRulesBuildCheck> => {
   const secretKey = env[SECRET_KEY_NAME]
   const isDeployBuild = env.WORKERS_CI === '1'
@@ -67,12 +60,23 @@ export const checkSwitchRulesForBuild = async (
     )
   }
 
-  const download = await downloadSwitchRules(
+  const writer = switchRulesWriter(async () => {})
+  const fetched = await fetchSwitchRules(
     { host, projectKey, secretKey },
-    { fetchRules: options.fetchRules },
+    writer.provider,
+    options,
   )
-  return match(download)
-    .with({ status: 'downloaded' }, ({ rules }) => checkRules(rules))
-    .with({ status: 'failed' }, ({ reason }) => failed(reason))
+  if (fetched.isErr()) return failed(fetched.error.message)
+  return match(writer.outcome())
+    .with({ status: 'accepted' }, ({ rules }) =>
+      passed(
+        `switch rules ok: ${rules.flags.length} rules decide every switch`,
+      ),
+    )
+    .with({ status: 'refused' }, ({ problems }) => failed(problems.join('\n')))
+    .with({ status: 'unwritten' }, () =>
+      failed('the switch rules could not be written'),
+    )
+    .with(undefined, () => failed('the switch rules could not be checked'))
     .exhaustive()
 }

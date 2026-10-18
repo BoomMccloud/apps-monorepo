@@ -1,8 +1,9 @@
 import type { PostHogOptions } from 'posthog-node'
+import type { FlagDefinitionCacheProvider } from 'posthog-node/experimental'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { InvariantViolation } from '../../../../../packages/utils/src/invariant'
 import {
   checkSwitchRules,
+  evaluateStoredSwitches,
   evaluateSwitches,
   NO_WALLET_VISITOR,
   switchVisitor,
@@ -16,8 +17,10 @@ import {
   TEST_WALLET,
 } from './switchRules.mock'
 
-// What each posthog-node client was given, in the order they were made.
+// What each posthog-node client was given, in the order they were made, and
+// each time one asked for the network through the `fetch` it was given.
 const clientOptions = vi.hoisted(() => [] as (PostHogOptions | undefined)[])
+const networkAsked = vi.hoisted(() => [] as string[])
 
 vi.mock('posthog-node', async (importOriginal) => {
   const actual = await importOriginal<typeof import('posthog-node')>()
@@ -25,12 +28,30 @@ vi.mock('posthog-node', async (importOriginal) => {
     ...actual,
     PostHog: class extends actual.PostHog {
       constructor(apiKey: string, options?: PostHogOptions) {
-        super(apiKey, options)
+        const given = options?.fetch
+        super(
+          apiKey,
+          given && {
+            ...options,
+            fetch: (url, init) => {
+              networkAsked.push(url)
+              return given(url, init)
+            },
+          },
+        )
         clientOptions.push(options)
       }
     },
   }
 })
+
+/** A provider that holds nothing and is not to fetch, as the Reader over an empty KV. */
+const holdingNothing: FlagDefinitionCacheProvider = {
+  getFlagDefinitions: () => undefined,
+  shouldFetchFlagDefinitions: () => false,
+  onFlagDefinitionsReceived: () => {},
+  shutdown: () => {},
+}
 
 describe('evaluateSwitches', () => {
   afterEach(() => {
@@ -49,17 +70,41 @@ describe('evaluateSwitches', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('gives posthog-node a network that fails as a bug in our code the moment it is asked', async () => {
-    await evaluateSwitches(switchRules(), switchVisitor(TEST_WALLET))
+  it('refuses the network posthog-node asks for when its provider holds no rules, and says it holds none', async () => {
+    const askedBefore = networkAsked.length
 
-    const askNetwork = () =>
-      clientOptions
-        .at(-1)
-        ?.fetch?.('http://switch-rules.invalid', { method: 'GET', headers: {} })
-    expect(askNetwork).toThrow(InvariantViolation)
-    expect(askNetwork).toThrow(
-      'Feature switches are decided from stored rules only',
+    const evaluation = await evaluateStoredSwitches(
+      holdingNothing,
+      switchVisitor(TEST_WALLET),
     )
+
+    expect(evaluation).toEqual({ answers: {}, hasRules: false })
+    // An ordinary empty store, not a bug: the SDK falls back to its own
+    // fetch, with a key, and the `fetch` it was given refuses.
+    expect(networkAsked.length).toBeGreaterThan(askedBefore)
+    const askNetwork = clientOptions
+      .at(-1)
+      ?.fetch?.('http://switch-rules.invalid', { method: 'GET', headers: {} })
+    await expect(askNetwork).rejects.toMatchObject({
+      _tag: 'SwitchRulesNetworkRefused',
+      message: 'Feature switches are decided from stored rules only',
+    })
+  })
+
+  it('reads the rules a provider holds, and asks nothing of the network for them', async () => {
+    const askedBefore = networkAsked.length
+    const holding: FlagDefinitionCacheProvider = {
+      ...holdingNothing,
+      getFlagDefinitions: async () => switchRules(),
+    }
+
+    await expect(
+      evaluateStoredSwitches(holding, switchVisitor(TEST_WALLET)),
+    ).resolves.toEqual({
+      answers: { migration: true, i18n: true, 'migration-nft': false },
+      hasRules: true,
+    })
+    expect(networkAsked).toHaveLength(askedBefore)
   })
 
   it('matches a wallet whatever the case of its address', async () => {

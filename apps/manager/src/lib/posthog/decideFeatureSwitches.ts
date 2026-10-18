@@ -1,22 +1,12 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
-import { match } from 'ts-pattern'
 import type { Address } from 'viem'
 import {
   ALL_SWITCHES_OFF,
   FEATURE_SWITCH_NAMES,
   type FeatureSwitches,
 } from './feature-flags'
-import {
-  checkSwitchRules,
-  evaluateSwitches,
-  type SwitchRules,
-  switchVisitor,
-} from './switchRules'
-import {
-  downloadSwitchRules,
-  type SwitchRulesSource,
-} from './switchRulesDownload'
-import { readStoredRules } from './switchRulesStore'
+import { evaluateStoredSwitches, switchVisitor } from './switchRules'
+import { switchRulesReader } from './switchRulesCache'
 
 /** The Worker bindings the switches need. */
 export type SwitchRulesEnv = {
@@ -28,15 +18,16 @@ export type SwitchRulesEnv = {
  * Logged when a request cannot decide the switches and answers them all off,
  * so no switch turns off unnoticed.
  */
-export class FeatureSwitchesUndecided extends TaggedError(
-  'FeatureSwitchesUndecided',
-)<{ readonly message: string; readonly cause: unknown }> {}
+class FeatureSwitchesUndecided extends TaggedError('FeatureSwitchesUndecided')<{
+  readonly message: string
+  readonly cause: unknown
+}> {}
 
 /**
  * Logged when the stored rules cannot be read, which would otherwise look
- * like no rules stored: each request then downloads its own.
+ * like no rules stored.
  */
-export class StoredSwitchRulesUnreadable extends TaggedError(
+class StoredSwitchRulesUnreadable extends TaggedError(
   'StoredSwitchRulesUnreadable',
 )<{ readonly message: string; readonly cause: unknown }> {}
 
@@ -56,92 +47,39 @@ const reportOnce = (
 const switchesUndecided = (message: string) =>
   new FeatureSwitchesUndecided({ message, cause: undefined })
 
-/** The project the switches belong to, or null when it is not configured. */
-export const switchRulesSource = (
-  env: SwitchRulesEnv,
-): SwitchRulesSource | null => {
-  const projectKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY
-  const host = import.meta.env.VITE_PUBLIC_POSTHOG_HOST
-  const secretKey = env.POSTHOG_PROJECT_SECRET_API_KEY
-  return projectKey && host && secretKey
-    ? { host, projectKey, secretKey }
-    : null
-}
-
-type RequestRules =
-  | { readonly status: 'usable'; readonly rules: SwitchRules }
-  | { readonly status: 'unusable'; readonly reason: string }
-
-/**
- * The rules a download holds, once they pass the rules check: rules that fail
- * it are never stored by the refresh, and are not served either.
- */
-const checkedForRequest = async (rules: SwitchRules): Promise<RequestRules> => {
-  const problems = await checkSwitchRules(rules)
-  return problems.length > 0
-    ? {
-        status: 'unusable',
-        reason: `no rules are stored and the downloaded rules fail the rules check: ${problems.join('; ')}`,
-      }
-    : { status: 'usable', rules }
-}
-
-/**
- * The stored rules. Until the scheduled refresh has stored any, as on a new
- * deploy or a preview, where crons do not run, each request downloads its own
- * and stores nothing.
- */
-const rulesForRequest = async (
-  env: SwitchRulesEnv,
-  fetchRules: typeof fetch | undefined,
-): Promise<RequestRules> => {
-  const stored = env.POSTHOG_SWITCH_RULES
-    ? await readStoredRules(env.POSTHOG_SWITCH_RULES).catch(
-        (cause: unknown) => {
-          reportOnce(
-            new StoredSwitchRulesUnreadable({
-              message:
-                'the stored switch rules could not be read, so each request downloads its own',
-              cause,
-            }),
-          )
-          return null
-        },
-      )
-    : null
-  if (stored) return { status: 'usable', rules: stored.rules }
-
-  const source = switchRulesSource(env)
-  if (!source) {
-    return {
-      status: 'unusable',
-      reason: 'no rules are stored and no project secret key is set',
-    }
-  }
-  const download = await downloadSwitchRules(source, { fetchRules })
-  return match(download)
-    .with({ status: 'downloaded' }, ({ rules }) => checkedForRequest(rules))
-    .with(
-      { status: 'failed' },
-      ({ reason }): RequestRules => ({
-        status: 'unusable',
-        reason: `no rules are stored and ${reason}`,
-      }),
-    )
-    .exhaustive()
-}
+const reportUnreadable = (cause: unknown): void =>
+  reportOnce(
+    new StoredSwitchRulesUnreadable({
+      message:
+        'the stored switch rules could not be read, so every switch is off until they can',
+      cause,
+    }),
+  )
 
 const decide = async (
   env: SwitchRulesEnv,
   wallet: Address | null,
-  options: { readonly fetchRules?: typeof fetch },
 ): Promise<FeatureSwitches> => {
-  const rules = await rulesForRequest(env, options.fetchRules)
-  if (rules.status === 'unusable') {
-    reportOnce(switchesUndecided(rules.reason))
+  const space = env.POSTHOG_SWITCH_RULES
+  if (!space) {
+    reportOnce(switchesUndecided('no switch rules space is bound'))
     return ALL_SWITCHES_OFF
   }
-  const answers = await evaluateSwitches(rules.rules, switchVisitor(wallet))
+  // A request only reads. The scheduled refresh fetches and stores, so until
+  // it has stored any, as on a new deploy or a preview, where crons do not
+  // run, every switch is off and the reason is logged.
+  const { answers, hasRules } = await evaluateStoredSwitches(
+    switchRulesReader(space, reportUnreadable),
+    switchVisitor(wallet),
+  )
+  if (!hasRules) {
+    reportOnce(
+      switchesUndecided(
+        'no switch rules are stored, so every switch is off until the scheduled refresh stores them',
+      ),
+    )
+    return ALL_SWITCHES_OFF
+  }
   const undecidedNames = FEATURE_SWITCH_NAMES.filter(
     (name) => answers[name] === undefined,
   )
@@ -157,18 +95,18 @@ const decide = async (
 }
 
 /**
- * Every switch for one visitor, decided on the server from PostHog's rules:
- * for the wallet when there is one, and alike for every visitor without one.
- * The wallet never leaves the Worker. When the rules cannot decide every
- * switch, or deciding fails in any way, every switch is off and the reason is
- * logged: the switches are never a reason for a page not to render.
+ * Every switch for one visitor, decided on the server from PostHog's rules
+ * as the scheduled refresh stored them: for the wallet when there is one, and
+ * alike for every visitor without one. The wallet never leaves the Worker.
+ * When the rules cannot decide every switch, or deciding fails in any way,
+ * every switch is off and the reason is logged: the switches are never a
+ * reason for a page not to render.
  */
 export const decideFeatureSwitches = (
   env: SwitchRulesEnv,
   wallet: Address | null,
-  options: { readonly fetchRules?: typeof fetch } = {},
 ): Promise<FeatureSwitches> =>
-  decide(env, wallet, options).catch((cause: unknown) => {
+  decide(env, wallet).catch((cause: unknown) => {
     reportOnce(
       new FeatureSwitchesUndecided({
         message: 'deciding the switches failed',

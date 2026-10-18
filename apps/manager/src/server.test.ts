@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memoryKv, switchRules } from '@/lib/posthog/switchRules.mock'
-import { SWITCH_RULES_KEY } from '@/lib/posthog/switchRulesStore'
+import { SWITCH_RULES_KEY } from '@/lib/posthog/switchRulesCache'
 import worker from './server'
 
 // The framework's own entry answers requests; these tests are about the cron.

@@ -460,6 +460,25 @@ export const pageSwitch = (page: Page, key: string): Promise<boolean> =>
     key,
   )
 
+/**
+ * Has the Manager's Worker run its scheduled job, which fetches the switch
+ * rules from the PostHog host and stores them in KV. A request only reads
+ * what the job stored, and a dev server runs no cron, so a spec that reads a
+ * switch runs the job first, through the route the Cloudflare plugin serves
+ * for it, once the host it fetches from is up.
+ */
+export const refreshManagerSwitchRules = async (
+  managerUrl: string,
+): Promise<void> => {
+  const response = await fetch(
+    `${new URL(managerUrl).origin}/cdn-cgi/handler/scheduled`,
+  )
+  expect(
+    response.status,
+    "the Manager's scheduled refresh of the switch rules",
+  ).toBe(200)
+}
+
 export const pageDistinctId = (page: Page): Promise<string | undefined> =>
   page.evaluate(() => (window as PostHogWindow).posthog?.get_distinct_id?.())
 

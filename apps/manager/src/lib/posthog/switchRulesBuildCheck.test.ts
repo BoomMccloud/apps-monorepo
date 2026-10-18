@@ -21,7 +21,7 @@ const answering =
       : Promise.resolve(response)
 
 describe('checkSwitchRulesForBuild', () => {
-  it('passes when the downloaded rules decide every switch, and says how many rules there are', async () => {
+  it('passes when the fetched rules decide every switch, and says how many rules there are', async () => {
     const fetchRules = answering(downloadOf())
 
     const check = await checkSwitchRulesForBuild(BUILD_ENV, {
@@ -35,7 +35,7 @@ describe('checkSwitchRulesForBuild', () => {
     })
   })
 
-  it('downloads from the project and host of the env it is given, which is the env of the build', async () => {
+  it('fetches from the project and host of the env it is given, which is the env of the build', async () => {
     const fetchRules = vi.fn(answering(downloadOf()))
 
     await checkSwitchRulesForBuild(
@@ -95,7 +95,7 @@ describe('checkSwitchRulesForBuild', () => {
     })
   })
 
-  it('fails when the env names no PostHog project or host to download from', async () => {
+  it('fails when the env names no PostHog project or host to fetch from', async () => {
     const fetchRules = vi.fn(answering(downloadOf()))
 
     await expect(
@@ -111,17 +111,33 @@ describe('checkSwitchRulesForBuild', () => {
     expect(fetchRules).not.toHaveBeenCalled()
   })
 
-  it('fails with the reason of a failed download, which never holds the secret key', async () => {
+  it('fails with what the SDK says of a refused key, which never holds the secret key', async () => {
     const check = await checkSwitchRulesForBuild(BUILD_ENV, {
       isSkippedWithoutKey: false,
       fetchRules: answering(new Response('no', { status: 401 })),
+      timeoutMs: 100,
     })
 
     expect(check).toEqual({
       status: 'failed',
-      message: 'the download answered 401',
+      message: expect.stringContaining(
+        'PostHog sent no switch rules: ClientError: Your project key or personal API key is invalid',
+      ),
     })
     expect(JSON.stringify(check)).not.toContain(SECRET_KEY)
+  })
+
+  it('fails when PostHog cannot be reached, with no more than that to say', async () => {
+    const check = await checkSwitchRulesForBuild(BUILD_ENV, {
+      isSkippedWithoutKey: false,
+      fetchRules: answering(new Error('Network connection lost')),
+      timeoutMs: 100,
+    })
+
+    expect(check).toEqual({
+      status: 'failed',
+      message: 'PostHog sent no switch rules',
+    })
   })
 
   it('fails when the rules cannot decide every switch, naming what is missing', async () => {

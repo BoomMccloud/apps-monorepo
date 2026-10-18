@@ -59,13 +59,18 @@ Worker's domain routing and Rhinestone credentials separately:
 The mainnet token rate limiter uses a separate namespace.
 
 The feature switches are decided on the server from PostHog's rules
-([`src/lib/posthog`](src/lib/posthog)). Each Worker, mainnet included, keeps
-its rules in its own `POSTHOG_SWITCH_RULES` KV namespace, which
-`wrangler deploy` provisions, and needs its own `POSTHOG_PROJECT_SECRET_API_KEY`
-Worker secret; without the secret every switch is off. `vite build` checks the
-live rules against that key in the mode it builds, so a build that deploys
-holds the key too (`pnpm check:switch-rules --mode mainnet` runs the same check
-by hand).
+([`src/lib/posthog`](src/lib/posthog)), the way PostHog's Cloudflare KV example
+does it: a scheduled job (every minute, see `wrangler.jsonc`) has PostHog's SDK
+fetch the rules and stores them, once they pass a check that every switch can
+be decided, in the Worker's own `POSTHOG_SWITCH_RULES` KV namespace, which
+`wrangler deploy` provisions; requests only read KV. Each Worker, mainnet
+included, needs its own `POSTHOG_PROJECT_SECRET_API_KEY` Worker secret; without
+it nothing is stored and every switch is off. Every switch is also off until
+the first run of the job after a deploy, and on a preview version or a dev
+server, which run no cron: `GET /cdn-cgi/handler/scheduled` runs the job once
+by hand. `vite build` checks the live rules against that key in the mode it
+builds, so a build that deploys holds the key too (`pnpm check:switch-rules
+--mode mainnet` runs the same check by hand).
 
 ## Notes
 

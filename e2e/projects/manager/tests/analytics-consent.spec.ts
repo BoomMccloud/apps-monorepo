@@ -26,6 +26,7 @@ import {
   noticeLink,
   pageSwitch,
   presentAsVisitorBrowser,
+  refreshManagerSwitchRules,
   requestText,
   storedConsent,
   throwPageErrors,
@@ -59,7 +60,7 @@ import { findSearchInput } from '../../../helpers/search-input.js'
  * meets it: the banner, the notice, and what reaches the PostHog host. The
  * Manager runs against the stand-in host this file starts
  * (`VITE_PUBLIC_POSTHOG_HOST=http://127.0.0.1:4973`), with a dummy secret
- * key for its server's rules download.
+ * key for its server's rules fetch.
  */
 
 const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
@@ -82,6 +83,8 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ context }) => {
   standIn.reset()
+  // The Worker decides the switches from the rules its job stored.
+  await refreshManagerSwitchRules(MANAGER_APP_URL)
   await presentAsVisitorBrowser(context)
 })
 

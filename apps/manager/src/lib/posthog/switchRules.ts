@@ -6,8 +6,8 @@ import type {
 import type { Address } from 'viem'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
-import { invariant } from '../../../../../packages/utils/src/invariant'
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
+import { TaggedError } from '../../../../../packages/utils/src/neverthrow'
 import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
 
 /**
@@ -91,7 +91,10 @@ const ruleProblems = (
   ]
 }
 
-/** Hands the client the rules it was given, and never lets it fetch any. */
+/**
+ * Hands the client the rules it was given, as the Reader hands it the stored
+ * ones. The rules check decides every switch from rules it holds this way.
+ */
 const heldRules = (rules: SwitchRules): FlagDefinitionCacheProvider => ({
   getFlagDefinitions: () => rules,
   shouldFetchFlagDefinitions: () => false,
@@ -99,13 +102,23 @@ const heldRules = (rules: SwitchRules): FlagDefinitionCacheProvider => ({
   shutdown: () => {},
 })
 
+/** What posthog-node meets when it asks for the network, which a request is never given. */
+class SwitchRulesNetworkRefused extends TaggedError(
+  'SwitchRulesNetworkRefused',
+)<{ readonly message: string }> {}
+
 /**
- * What posthog-node meets if it ever asks for the network, which it is never
- * given: only a bug in our code can get here.
+ * posthog-node asks for the network whenever its cache provider holds nothing
+ * (a store not yet filled, or one it cannot read): it falls back to its own
+ * fetch, with a key, for every request and without the rules check. That is
+ * reachable by an ordinary empty store, so it is refused here, not asserted.
  */
-const refuseNetwork = (): never => {
-  invariant(false, 'Feature switches are decided from stored rules only')
-}
+const refuseNetwork = (): Promise<never> =>
+  Promise.reject(
+    new SwitchRulesNetworkRefused({
+      message: 'Feature switches are decided from stored rules only',
+    }),
+  )
 
 /** Long enough that the client never refreshes within one evaluation. */
 const NO_POLLING_MS = 60 * 60 * 1000
@@ -113,22 +126,29 @@ const NO_POLLING_MS = 60 * 60 * 1000
 /** The switches the rules decided; one they could not decide is absent. */
 type SwitchAnswers = Readonly<Partial<Record<FeatureSwitchName, boolean>>>
 
+/** What the rules decided for one visitor, and whether the provider held any rules at all. */
+type SwitchEvaluation = {
+  readonly answers: SwitchAnswers
+  readonly hasRules: boolean
+}
+
 /**
- * Decide each switch for one visitor from the rules alone. Nothing is ever
- * asked of PostHog, and no record of the read is sent.
+ * A client that reads its rules from `provider` and decides locally, as the
+ * request handler of PostHog's Cloudflare KV example does. The SDK is given a
+ * key only because it builds its rules reader for a client that has one; it
+ * is never used, since `fetch` refuses and every read is local.
  */
-export const evaluateSwitches = async (
-  rules: SwitchRules,
+const evaluate = async (
+  provider: FlagDefinitionCacheProvider,
   visitor: SwitchVisitor,
-): Promise<SwitchAnswers> => {
+): Promise<SwitchEvaluation> => {
   const client = new PostHog('switch-rules', {
     host: 'http://switch-rules.invalid',
     personalApiKey: 'switch-rules',
-    strictLocalEvaluation: true,
-    flagDefinitionCacheProvider: heldRules(rules),
+    enableLocalEvaluation: true,
+    flagDefinitionCacheProvider: provider,
     featureFlagsPollingInterval: NO_POLLING_MS,
     fetch: refuseNetwork,
-    disableGeoip: true,
   })
   try {
     const flags = await client.getAllFlags(visitor.distinctId, {
@@ -136,16 +156,31 @@ export const evaluateSwitches = async (
       onlyEvaluateLocally: true,
       flagKeys: [...FEATURE_SWITCH_NAMES],
     })
-    return Object.fromEntries(
-      FEATURE_SWITCH_NAMES.flatMap((name) => {
-        const value = flags[name]
-        return typeof value === 'boolean' ? [[name, value]] : []
-      }),
-    )
+    return {
+      answers: Object.fromEntries(
+        FEATURE_SWITCH_NAMES.flatMap((name) => {
+          const value = flags[name]
+          return typeof value === 'boolean' ? [[name, value]] : []
+        }),
+      ),
+      hasRules: client.isLocalEvaluationReady(),
+    }
   } finally {
     await client.shutdown()
   }
 }
+
+/**
+ * Decide each switch for one visitor from rules in hand. Nothing is ever
+ * asked of PostHog, and no record of the read is sent.
+ */
+export const evaluateSwitches = async (
+  rules: SwitchRules,
+  visitor: SwitchVisitor,
+): Promise<SwitchAnswers> => (await evaluate(heldRules(rules), visitor)).answers
+
+/** The same, for the rules a provider holds: the stored ones, read for a request. */
+export const evaluateStoredSwitches = evaluate
 
 /**
  * The rules check: every switch the Manager reads is in the rules, depends on
