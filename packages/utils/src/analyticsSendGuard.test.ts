@@ -21,7 +21,7 @@ const clientWith = (
 // happy-dom's way to give the page an address; its window type does not say so.
 const setPageUrl = (url: string): void => {
   const { happyDOM } = window as unknown as {
-    readonly happyDOM: { setURL: (url: string) => void }
+    readonly happyDOM: { readonly setURL: (url: string) => void }
   }
   happyDOM.setURL(url)
 }
