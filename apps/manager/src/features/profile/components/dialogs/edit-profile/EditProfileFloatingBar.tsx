@@ -1,3 +1,4 @@
+import { useBottomBarClearance } from '@ens-apps/utils/useBottomBarClearance'
 import { useLingui } from '@lingui/react/macro'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
@@ -127,6 +128,7 @@ export const EditProfileFloatingBar = ({
   const barHeight = useMeasuredHeight(barRef)
   const [section, setSection] = useState<HTMLElement | null>(null)
   useIntercomClearance(section)
+  useBottomBarClearance(section)
 
   useEffect(() => {
     if (isOpen) editorRef.current?.focus({ preventScroll: true })

@@ -1,5 +1,7 @@
+import { useBottomBarClearance } from '@ens-apps/utils/useBottomBarClearance'
 import { useHotkey } from '@tanstack/react-hotkeys'
 import { AlertCircle, Loader2, RefreshCw, Save, X } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 
 export const PendingChangesBar = ({
@@ -31,6 +33,9 @@ export const PendingChangesBar = ({
 }) => {
   const canSave = changesCount > 0 && !hasValidationErrors && !isSaving
   useHotkey('Mod+S', onSave, { enabled: canSave })
+  // Whichever of the three bars is shown, the analytics banner stays above it.
+  const [bar, setBar] = useState<HTMLElement | null>(null)
+  useBottomBarClearance(bar)
 
   const saveButtonLabel = (() => {
     if (!isConnected) return 'Connect Wallet'
@@ -45,7 +50,10 @@ export const PendingChangesBar = ({
   // Syncing state (after transaction, waiting for indexer)
   if (isSyncing) {
     return (
-      <div className="sticky bottom-6 flex justify-center px-6 pointer-events-none">
+      <div
+        ref={setBar}
+        className="pointer-events-none sticky bottom-6 flex justify-center px-6"
+      >
         <div className="bg-card border border-border rounded-sm shadow-lg px-4 py-2 flex items-center gap-4 pointer-events-auto">
           <RefreshCw className="size-4 animate-spin" />
           <span className="text-p text-muted-foreground">
@@ -59,7 +67,10 @@ export const PendingChangesBar = ({
   // Error state - show error with retry option
   if (errorMessage) {
     return (
-      <div className="sticky bottom-6 flex justify-center px-6 pointer-events-none">
+      <div
+        ref={setBar}
+        className="pointer-events-none sticky bottom-6 flex justify-center px-6"
+      >
         <div className="bg-danger-fill border border-destructive/40 rounded-sm shadow-lg px-4 py-2 flex items-center gap-4 pointer-events-auto">
           <AlertCircle className="size-4 text-destructive shrink-0" />
           <span className="text-p text-danger-text">{errorMessage}</span>
@@ -82,7 +93,10 @@ export const PendingChangesBar = ({
   }
 
   return (
-    <div className="sticky bottom-6 flex justify-center px-6 pointer-events-none">
+    <div
+      ref={setBar}
+      className="pointer-events-none sticky bottom-6 flex justify-center px-6"
+    >
       <div className="bg-card border border-border rounded-sm shadow-lg px-4 py-2 flex items-center gap-4 pointer-events-auto">
         <span className="text-base text-muted-foreground">
           <span className="font-medium">{updatesCount} </span>

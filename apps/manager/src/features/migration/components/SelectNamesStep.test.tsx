@@ -1,6 +1,7 @@
+import { BOTTOM_BAR_CLEARANCE_PROPERTY } from '@ens-apps/utils/bottomBarClearance'
 import type { GasAffordability } from '@ens-apps/utils/gasAffordability'
 import { fireEvent, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MigrationGasEstimateState } from '@/features/migration/hooks/useMigrationGasEstimate'
 import type { MigrationGasFundingStatus } from '@/features/migration/hooks/useMigrationGasFunding'
 import type { MigrationPlan } from '@/features/migration/service/buildMigrationPlan'
@@ -113,6 +114,31 @@ const renderStep = ({
 }
 
 describe('SelectNamesStep', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.documentElement.style.removeProperty(BOTTOM_BAR_CLEARANCE_PROPERTY)
+  })
+
+  it('keeps the analytics banner above its footer while it is shown', () => {
+    const footerHeight = 96
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      height: footerHeight,
+      top: window.innerHeight - footerHeight,
+    } as DOMRect)
+    const clearance = () =>
+      document.documentElement.style.getPropertyValue(
+        BOTTOM_BAR_CLEARANCE_PROPERTY,
+      )
+
+    const { unmount } = renderStep()
+
+    expect(clearance()).toBe(`${footerHeight}px`)
+
+    unmount()
+
+    expect(clearance()).toBe('0px')
+  })
+
   it('seeds all visible names (parent + subnames + orphans) as selected', () => {
     const { onNamesChange, getByText } = renderStep()
     expect(getByText('sub1234.eth')).toBeInTheDocument()

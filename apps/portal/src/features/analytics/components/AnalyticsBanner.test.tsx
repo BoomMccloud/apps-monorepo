@@ -2,6 +2,7 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
+import { BOTTOM_BAR_CLEARANCE_PROPERTY } from '@ens-apps/utils/bottomBarClearance'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { AnchorHTMLAttributes } from 'react'
@@ -53,6 +54,14 @@ describe('AnalyticsBanner', () => {
     expect(
       screen.getByRole('link', { name: 'Privacy notice' }),
     ).toHaveAttribute('href', '/privacy')
+  })
+
+  it('sits above a bar fixed to the bottom of the page, by the space the bars publish', () => {
+    renderBanner('pending')
+
+    expect(banner()?.className).toContain(
+      `bottom-[calc(1.5rem+var(${BOTTOM_BAR_CLEARANCE_PROPERTY},0px))]`,
+    )
   })
 
   it.each([

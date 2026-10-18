@@ -24,7 +24,10 @@ export const AnalyticsBanner = () => {
       // biome-ignore lint/plugin: Greptile's cn-class-helper asks for cn here, not tw, until the agent-lint pull request lands (Leon, 2026-10-18).
       className={cn(
         'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
-        'xs:inset-x-auto xs:top-auto xs:bottom-6 xs:left-6 xs:w-80',
+        // greptile: no-arbitrary-tailwind: the space a bar fixed to the bottom
+        // of the page takes is measured at run time (bottomBarClearance), so no
+        // spacing token can fit.
+        'xs:inset-x-auto xs:top-auto xs:bottom-[calc(1.5rem+var(--bottom-bar-clearance,0px))] xs:left-6 xs:w-80',
         floatingWrapperGlassClassName,
       )}
     >
