@@ -1,4 +1,5 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { match } from 'ts-pattern'
 import {
   StoredSwitchRulesUnreadable,
@@ -25,35 +26,40 @@ const refreshFailed = (message: string) =>
 const storeCheckedRules = async (
   space: KVNamespace,
   download: { readonly rules: SwitchRules; readonly etag: string | null },
-): Promise<'stored'> => {
+): Promise<Result<'stored', SwitchRulesRefreshFailed>> => {
   const problems = await checkSwitchRules(download.rules)
   if (problems.length > 0) {
-    throw refreshFailed(
-      `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+    return err(
+      refreshFailed(
+        `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+      ),
     )
   }
   await writeStoredRules(space, {
     rules: download.rules,
     etag: download.etag,
   })
-  return 'stored'
+  return ok('stored')
 }
 
 /**
  * The scheduled job: download PostHog's switch rules and store them for the
  * requests to read, once they pass the rules check. Rules that fail the check
- * are never stored, and the job throws, so a failed run shows in the Worker's
- * logs while requests go on with the last good rules.
+ * are never stored; the job returns why, and requests go on with the last
+ * good rules. The Worker's entry point turns a failure into a failed run
+ * (server.ts).
  */
 export const refreshSwitchRules = async (
   env: SwitchRulesEnv,
   options: { readonly fetchRules?: typeof fetch } = {},
-): Promise<'stored' | 'unchanged'> => {
+): Promise<Result<'stored' | 'unchanged', SwitchRulesRefreshFailed>> => {
   const space = env.POSTHOG_SWITCH_RULES
   const source = switchRulesSource(env)
   if (!space || !source) {
-    throw refreshFailed(
-      'the switch rules space, the project key or the project secret key is not set',
+    return err(
+      refreshFailed(
+        'the switch rules space, the project key or the project secret key is not set',
+      ),
     )
   }
 
@@ -72,10 +78,8 @@ export const refreshSwitchRules = async (
     ? await downloadSwitchRulesIfChanged(source, stored.etag, options)
     : await downloadSwitchRules(source, options)
   return match(download)
-    .with({ status: 'unchanged' }, () => 'unchanged' as const)
-    .with({ status: 'failed' }, ({ reason }) => {
-      throw refreshFailed(reason)
-    })
+    .with({ status: 'unchanged' }, () => ok('unchanged' as const))
+    .with({ status: 'failed' }, ({ reason }) => err(refreshFailed(reason)))
     .with({ status: 'downloaded' }, (downloaded) =>
       storeCheckedRules(space, downloaded),
     )
