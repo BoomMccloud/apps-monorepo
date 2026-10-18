@@ -166,7 +166,7 @@ export interface AnalyticsClient {
   opt_in_capturing(options: { readonly captureEventName: false }): void
   opt_out_capturing(): void
   /** With `true`, the device id is forgotten along with the visitor id. */
-  reset(resetDeviceId?: boolean): void
+  reset(shouldResetDeviceId?: boolean): void
   set_config(config: CollectionSettings): void
   /**
    * The SDK's own hand-off of the project's settings to its recordings,
