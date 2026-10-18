@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { floatingWrapperGlassClassName } from '@/features/navigation/Header/shared/FloatingWrapper'
-import { tw } from '@/utils/tailwind'
+import { cn } from '@/lib/utils'
 
 /**
  * The analytics banner: a card floating over the page until the visitor
@@ -21,7 +21,8 @@ export const AnalyticsBanner = () => {
   return (
     <section
       aria-labelledby={headingId}
-      className={tw(
+      // biome-ignore lint/plugin: Greptile's cn-class-helper asks for cn here, not tw, until the agent-lint pull request lands (Leon, 2026-10-18).
+      className={cn(
         'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
         'xs:inset-x-auto xs:top-auto xs:bottom-6 xs:left-6 xs:w-80',
         floatingWrapperGlassClassName,
