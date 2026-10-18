@@ -5,7 +5,7 @@ import {
   resetVisitor,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
-import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
+import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
 import { act, render, screen } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'

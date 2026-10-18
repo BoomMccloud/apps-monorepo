@@ -1,5 +1,5 @@
-import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import { ANALYTICS_BANNER } from '@ens-apps/utils/analyticsConsentWording'
+import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { Link } from '@tanstack/react-router'
 import { type CSSProperties, useId } from 'react'
 import { Button } from '@/components/ui/button'

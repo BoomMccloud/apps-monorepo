@@ -6,7 +6,7 @@ import {
   resetVisitor,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
-import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
+import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'

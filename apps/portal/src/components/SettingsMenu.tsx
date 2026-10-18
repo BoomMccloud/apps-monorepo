@@ -1,4 +1,4 @@
-import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
+import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { usePostHog } from '@posthog/react'
 import { MessageSquareTextIcon } from 'lucide-react'
 import type { ComponentProps } from 'react'

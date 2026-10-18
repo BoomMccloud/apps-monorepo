@@ -6,9 +6,9 @@ import {
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
-  useFollowedChoice,
-  useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
+import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
+import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { useState } from 'react'
 import { match } from 'ts-pattern'

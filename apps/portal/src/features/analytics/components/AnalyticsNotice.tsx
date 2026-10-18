@@ -1,5 +1,4 @@
 import { NOT_CAPTURED_CLASS } from '@ens-apps/utils/analyticsConsent'
-import { useAnalyticsConsent } from '@ens-apps/utils/analyticsConsentContext'
 import {
   ANALYTICS_CHOICE_STATUS,
   ANALYTICS_NOTICE_HEADING,
@@ -8,6 +7,7 @@ import {
   ANALYTICS_SWITCH_LABEL,
   type NoticeSection,
 } from '@ens-apps/utils/analyticsConsentWording'
+import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { useId } from 'react'
 import { Switch } from '@/components/ui/switch'
 

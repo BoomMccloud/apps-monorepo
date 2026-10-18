@@ -6,9 +6,9 @@ import {
 import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
-  useFollowedChoice,
-  useWalletIdentity,
 } from '@ens-apps/utils/analyticsConsentContext'
+import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
+import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 import { useState } from 'react'
