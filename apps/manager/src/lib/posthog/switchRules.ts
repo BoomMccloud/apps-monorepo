@@ -105,7 +105,7 @@ const heldRules = (rules: SwitchRules): FlagDefinitionCacheProvider => ({
 /** What posthog-node meets when it asks for the network, which a request is never given. */
 class SwitchRulesNetworkRefused extends TaggedError(
   'SwitchRulesNetworkRefused',
-)<{ readonly message: string }> {}
+)<{ readonly message: string; readonly cause: unknown }> {}
 
 /**
  * posthog-node asks for the network whenever its cache provider holds nothing
@@ -119,6 +119,7 @@ const refuseNetwork = (): Promise<never> =>
   Promise.reject(
     new SwitchRulesNetworkRefused({
       message: 'Feature switches are decided from stored rules only',
+      cause: undefined,
     }),
   )
 

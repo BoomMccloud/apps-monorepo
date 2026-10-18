@@ -17,10 +17,13 @@ type FeatureSwitchesInput = {
 
 class InvalidFeatureSwitchesInput extends TaggedError(
   'InvalidFeatureSwitchesInput',
-)<{ readonly message: string }> {}
+)<{ readonly message: string; readonly cause: unknown }> {}
 
 const invalidInput = () =>
-  new InvalidFeatureSwitchesInput({ message: 'Invalid feature switches input' })
+  new InvalidFeatureSwitchesInput({
+    message: 'Invalid feature switches input',
+    cause: undefined,
+  })
 
 const validateFeatureSwitchesInput = (input: unknown): FeatureSwitchesInput => {
   if (input === undefined) return {}
