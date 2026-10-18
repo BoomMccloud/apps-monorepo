@@ -6,7 +6,6 @@ import {
   type Locator,
   type Page,
   type TestInfo,
-  test,
 } from '@playwright/test'
 import type {
   CapturedEvent,
@@ -362,36 +361,38 @@ export const expectBrowserSilent = async (
 }
 
 /**
- * Recordings, on a production build. A dev server keeps them off, as it did
- * before the pause (`disable_session_recording: DEV`), so there the walk
- * confirms none were sent and records recordings as not covered.
+ * Recordings reach the host once the visitor has accepted. A production build
+ * records by itself. A dev server keeps them off, as before the pause
+ * (`disable_session_recording: DEV`), so there the walk switches the recorder
+ * on through the SDK handle the page exposes, as the build's own setting would
+ * have; what CI covers on a dev server is the recorder's start from the
+ * project's settings and its stopping and starting again with the choice. The
+ * build's setting has a unit test of its own (`collectionOn`).
  */
-export const expectRecordingsWhereBuilt = async (
+export const expectRecordingsSent = async (
   page: Page,
   standIn: PostHogStandIn,
   origin: string,
   since: number,
 ): Promise<void> => {
-  const recordingRequests = () =>
-    browserRequestsSince(standIn, since).filter(
-      (request) =>
-        request.path.startsWith('/s') &&
-        request.events.some((event) => event.event === '$snapshot'),
-    )
   if (await isDevServer(page, origin)) {
-    test.info().annotations.push({
-      type: 'not covered',
-      description:
-        'recordings: the app runs on a dev server, where recordings stay off as before the pause',
-    })
-    expect(recordingRequests()).toEqual([])
-    return
+    await page.evaluate(() =>
+      (window as PostHogWindow).posthog?.startSessionRecording?.(),
+    )
   }
   await expect
-    .poll(() => recordingRequests().length, {
-      message: 'the browser sends recording data',
-      timeout: FLUSH_TIMEOUT,
-    })
+    .poll(
+      () =>
+        browserRequestsSince(standIn, since).filter(
+          (request) =>
+            request.path.startsWith('/s') &&
+            request.events.some((event) => event.event === '$snapshot'),
+        ).length,
+      {
+        message: 'the browser sends recording data',
+        timeout: FLUSH_TIMEOUT,
+      },
+    )
     .toBeGreaterThan(0)
 }
 
@@ -438,6 +439,7 @@ type PostHogWindow = Window & {
       key: string,
       options?: { readonly send_event?: boolean },
     ) => unknown
+    readonly startSessionRecording?: () => unknown
   }
 }
 

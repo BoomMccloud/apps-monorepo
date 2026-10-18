@@ -22,7 +22,7 @@ import {
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
   expectNothingSent,
-  expectRecordingsWhereBuilt,
+  expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
@@ -326,7 +326,7 @@ test.describe('Explorer analytics choice', () => {
         { timeout: FLUSH_TIMEOUT },
       )
       .toBe(true)
-    await expectRecordingsWhereBuilt(page, standIn, ORIGIN, acceptedAt)
+    await expectRecordingsSent(page, standIn, ORIGIN, acceptedAt)
 
     await expectErrorReportsCutDown(page, standIn)
 

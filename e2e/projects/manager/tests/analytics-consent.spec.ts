@@ -18,7 +18,7 @@ import {
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
   expectNothingSent,
-  expectRecordingsWhereBuilt,
+  expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
@@ -368,7 +368,7 @@ test.describe('Manager analytics choice', () => {
         { timeout: FLUSH_TIMEOUT },
       )
       .toBe(true)
-    await expectRecordingsWhereBuilt(page, standIn, ORIGIN, acceptedAt)
+    await expectRecordingsSent(page, standIn, ORIGIN, acceptedAt)
 
     // Error reports, with the address and the .eth name cut out.
     await expectErrorReportsCutDown(page, standIn)

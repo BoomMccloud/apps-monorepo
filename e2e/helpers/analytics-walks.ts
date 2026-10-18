@@ -15,7 +15,7 @@ import {
   exceptionMessagesOf,
   expectBrowserSilent,
   expectNoPostHogStorage,
-  expectRecordingsWhereBuilt,
+  expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
@@ -165,6 +165,45 @@ export const expectErrorReportsCutDown = async (
   ).toEqual([])
 }
 
+const AUTOCAPTURE_CONTROL_ID = 'autocapture-control'
+
+/**
+ * Clicks are being sent in this tab: a button the walk adds to the page and
+ * clicks reaches the host as a click. The control the press that declines is
+ * measured against, so that its silence cannot be a tab where no click is
+ * ever sent.
+ */
+const expectClicksAreSent = async (
+  page: Page,
+  standIn: PostHogStandIn,
+): Promise<void> => {
+  const clickedAt = Date.now()
+  await page.evaluate((id) => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      `<button id="${id}" type="button" style="position:fixed;top:0;left:0;z-index:2147483647">autocapture control</button>`,
+    )
+  }, AUTOCAPTURE_CONTROL_ID)
+  const control = page.locator(`#${AUTOCAPTURE_CONTROL_ID}`)
+  await control.click()
+  await expect
+    .poll(
+      () =>
+        browserRequestsSince(standIn, clickedAt)
+          .flatMap((request) => request.events)
+          .some(
+            (event) =>
+              event.event === '$autocapture' &&
+              JSON.stringify(event.properties).includes(AUTOCAPTURE_CONTROL_ID),
+          ),
+      { timeout: FLUSH_TIMEOUT },
+    )
+    .toBe(true)
+  await control.evaluate((element) => {
+    element.remove()
+  })
+}
+
 /**
  * Switching to Decline on the notice stops analytics at once: no page view,
  * no click, no error report, nothing about the wallet. Switching back
@@ -195,6 +234,7 @@ export const expectNoticeSwitchStopsAndResumes = async ({
   await forgetConsent(context)
   await page.setViewportSize(DESKTOP)
   await open(page, '/')
+  const acceptedAt = Date.now()
   await acceptButton(page).click()
   await connect()
   await expect
@@ -208,6 +248,9 @@ export const expectNoticeSwitchStopsAndResumes = async ({
   const toggle = analyticsSwitch(page)
   await expect(toggle).toBeChecked()
   await expect(notice).toContainText(/accepted/i)
+  // What the Decline stops is running first: clicks and recordings are sent.
+  await expectClicksAreSent(page, standIn)
+  await expectRecordingsSent(page, standIn, origin, acceptedAt)
 
   // Decline.
   const pressedAt = Date.now()
@@ -271,5 +314,5 @@ export const expectNoticeSwitchStopsAndResumes = async ({
       { timeout: FLUSH_TIMEOUT },
     )
     .toBe(true)
-  await expectRecordingsWhereBuilt(page, standIn, origin, resumedAt)
+  await expectRecordingsSent(page, standIn, origin, resumedAt)
 }
