@@ -3,10 +3,12 @@ import { TaggedError } from './neverthrow/error-classes.js'
 /**
  * Thrown by `invariant` when a belief the code holds about its own state is
  * false. Only a bug in our code gets here, so nothing catches it on purpose:
- * it travels to the nearest error boundary and the error report.
+ * it travels to the nearest error boundary and the error report. `cause` is
+ * always undefined: a broken belief has no underlying error.
  */
 export class InvariantViolation extends TaggedError('InvariantViolation')<{
   readonly message: string
+  readonly cause: unknown
 }> {}
 
 /**
@@ -30,5 +32,5 @@ export function invariant(
   condition: unknown,
   message: string,
 ): asserts condition {
-  if (!condition) throw new InvariantViolation({ message })
+  if (!condition) throw new InvariantViolation({ message, cause: undefined })
 }
