@@ -1,6 +1,7 @@
 import { isRecord } from '@ens-apps/utils/isRecord'
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { createServerFn } from '@tanstack/react-start'
+import { match, P } from 'ts-pattern'
 import { isAddress } from 'viem'
 import { getConnectionCookie } from '@/lib/connection-cookie'
 import { decideFeatureSwitches } from './decideFeatureSwitches'
@@ -26,13 +27,19 @@ const invalidInput = () =>
   })
 
 const validateFeatureSwitchesInput = (input: unknown): FeatureSwitchesInput => {
-  if (input === undefined) return {}
-  if (!isRecord(input)) throw invalidInput()
-  if (input.wallet === undefined) return {}
-  if (input.wallet === null || typeof input.wallet === 'string') {
-    return { wallet: input.wallet }
-  }
-  throw invalidInput()
+  const validated = match(input)
+    .with(undefined, () => ({}))
+    .with(P.when(isRecord), (record) =>
+      match(record.wallet)
+        .with(undefined, () => ({}))
+        .with(P.union(null, P.string), (wallet) => ({ wallet }))
+        .otherwise(() => undefined),
+    )
+    .otherwise(() => undefined)
+  // A server function's validator refuses by throwing, which is what the
+  // framework expects of it.
+  if (validated === undefined) throw invalidInput()
+  return validated
 }
 
 /**

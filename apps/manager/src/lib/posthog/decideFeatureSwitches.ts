@@ -1,5 +1,5 @@
 import { TaggedError } from '@ens-apps/utils/neverthrow'
-import { match } from 'ts-pattern'
+import { match, P } from 'ts-pattern'
 import type { Address } from 'viem'
 import {
   ALL_SWITCHES_OFF,
@@ -97,26 +97,27 @@ const decide = async (
     switchRulesReader(space, reportReaderProblem),
     switchVisitor(wallet),
   )
-  if (!hasRules) {
-    reportOnce(
-      switchesUndecided(
-        'no switch rules are stored, so every switch is off until the scheduled refresh stores them',
-      ),
-    )
-    return ALL_SWITCHES_OFF
-  }
   const undecidedNames = FEATURE_SWITCH_NAMES.filter(
     (name) => answers[name] === undefined,
   )
-  if (undecidedNames.length > 0) {
-    reportOnce(
-      switchesUndecided(
-        `the rules decide no yes or no for ${undecidedNames.join(', ')}`,
-      ),
-    )
-    return ALL_SWITCHES_OFF
-  }
-  return { ...ALL_SWITCHES_OFF, ...answers }
+  return match({ hasRules, undecidedNames })
+    .with({ hasRules: false }, () => {
+      reportOnce(
+        switchesUndecided(
+          'no switch rules are stored, so every switch is off until the scheduled refresh stores them',
+        ),
+      )
+      return ALL_SWITCHES_OFF
+    })
+    .with({ undecidedNames: P.when((names) => names.length > 0) }, (found) => {
+      reportOnce(
+        switchesUndecided(
+          `the rules decide no yes or no for ${found.undecidedNames.join(', ')}`,
+        ),
+      )
+      return ALL_SWITCHES_OFF
+    })
+    .otherwise(() => ({ ...ALL_SWITCHES_OFF, ...answers }))
 }
 
 /**
