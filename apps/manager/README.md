@@ -65,12 +65,16 @@ fetch the rules and stores them, once they pass a check that every switch can
 be decided, in the Worker's own `POSTHOG_SWITCH_RULES` KV namespace, which
 `wrangler deploy` provisions; requests only read KV. Each Worker, mainnet
 included, needs its own `POSTHOG_PROJECT_SECRET_API_KEY` Worker secret; without
-it nothing is stored and every switch is off. Every switch is also off until
-the first run of the job after a deploy, and on a preview version or a dev
-server, which run no cron: `GET /cdn-cgi/handler/scheduled` runs the job once
-by hand. `vite build` checks the live rules against that key in the mode it
-builds, so a build that deploys holds the key too (`pnpm check:switch-rules
---mode mainnet` runs the same check by hand).
+it nothing is stored and every switch is off. KV persists across deploys, so a
+Worker has no rules only after its first deploy, until its job has run once
+(within a minute); a later deploy keeps the stored rules. Every switch is also
+off on a preview version, which has no KV binding and no cron, and on a dev
+server or `vite preview`, which run no cron: there
+`GET /cdn-cgi/handler/scheduled` runs the job once by hand. That route is for
+a dev server and `vite preview`, not for a deployed Worker or a deployed
+preview version. `vite build` checks the live rules against that key in the
+mode it builds, so a build that deploys holds the key too (`pnpm
+check:switch-rules --mode mainnet` runs the same check by hand).
 
 ## Notes
 
