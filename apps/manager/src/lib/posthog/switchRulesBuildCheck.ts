@@ -95,6 +95,11 @@ const checkLiveRules = async (
  *
  * `env` is the environment of the build, so the check reads the project and
  * host the build will compile in, whichever Vite mode it runs in.
+ *
+ * A download that fails fails the check too, so a build that holds the key is
+ * as available as PostHog is: a build that deploys must not ship rules it
+ * could not check. A build without the key skips the check, except a Workers
+ * build.
  */
 export const checkSwitchRulesForBuild = async (
   env: Readonly<Record<string, string | undefined>>,
