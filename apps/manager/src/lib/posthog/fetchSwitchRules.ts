@@ -1,10 +1,11 @@
-import { err, ok, type Result, ResultAsync } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { PostHog, type PostHogOptions } from 'posthog-node'
 import type { FlagDefinitionCacheProvider } from 'posthog-node/experimental'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
 import {
   fromSync,
+  ResultFn,
   TaggedError,
 } from '../../../../../packages/utils/src/neverthrow'
 import { NO_POLLING_MS } from './switchRules'
@@ -35,17 +36,27 @@ export type FetchSwitchRulesOptions = {
 /** How long the SDK is given to fetch the rules and hand them over. */
 const FETCH_TIMEOUT_MS = 5_000
 
-/** The fetch itself, as a promise of its Result. */
-const fetchOnce = async (
+/**
+ * Has PostHog's SDK fetch the project's switch rules once and hand them to
+ * `provider`, as PostHog's Cloudflare KV example does in its scheduled job:
+ * a client with local evaluation on and a provider that fetches, which is
+ * asked to wait until the rules have arrived and then shut down. Resolves ok
+ * once the SDK handed over rules, whatever the provider made of them.
+ *
+ * The SDK catches and drops most failures of the fetch, so this reads the
+ * outcome from what the SDK does say: the provider was or was not handed
+ * rules, and its error event, when it has one (a refused key, a rate limit).
+ */
+export const fetchSwitchRules = ResultFn(async function* (
   source: SwitchRulesSource,
   provider: FlagDefinitionCacheProvider,
-  options: FetchSwitchRulesOptions,
-): Promise<Result<void, SwitchRulesNotFetched>> => {
+  options: FetchSwitchRulesOptions = {},
+) {
   const handedOver = Promise.withResolvers<true>()
   const complaint = Promise.withResolvers<string>()
-  const made = fromSync(
-    () =>
-      new PostHog(source.projectKey, {
+  const client = yield* fromSync(
+    () => {
+      const made = new PostHog(source.projectKey, {
         host: source.host,
         // posthog-node 5.21 calls the project secret key its personal API
         // key; from 5.40 it is `secretKey`.
@@ -60,17 +71,20 @@ const fetchOnce = async (
           },
         },
         fetch: options.fetchRules,
-      }),
+      })
+      // Listening in the step that makes the client: the SDK starts fetching
+      // as it is made, and `yield*` hands the client over only after some
+      // microtasks, by which time a refused key may have been reported.
+      made.on('error', (error: unknown) => complaint.resolve(String(error)))
+      return made
+    },
     (cause) =>
       new SwitchRulesNotFetched({
         message: 'the PostHog client could not be made',
         cause,
       }),
   )
-  if (made.isErr()) return err(made.error)
 
-  const client = made.value
-  client.on('error', (error: unknown) => complaint.resolve(String(error)))
   await client.waitForLocalEvaluationReady(
     options.timeoutMs ?? FETCH_TIMEOUT_MS,
   )
@@ -90,22 +104,4 @@ const fetchOnce = async (
       cause: undefined,
     }),
   )
-}
-
-/**
- * Has PostHog's SDK fetch the project's switch rules once and hand them to
- * `provider`, as PostHog's Cloudflare KV example does in its scheduled job:
- * a client with local evaluation on and a provider that fetches, which is
- * asked to wait until the rules have arrived and then shut down. Resolves ok
- * once the SDK handed over rules, whatever the provider made of them.
- *
- * The SDK catches and drops most failures of the fetch, so this reads the
- * outcome from what the SDK does say: the provider was or was not handed
- * rules, and its error event, when it has one (a refused key, a rate limit).
- */
-export const fetchSwitchRules = (
-  source: SwitchRulesSource,
-  provider: FlagDefinitionCacheProvider,
-  options: FetchSwitchRulesOptions = {},
-): ResultAsync<void, SwitchRulesNotFetched> =>
-  new ResultAsync(fetchOnce(source, provider, options))
+})
