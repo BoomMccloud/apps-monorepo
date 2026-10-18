@@ -244,6 +244,18 @@ describe('PHProvider', () => {
     expect(screen.getByText('denied')).not.toBeNull()
   })
 
+  it('hands wagmi the same connection handlers on every render, so its watcher is set up once', () => {
+    const { rerenderProvider } = renderProvider()
+    const first = connectionCallbacks()
+
+    rerenderProvider()
+    rerenderProvider()
+
+    expect(vi.mocked(useConnectionEffect).mock.calls.length).toBeGreaterThan(1)
+    expect(connectionCallbacks().onConnect).toBe(first.onConnect)
+    expect(connectionCallbacks().onDisconnect).toBe(first.onDisconnect)
+  })
+
   it('identifies a wallet that connects after Accept, then records the connect', () => {
     vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
     renderProvider()

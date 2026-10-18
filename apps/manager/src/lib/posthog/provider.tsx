@@ -11,7 +11,7 @@ import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
 import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
 import posthog, { reactClient } from './client'
@@ -42,7 +42,8 @@ export const PHProvider = ({
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
   // Each reset empties the SDK's switches; the sync hook writes them again.
   const [resetCount, setResetCount] = useState(0)
-  const recordReset = () => setResetCount((count) => count + 1)
+  // Memoized: useWalletAnalytics keeps its disconnect handler stable on it.
+  const recordReset = useCallback(() => setResetCount((count) => count + 1), [])
 
   // What the page does about a choice, whether the visitor pressed it here or
   // it was made in another tab or app.

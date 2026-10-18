@@ -219,6 +219,22 @@ describe('PHProvider', () => {
     })
   })
 
+  it('hands wagmi the same connection handlers on every render, so its watcher is set up once', () => {
+    const view = renderProvider()
+    const first = connectionCallbacks()
+
+    // A new element: React skips one it has already rendered.
+    view.rerender(
+      <PHProvider>
+        <ConsentProbe />
+      </PHProvider>,
+    )
+
+    expect(vi.mocked(useConnectionEffect).mock.calls.length).toBeGreaterThan(1)
+    expect(connectionCallbacks().onConnect).toBe(first.onConnect)
+    expect(connectionCallbacks().onDisconnect).toBe(first.onDisconnect)
+  })
+
   it('identifies a wallet that connects after Accept, then records the connect', () => {
     vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
     renderProvider()
