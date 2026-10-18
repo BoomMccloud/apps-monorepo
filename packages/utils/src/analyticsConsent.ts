@@ -9,12 +9,12 @@
  * of error reports. What is sent is held back until the visitor accepts by
  * `analyticsSendGuard`. Each app keeps its own banner, notice and wiring.
  */
-import { errAsync, fromPromise } from 'neverthrow'
+import { fromPromise, ok } from 'neverthrow'
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
 import type { Address } from 'viem'
 import { guardPostHogSends } from './analyticsSendGuard'
 import { isRecord } from './isRecord'
-import { TaggedError } from './neverthrow'
+import { ResultFn, TaggedError } from './neverthrow'
 
 /** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
 export const ANALYTICS_CONSENT_COOKIE_NAME = 'ens.analytics.consent'
@@ -206,28 +206,30 @@ class ProjectSettingsNotLoaded extends TaggedError('ProjectSettingsNotLoaded')<{
   readonly cause: unknown
 }> {}
 
-const requestProjectSettings = (client: AnalyticsClient) =>
-  fromPromise(
+const requestProjectSettings = ResultFn(async function* (
+  client: AnalyticsClient,
+) {
+  const response = yield* fromPromise(
     fetch(projectSettingsUrl(client)),
     (cause) =>
       new ProjectSettingsNotLoaded({ message: 'the request failed', cause }),
-  ).andThen((response) =>
-    response.ok
-      ? fromPromise(
-          response.json(),
-          (cause) =>
-            new ProjectSettingsNotLoaded({
-              message: 'the answer could not be read',
-              cause,
-            }),
-        )
-      : errAsync(
-          new ProjectSettingsNotLoaded({
-            message: `the host answered ${response.status}`,
-            cause: undefined,
-          }),
-        ),
   )
+  if (!response.ok) {
+    yield* new ProjectSettingsNotLoaded({
+      message: `the host answered ${response.status}`,
+      cause: undefined,
+    })
+  }
+  const settings = yield* fromPromise(
+    response.json(),
+    (cause) =>
+      new ProjectSettingsNotLoaded({
+        message: 'the answer could not be read',
+        cause,
+      }),
+  )
+  return ok<unknown>(settings)
+})
 
 /**
  * Load the project's settings and hand them to the SDK, as it would at
