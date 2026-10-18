@@ -1,4 +1,6 @@
+import type { PostHogOptions } from 'posthog-node'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { InvariantViolation } from '../../../../../packages/utils/src/invariant'
 import {
   checkSwitchRules,
   evaluateSwitches,
@@ -13,6 +15,22 @@ import {
   switchRules,
   TEST_WALLET,
 } from './switchRules.mock'
+
+// What each posthog-node client was given, in the order they were made.
+const clientOptions = vi.hoisted(() => [] as (PostHogOptions | undefined)[])
+
+vi.mock('posthog-node', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('posthog-node')>()
+  return {
+    ...actual,
+    PostHog: class extends actual.PostHog {
+      constructor(apiKey: string, options?: PostHogOptions) {
+        super(apiKey, options)
+        clientOptions.push(options)
+      }
+    },
+  }
+})
 
 describe('evaluateSwitches', () => {
   afterEach(() => {
@@ -29,6 +47,19 @@ describe('evaluateSwitches', () => {
       evaluateSwitches(switchRules(), switchVisitor(OTHER_WALLET)),
     ).resolves.toEqual({ migration: false, i18n: true, 'migration-nft': false })
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('gives posthog-node a network that fails as a bug in our code the moment it is asked', async () => {
+    await evaluateSwitches(switchRules(), switchVisitor(TEST_WALLET))
+
+    const askNetwork = () =>
+      clientOptions
+        .at(-1)
+        ?.fetch?.('http://switch-rules.invalid', { method: 'GET', headers: {} })
+    expect(askNetwork).toThrow(InvariantViolation)
+    expect(askNetwork).toThrow(
+      'Feature switches are decided from stored rules only',
+    )
   })
 
   it('matches a wallet whatever the case of its address', async () => {
