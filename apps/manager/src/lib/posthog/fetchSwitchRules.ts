@@ -7,6 +7,7 @@ import {
   fromSync,
   TaggedError,
 } from '../../../../../packages/utils/src/neverthrow'
+import { NO_POLLING_MS } from './switchRules'
 
 /**
  * Where the rules come from: the project's public key names the project, and
@@ -33,9 +34,6 @@ export type FetchSwitchRulesOptions = {
 
 /** How long the SDK is given to fetch the rules and hand them over. */
 const FETCH_TIMEOUT_MS = 5_000
-
-/** The SDK polls at this interval; a run is over long before the first poll. */
-const NO_POLLING_MS = 60 * 60 * 1000
 
 /**
  * Has PostHog's SDK fetch the project's switch rules once and hand them to

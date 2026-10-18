@@ -110,8 +110,10 @@ class SwitchRulesNetworkRefused extends TaggedError(
 /**
  * posthog-node asks for the network whenever its cache provider holds nothing
  * (a store not yet filled, or one it cannot read): it falls back to its own
- * fetch, with a key, for every request and without the rules check. That is
- * reachable by an ordinary empty store, so it is refused here, not asserted.
+ * fetch for the rules, which in PostHog's example carries the real key and
+ * brings back rules that no check has seen. That is reachable by an ordinary
+ * empty store, so a request refuses it, whatever host its client is given,
+ * and does not assert it.
  */
 const refuseNetwork = (): Promise<never> =>
   Promise.reject(
@@ -120,8 +122,8 @@ const refuseNetwork = (): Promise<never> =>
     }),
   )
 
-/** Long enough that the client never refreshes within one evaluation. */
-const NO_POLLING_MS = 60 * 60 * 1000
+/** Long enough that a client never polls within the one use it is made for. */
+export const NO_POLLING_MS = 60 * 60 * 1000
 
 /** The switches the rules decided; one they could not decide is absent. */
 type SwitchAnswers = Readonly<Partial<Record<FeatureSwitchName, boolean>>>
