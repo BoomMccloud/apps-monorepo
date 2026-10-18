@@ -105,6 +105,9 @@ export const switchRulesWriter = (
     getFlagDefinitions: () => undefined,
     shouldFetchFlagDefinitions: () => true,
     onFlagDefinitionsReceived: async (rules) => {
+      // greptile: no-mutation: the one cell the SDK's callback fills; the SDK
+      // swallows what the callback throws or returns, so the caller reads the
+      // cell once the SDK has finished.
       outcome = await acceptChecked(rules, write)
     },
     shutdown: () => {},

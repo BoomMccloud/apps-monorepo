@@ -52,6 +52,7 @@ const reportOnce = (
 ): void => {
   const key = `${problem._tag}: ${problem.message}`
   if (reportedProblems.has(key)) return
+  // greptile: no-mutation: the Set is this module's own record of what was logged, read by nothing else.
   reportedProblems.add(key)
   console.error(problem)
 }
