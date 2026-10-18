@@ -64,6 +64,7 @@ type CollectionSettings = {
   readonly disable_web_experiments: boolean
   readonly disable_conversations: boolean
   readonly disable_session_recording: boolean
+  readonly capture_heatmaps: boolean
 }
 
 /**
@@ -73,10 +74,14 @@ type CollectionSettings = {
  * them only at start-up, never on a later change of settings, and it sends
  * nothing it sees until the visitor accepts.
  *
- * Heatmaps, dead clicks and performance timings are left unset: each follows
- * the project's settings, which load only after Accept, so before Accept none
- * of them can start, and unset is the only value that hands them back to the
- * project's settings afterwards.
+ * Dead clicks and performance timings are left unset: each follows the
+ * project's settings, which load only after Accept, so before Accept none of
+ * them can start, and unset is the only value that hands them back to the
+ * project's settings afterwards. Heatmaps are set off instead: they buffer
+ * every click without asking about the choice, and only an explicit off makes
+ * the SDK drop that buffer and stop listening, so a Decline would otherwise
+ * leave them collecting for a later Accept to send. They start again from the
+ * project's settings once Accept has loaded them (`loadProjectSettings`).
  */
 export const collectionOff: CollectionSettings = {
   capture_pageview: 'history_change',
@@ -90,6 +95,7 @@ export const collectionOff: CollectionSettings = {
   disable_web_experiments: true,
   disable_conversations: true,
   disable_session_recording: true,
+  capture_heatmaps: false,
 }
 
 /** Error reports: uncaught errors and unhandled rejections, never the console. */
@@ -121,6 +127,8 @@ export const collectionOn = ({
   disable_web_experiments: true,
   disable_conversations: false,
   disable_session_recording: isDev,
+  // Off until the project's settings arrive and say whether they are on.
+  capture_heatmaps: false,
 })
 
 /**
@@ -167,7 +175,7 @@ export interface AnalyticsClient {
   opt_out_capturing(): void
   /** With `true`, the device id is forgotten along with the visitor id. */
   reset(shouldResetDeviceId?: boolean): void
-  set_config(config: CollectionSettings): void
+  set_config(config: Readonly<Partial<CollectionSettings>>): void
   /**
    * The SDK's own hand-off of the project's settings to its recordings,
    * surveys, heatmaps and the rest. It has no public way to load them once
@@ -241,6 +249,11 @@ const loadProjectSettings = async (client: AnalyticsClient): Promise<void> => {
       ? { ok: true, config: loaded.value }
       : { ok: false },
   )
+  // Heatmaps follow the project: on only when its settings say so.
+  client.set_config({
+    capture_heatmaps:
+      loaded.isOk() && isRecord(loaded.value) && Boolean(loaded.value.heatmaps),
+  })
 }
 
 /** The options of Accept, of start-up and of following the stored choice. */

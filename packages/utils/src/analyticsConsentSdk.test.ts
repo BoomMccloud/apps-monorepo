@@ -204,6 +204,8 @@ describe('the analytics choice on the installed SDK', () => {
     const changedOnPurpose = new Set([
       'capture_exceptions',
       'disable_session_recording',
+      // Heatmaps wait for the project's settings, which arrive after Accept.
+      'capture_heatmaps',
     ])
     for (const key of Object.keys(collectionOff)) {
       if (changedOnPurpose.has(key)) continue
@@ -324,6 +326,60 @@ describe('the analytics choice on the installed SDK', () => {
       const names = eventNames(await sentSince(sentWhileDeclined))
       expect(names).toContain('after-accept-again')
       expect(names).not.toContain('while-declined')
+    })
+  })
+
+  describe('heatmaps, which buffer clicks without asking about the choice', () => {
+    const click = (x: number, y: number) =>
+      document.body.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }),
+      )
+
+    const heatmapsSince = async (count: number) =>
+      (await sentSince(count))
+        .flatMap((request) => request.events)
+        .filter((event) => event.event === '$$heatmap')
+
+    it('collect no click while the visitor has declined, so a new Accept sends none of them', async () => {
+      const client = await startAccepted()
+      declineAnalytics(client)
+
+      history.pushState({}, '', '/while-declined')
+      click(42, 73)
+      const sentWhileDeclined = (await network.wire()).length
+      await acceptAnalytics(client, CHOICE)
+      await flush()
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(
+        JSON.stringify(await heatmapsSince(sentWhileDeclined)),
+      ).not.toContain('while-declined')
+    })
+
+    it('start again after Accept when the project has them on, and send the clicks made then', async () => {
+      const client = await startAccepted()
+      const sent = (await network.wire()).length
+
+      history.pushState({}, '', '/after-accept')
+      click(7, 9)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(JSON.stringify(await heatmapsSince(sent))).toContain(
+        'after-accept',
+      )
+      expect(client.config.capture_heatmaps).toBe(true)
+    })
+
+    it('stay off after Accept when the project has them off', async () => {
+      network.reset({ projectSettings: { heatmaps: false } })
+      const client = await startAccepted()
+      const sent = (await network.wire()).length
+
+      click(7, 9)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(await heatmapsSince(sent)).toEqual([])
+      expect(client.config.capture_heatmaps).toBe(false)
     })
   })
 
