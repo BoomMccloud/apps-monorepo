@@ -9,10 +9,12 @@
  * of error reports. What is sent is held back until the visitor accepts by
  * `analyticsSendGuard`. Each app keeps its own banner, notice and wiring.
  */
+import { errAsync, fromPromise } from 'neverthrow'
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
 import type { Address } from 'viem'
 import { guardPostHogSends } from './analyticsSendGuard'
 import { isRecord } from './isRecord'
+import { TaggedError } from './neverthrow'
 
 /** The cookie the choice lives in: `1` after Accept, `0` after Decline. */
 export const ANALYTICS_CONSENT_COOKIE_NAME = 'ens.analytics.consent'
@@ -190,6 +192,35 @@ export const NOT_CAPTURED_CLASS = 'ph-no-capture'
 const projectSettingsUrl = (client: AnalyticsClient): string =>
   `${client.config.api_host.replace(/\/+$/, '')}/array/${client.config.token}/config`
 
+/** The request failed, the host refused it, or its answer cannot be read. */
+class ProjectSettingsNotLoaded extends TaggedError('ProjectSettingsNotLoaded')<{
+  readonly message: string
+  readonly cause: unknown
+}> {}
+
+const requestProjectSettings = (client: AnalyticsClient) =>
+  fromPromise(
+    fetch(projectSettingsUrl(client)),
+    (cause) =>
+      new ProjectSettingsNotLoaded({ message: 'the request failed', cause }),
+  ).andThen((response) =>
+    response.ok
+      ? fromPromise(
+          response.json(),
+          (cause) =>
+            new ProjectSettingsNotLoaded({
+              message: 'the answer could not be read',
+              cause,
+            }),
+        )
+      : errAsync(
+          new ProjectSettingsNotLoaded({
+            message: `the host answered ${response.status}`,
+            cause: undefined,
+          }),
+        ),
+  )
+
 /**
  * Load the project's settings and hand them to the SDK, as it would at
  * start-up had the visitor already accepted. Settings that arrive after the
@@ -200,18 +231,15 @@ const projectSettingsUrl = (client: AnalyticsClient): string =>
  * a retry or a refetch on focus would be behaviour the SDK does not have.
  */
 const loadProjectSettings = async (client: AnalyticsClient): Promise<void> => {
-  const settings = await fetch(projectSettingsUrl(client))
-    .then((response) => {
-      if (!response.ok) throw new Error(`the host answered ${response.status}`)
-      return response.json()
-    })
-    .catch((cause: unknown) => {
-      console.warn('[posthog] project settings failed to load', cause)
-      return undefined
-    })
+  const loaded = await requestProjectSettings(client)
+  if (loaded.isErr()) {
+    console.warn('[posthog] project settings failed to load', loaded.error)
+  }
   if (client.get_explicit_consent_status() !== 'granted') return
   client._onRemoteConfig(
-    isRecord(settings) ? { ok: true, config: settings } : { ok: false },
+    loaded.isOk() && isRecord(loaded.value)
+      ? { ok: true, config: loaded.value }
+      : { ok: false },
   )
 }
 

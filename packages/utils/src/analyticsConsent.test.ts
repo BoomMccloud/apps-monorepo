@@ -291,10 +291,11 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
 
   it('tells the SDK there are none, and says so in the console', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const offline = new Error('offline')
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
-        throw new Error('offline')
+        throw offline
       }),
     )
     const client = acceptedClient()
@@ -304,7 +305,11 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
     expect(client._onRemoteConfig).toHaveBeenCalledWith({ ok: false })
     expect(warn).toHaveBeenCalledWith(
       '[posthog] project settings failed to load',
-      expect.any(Error),
+      expect.objectContaining({
+        _tag: 'ProjectSettingsNotLoaded',
+        message: 'the request failed',
+        cause: offline,
+      }),
     )
   })
 
@@ -321,7 +326,64 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
     expect(client._onRemoteConfig).toHaveBeenCalledWith({ ok: false })
     expect(warn).toHaveBeenCalledWith(
       '[posthog] project settings failed to load',
-      new Error('the host answered 503'),
+      expect.objectContaining({
+        _tag: 'ProjectSettingsNotLoaded',
+        message: 'the host answered 503',
+      }),
     )
+  })
+
+  it('does the same when the answer is not JSON', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { status: 200 })),
+    )
+    const client = acceptedClient()
+
+    await acceptAnalytics(client, { isDev: false })
+
+    expect(client._onRemoteConfig).toHaveBeenCalledWith({ ok: false })
+    expect(warn).toHaveBeenCalledWith(
+      '[posthog] project settings failed to load',
+      expect.objectContaining({
+        _tag: 'ProjectSettingsNotLoaded',
+        message: 'the answer could not be read',
+        cause: expect.any(SyntaxError),
+      }),
+    )
+  })
+
+  it('hands the SDK the settings the host answers with, and logs nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ supportedCompression: ['gzip'] })),
+    )
+    const client = acceptedClient()
+
+    await acceptAnalytics(client, { isDev: false })
+
+    expect(client._onRemoteConfig).toHaveBeenCalledWith({
+      ok: true,
+      config: { supportedCompression: ['gzip'] },
+    })
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('drops settings that arrive after the visitor has declined', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 503 })),
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = {
+      ...acceptedClient(),
+      get_explicit_consent_status: vi.fn(() => 'denied' as const),
+    }
+
+    await acceptAnalytics(client, { isDev: false })
+
+    expect(client._onRemoteConfig).not.toHaveBeenCalled()
   })
 })
