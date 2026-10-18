@@ -1,5 +1,5 @@
-import { TaggedError } from '@ens-apps/utils/neverthrow'
-import { err, ok, type Result } from 'neverthrow'
+import { ResultFn, TaggedError } from '@ens-apps/utils/neverthrow'
+import { err, ok } from 'neverthrow'
 import { match } from 'ts-pattern'
 import type { SwitchRulesEnv } from './decideFeatureSwitches'
 import {
@@ -40,10 +40,10 @@ const switchRulesSource = (env: SwitchRulesEnv): SwitchRulesSource | null => {
  * from it once the SDK has finished. Every run fetches the rules whole: a
  * client made for one run holds no ETag to ask with.
  */
-export const refreshSwitchRules = async (
+export const refreshSwitchRules = ResultFn(async function* (
   env: SwitchRulesEnv,
   options: FetchSwitchRulesOptions = {},
-): Promise<Result<'stored', SwitchRulesRefreshFailed>> => {
+) {
   const space = env.POSTHOG_SWITCH_RULES
   const source = switchRulesSource(env)
   if (!space || !source) {
@@ -57,8 +57,9 @@ export const refreshSwitchRules = async (
   const writer = switchRulesWriter((rules) =>
     space.put(SWITCH_RULES_KEY, JSON.stringify(rules)),
   )
-  const fetched = await fetchSwitchRules(source, writer.provider, options)
-  if (fetched.isErr()) return err(refreshFailed(fetched.error.message))
+  yield* fetchSwitchRules(source, writer.provider, options).mapErr((failure) =>
+    refreshFailed(failure.message),
+  )
   return match(writer.outcome())
     .with({ status: 'accepted' }, () => ok('stored' as const))
     .with({ status: 'refused' }, ({ problems }) =>
@@ -81,4 +82,4 @@ export const refreshSwitchRules = async (
       err(refreshFailed('the new rules arrived and could not be checked')),
     )
     .exhaustive()
-}
+})
