@@ -45,11 +45,14 @@ export const useFeatureSwitchSync = ({
   pageStart,
   resetCount,
 }: FeatureSwitchSyncInput): void => {
-  const { data } = useQuery({
-    ...getFeatureSwitchesQueryOptions(wallet),
-    enabled: isConnectionSettled,
-    initialData: wallet === pageStart.wallet ? pageStart.switches : undefined,
-  })
+  const { data } = useQuery(
+    getFeatureSwitchesQueryOptions({
+      wallet,
+      isEnabled: isConnectionSettled,
+      initialSwitches:
+        wallet === pageStart.wallet ? pageStart.switches : undefined,
+    }),
+  )
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `resetCount` writes the answers again after a reset, which empties the SDK's switches though `data` has not changed
   useEffect(() => {
