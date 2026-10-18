@@ -6,6 +6,7 @@ import {
   evaluateStoredSwitches,
   evaluateSwitches,
   NO_WALLET_VISITOR,
+  type SwitchRules,
   switchVisitor,
 } from './switchRules'
 import {
@@ -16,6 +17,8 @@ import {
   switchRules,
   TEST_WALLET,
 } from './switchRules.mock'
+
+type Cohort = SwitchRules['cohorts'][string]
 
 // What each posthog-node client was given, in the order they were made, and
 // each time one asked for the network through the `fetch` it was given.
@@ -212,6 +215,135 @@ describe('checkSwitchRules', () => {
         'migration-nft: uses the is_not_set operator',
       ]),
     )
+  })
+
+  it('names a property the server never supplies, though the two sample visitors never reach the condition that holds it', async () => {
+    const rules = switchRules({
+      migration: flagRule('migration', [
+        {
+          properties: [
+            {
+              key: 'address',
+              type: 'person',
+              operator: 'is_not',
+              value: [TEST_WALLET.toLowerCase()],
+            },
+          ],
+          rollout_percentage: 100,
+        },
+        {
+          properties: [
+            { key: 'country', type: 'person', operator: 'exact', value: 'DE' },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+    // The wallet the first condition leaves out gets no answer, so every
+    // switch is off for it, though the sample wallets are all decided.
+    const excluded = await evaluateSwitches(rules, switchVisitor(TEST_WALLET))
+    expect(excluded).not.toHaveProperty('migration')
+
+    expect(await checkSwitchRules(rules)).toContain(
+      'migration: uses the property country, which the server does not supply (it supplies address)',
+    )
+  })
+
+  it('names a property inside a cohort, however deep, and a dependency on another flag', async () => {
+    const countryCohort: Cohort = {
+      type: 'OR',
+      values: [
+        {
+          type: 'AND',
+          values: [
+            { key: 'country', type: 'person', operator: 'exact', value: 'DE' },
+          ],
+        },
+      ],
+    }
+    const rules = {
+      ...switchRules({
+        i18n: flagRule('i18n', [
+          {
+            properties: [
+              { key: 'id', type: 'cohort', operator: 'in', value: 7 },
+            ],
+            rollout_percentage: 100,
+          },
+        ]),
+        'migration-nft': flagRule('migration-nft', [
+          {
+            properties: [
+              {
+                key: 'migration',
+                type: 'flag',
+                operator: 'flag_evaluates_to',
+                value: true,
+                dependency_chain: ['migration'],
+              },
+            ],
+            rollout_percentage: 100,
+          },
+        ]),
+      }),
+      cohorts: { '7': countryCohort },
+    }
+
+    expect(await checkSwitchRules(rules)).toEqual(
+      expect.arrayContaining([
+        'i18n: uses the property country, which the server does not supply (it supplies address)',
+        'migration-nft: depends on another flag, which the server does not evaluate',
+      ]),
+    )
+  })
+
+  it('passes cohorts that hold only the wallet address, nested or naming one another', async () => {
+    const wallets: Cohort = {
+      type: 'AND',
+      values: [
+        {
+          key: 'address',
+          type: 'person',
+          operator: 'exact',
+          value: [TEST_WALLET.toLowerCase()],
+        },
+        { key: 'id', type: 'cohort', operator: 'in', value: 2 },
+      ],
+    }
+    const nested: Cohort = {
+      type: 'OR',
+      values: [
+        {
+          type: 'AND',
+          values: [
+            { key: 'id', type: 'cohort', operator: 'in', value: 1 },
+            {
+              key: 'address',
+              type: 'person',
+              operator: 'exact',
+              value: [OTHER_WALLET.toLowerCase()],
+            },
+          ],
+        },
+      ],
+    }
+    const rules = {
+      ...switchRules({
+        i18n: flagRule('i18n', [
+          {
+            properties: [
+              { key: 'id', type: 'cohort', operator: 'in', value: 1 },
+            ],
+            rollout_percentage: 100,
+          },
+          forEveryone(),
+        ]),
+      }),
+      // The two cohorts name each other; the check ends at the second visit.
+      cohorts: { '1': wallets, '2': nested },
+    }
+
+    expect(await checkSwitchRules(rules)).toEqual([])
   })
 
   it('names a switch aimed at any wallet with is_set, which a visitor without a wallet would match too', async () => {

@@ -3,6 +3,7 @@ import type {
   FlagDefinitionCacheData,
   FlagDefinitionCacheProvider,
 } from 'posthog-node/experimental'
+import { match, P } from 'ts-pattern'
 import type { Address } from 'viem'
 // By path, not by package name: vite.config.ts loads this module through the
 // build check before any workspace package can be resolved.
@@ -41,10 +42,100 @@ export const switchVisitor = (wallet: Address | null): SwitchVisitor =>
 /** A wallet the rules check decides every switch for, besides no wallet. */
 const SAMPLE_WALLET = '0x000000000000000000000000000000000000dEaD'
 
+/** The one property of a visitor that the server supplies to the rules. */
+const SUPPLIED_PROPERTY = 'address'
+
 type FlagRule = SwitchRules['flags'][number]
+type Condition = NonNullable<NonNullable<FlagRule['filters']>['groups']>[number]
+type Property = Condition['properties'][number]
+type CohortGroup = SwitchRules['cohorts'][string]
 
 const propertiesOf = (rule: FlagRule) =>
   (rule.filters?.groups ?? []).flatMap((group) => group.properties ?? [])
+
+/**
+ * Every property a cohort holds, in its nested groups and in the cohorts those
+ * name in turn. A cohort already entered is not entered again, so cohorts that
+ * name each other end the walk.
+ */
+const cohortProperties = (
+  cohorts: SwitchRules['cohorts'],
+  id: string,
+  entered: readonly string[],
+): readonly Property[] => {
+  const group = cohorts[id]
+  return entered.includes(id) || !group
+    ? []
+    : groupProperties(cohorts, group, [...entered, id])
+}
+
+const groupProperties = (
+  cohorts: SwitchRules['cohorts'],
+  group: CohortGroup,
+  entered: readonly string[],
+): readonly Property[] =>
+  (Array.isArray(group.values) ? group.values : []).flatMap(
+    (member: CohortGroup | Property) =>
+      match(member)
+        .with({ values: P.array() }, (nested) =>
+          groupProperties(cohorts, nested, entered),
+        )
+        .with({ type: 'cohort' }, (reference) => [
+          reference,
+          ...cohortProperties(cohorts, String(reference.value), entered),
+        ])
+        .otherwise((property) => [property]),
+  )
+
+/** The rule's own properties, with those of every cohort they name. */
+const reachableProperties = (
+  rules: SwitchRules,
+  rule: FlagRule,
+): readonly Property[] =>
+  propertiesOf(rule).flatMap((property) =>
+    property.type === 'cohort'
+      ? [
+          property,
+          ...cohortProperties(rules.cohorts, String(property.value), []),
+        ]
+      : [property],
+  )
+
+/** What in one property of a switch's rule the server could not decide. */
+const propertyProblems = (
+  rules: SwitchRules,
+  name: FeatureSwitchName,
+  property: Property,
+): readonly string[] => [
+  ...(property.operator === 'is_not_set'
+    ? [`${name}: uses the is_not_set operator`]
+    : []),
+  // A visitor without a wallet is decided with an empty address, which
+  // posthog-node counts as set.
+  ...(property.operator === 'is_set'
+    ? [
+        `${name}: uses the is_set operator, which a visitor without a wallet answers yes to`,
+      ]
+    : []),
+  ...match(property)
+    .with({ type: 'cohort' }, ({ value }) =>
+      String(value) in rules.cohorts
+        ? []
+        : [
+            `${name}: uses cohort ${String(value)}, which the rules do not hold`,
+          ],
+    )
+    .with({ type: 'flag' }, () => [
+      `${name}: depends on another flag, which the server does not evaluate`,
+    ])
+    // The server is given the address and nothing else, so a condition on any
+    // other property cannot be decided for the visitors it does not exclude
+    // before it, whichever branch the two sample visitors take.
+    .with({ key: P.not(SUPPLIED_PROPERTY) }, ({ key }) => [
+      `${name}: uses the property ${String(key)}, which the server does not supply (it supplies ${SUPPLIED_PROPERTY})`,
+    ])
+    .otherwise(() => []),
+]
 
 /** What in a switch's own rule PostHog alone could decide. */
 const ruleProblems = (
@@ -62,31 +153,18 @@ const ruleProblems = (
   }
   const groupTypeIndex = rule.filters?.aggregation_group_type_index
   return [
-    ...(rule.ensure_experience_continuity
-      ? [`${name}: persists across sign-in (experience continuity)`]
-      : []),
-    // The server is given no groups, so a switch aimed at a group is off for
-    // everyone without a word, whether or not the rules hold that group type.
-    ...(typeof groupTypeIndex === 'number'
-      ? [`${name}: aims at a group, and the server is given no groups`]
-      : []),
-    ...propertiesOf(rule).flatMap((property) => [
-      ...(property.operator === 'is_not_set'
-        ? [`${name}: uses the is_not_set operator`]
+    ...new Set([
+      ...(rule.ensure_experience_continuity
+        ? [`${name}: persists across sign-in (experience continuity)`]
         : []),
-      // A visitor without a wallet is decided with an empty address, which
-      // posthog-node counts as set.
-      ...(property.operator === 'is_set'
-        ? [
-            `${name}: uses the is_set operator, which a visitor without a wallet answers yes to`,
-          ]
+      // The server is given no groups, so a switch aimed at a group is off for
+      // everyone without a word, whether or not the rules hold that group type.
+      ...(typeof groupTypeIndex === 'number'
+        ? [`${name}: aims at a group, and the server is given no groups`]
         : []),
-      ...(property.type === 'cohort' &&
-      !(String(property.value) in rules.cohorts)
-        ? [
-            `${name}: uses cohort ${String(property.value)}, which the rules do not hold`,
-          ]
-        : []),
+      ...reachableProperties(rules, rule).flatMap((property) =>
+        propertyProblems(rules, name, property),
+      ),
     ]),
   ]
 }
