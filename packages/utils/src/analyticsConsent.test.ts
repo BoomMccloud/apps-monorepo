@@ -137,6 +137,40 @@ describe('scrubErrorMessage', () => {
     )
   })
 
+  it.each([
+    ['in lower case', '8ba1f109551bd432803012645ac136ddd64dba72'],
+    [
+      'in mixed case, as a checksum writes it',
+      '8ba1F109551bD432803012645Ac136ddd64DBA72',
+    ],
+    ['in upper case', '8BA1F109551BD432803012645AC136DDD64DBA72'],
+    ['as a transaction hash', `${'ab12'.repeat(16)}`],
+  ])('cuts an address written without 0x, %s', (_how, address) => {
+    expect(scrubErrorMessage(`Call failed for ${address} on mainnet`)).toBe(
+      'Call failed for [address] on mainnet',
+    )
+    expect(scrubErrorMessage(`/address/${address}?tab=txs`)).toBe(
+      '/address/[address]?tab=txs',
+    )
+  })
+
+  it('leaves a long decimal number readable, which has no hex letter to take for an address', () => {
+    const maxUint256 = String(2n ** 256n - 1n)
+
+    expect(scrubErrorMessage(`allowance ${maxUint256} is too low`)).toBe(
+      `allowance ${maxUint256} is too low`,
+    )
+  })
+
+  it('leaves a hex run shorter than an address, and one inside a longer word, readable', () => {
+    const short = 'ab12'.repeat(9)
+    const inWord = `x${'ab12'.repeat(10)}x`
+
+    expect(scrubErrorMessage(`id ${short} and ${inWord}`)).toBe(
+      `id ${short} and ${inWord}`,
+    )
+  })
+
   it('keeps a short hex value that ends a short message', () => {
     expect(scrubErrorMessage('failed with code 0x1f')).toBe(
       'failed with code 0x1f',
