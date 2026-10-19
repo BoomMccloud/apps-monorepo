@@ -566,6 +566,10 @@ msgstr ""
 msgid "Checking your account…"
 msgstr ""
 
+#: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
+msgid "Checking your earlier payment"
+msgstr ""
+
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 msgid "Choose Primary Name"
 msgstr "Välj primärt namn"
@@ -3133,6 +3137,10 @@ msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Waiting for the commitment confirmation"
+msgstr ""
+
+#: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
+msgid "Waiting for the payment you already signed to arrive"
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
