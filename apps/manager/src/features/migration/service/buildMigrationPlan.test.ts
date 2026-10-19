@@ -47,6 +47,7 @@ vi.mock('./migrationInvariants', async (importActual) => ({
         hca,
       }),
       implementation: HCA,
+      writer: 'hca',
       hcaHasRootRoles: true,
       walletHasWildcardRoles: true,
     }),
