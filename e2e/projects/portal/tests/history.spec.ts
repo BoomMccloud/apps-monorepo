@@ -28,6 +28,11 @@
  * Needs the `v1-subgraph` service. The PR CI service set does not start it, so
  * the suite skips with a reason when the shim is absent or too old to serve the
  * upstream `newResolvers` / `resolverId` fields.
+ *
+ * With #1354 (`E2E_EXPLORER_INDEXER=bigname`) both pages read one stream,
+ * bigname's `/v1/names/{name}/history`, and the shim is not involved. The
+ * oracle is unchanged — a contract nobody assigned must not write the name's
+ * history — but the waits and the non-vacuity guard follow bigname instead.
  */
 import { ensL1Contracts, supportedL1Chains } from '@ensdomains/ensjs/chain'
 import type { Locator, Page } from '@playwright/test'
@@ -54,6 +59,11 @@ import {
   testClient,
   walletClient,
 } from '../../../helpers/anvil-client.js'
+import {
+  bignameNameHistory,
+  waitForBignameBlock,
+} from '../../../helpers/bigname-sync.js'
+import { explorerReadsBigname } from '../../../helpers/indexer-sync.js'
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
 const V1_SUBGRAPH_URL =
@@ -223,12 +233,32 @@ const forgeResolverEvents = async (
   )
 }
 
+/** Wait until whatever the explorer reads has indexed `block`. */
+const waitForReader = (block: bigint) =>
+  explorerReadsBigname ? waitForBignameBlock(block) : waitForShim(block)
+
 /**
  * Non-vacuity guard: the forged rows really are in the subgraph under this
  * name, so any domain-keyed resolver read would return them. Without this, the
  * page's "not shown" assertions could pass because the forgery never landed.
  */
-const expectForgeryIndexed = async (node: Hex) => {
+const expectForgeryIndexed = async (node: Hex, name: string) => {
+  if (explorerReadsBigname) {
+    const rows = await bignameNameHistory(name)
+    const fromForger = (address: Address) =>
+      rows
+        .filter((r) => r.contract_address.toLowerCase() === address)
+        .map((r) => r.data?.key)
+    expect(
+      fromForger(FORGE_ADDR),
+      'precondition: bigname lists the forged AddrChanged under the name',
+    ).toEqual(['addr:60'])
+    expect(
+      fromForger(FORGE_TEXT),
+      'precondition: and the forged TextChanged',
+    ).toEqual(['text:url'])
+    return
+  }
   const { data } = await shim<{
     resolvers: { id: string; events: { __typename: string }[] }[]
     newResolvers: { resolverId: string }[]
@@ -295,6 +325,11 @@ const nameWithRecords = async (
 
 test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () => {
   test.beforeEach(async () => {
+    test.fail(
+      explorerReadsBigname,
+      'E2E-039: bigname files every resolver-shaped event under the name, and the explorer shows them all',
+    )
+    if (explorerReadsBigname) return
     shimUnavailable ??= await checkShim()
     test.skip(!!shimUnavailable, shimUnavailable ?? '')
   })
@@ -316,8 +351,8 @@ test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () 
       legitUrl,
     )
     await writes.setAddr(OTHER_PUBLIC_RESOLVER, owner.address)
-    await waitForShim(await forgeResolverEvents(attacker, node, forgedUrl))
-    await expectForgeryIndexed(node)
+    await waitForReader(await forgeResolverEvents(attacker, node, forgedUrl))
+    await expectForgeryIndexed(node, name)
 
     await page.goto(`${PORTAL_APP_URL}/${name}/history`)
     const main = await expectTimelineLoaded(page, legitUrl)
@@ -355,8 +390,8 @@ test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () 
       'v1-hist-scoped',
       legitUrl,
     )
-    await waitForShim(await forgeResolverEvents(attacker, node, forgedUrl))
-    await expectForgeryIndexed(node)
+    await waitForReader(await forgeResolverEvents(attacker, node, forgedUrl))
+    await expectForgeryIndexed(node, name)
 
     await page.goto(`${PORTAL_APP_URL}/${name}/resolver`)
     const main = await expectTimelineLoaded(page, legitUrl)
@@ -398,7 +433,7 @@ test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () 
     await setResolver(B)
     await setText(B, url.reassigned) //    B assigned again
     await setResolver(zeroAddress)
-    await waitForShim(await setText(B, url.unset)) // resolver unset
+    await waitForReader(await setText(B, url.unset)) // resolver unset
 
     await page.goto(`${PORTAL_APP_URL}/${name}/history`)
     const main = await expectTimelineLoaded(page, url.reassigned)

@@ -214,3 +214,21 @@ export async function waitForBignameRecordKeys(
     `bigname did not list ${name}'s record keys within ${timeoutMs}ms; missing: ${missing.join(', ')}`,
   )
 }
+
+/** One row of bigname's name history, as the explorer's timeline reads it. */
+export type BignameHistoryRow = {
+  readonly type: string
+  readonly block_number: number
+  readonly contract_address: string
+  readonly data?: { readonly key?: string; readonly value?: string }
+}
+
+/** The name's history rows (one page of 200, newest first), or [] if unknown. */
+export async function bignameNameHistory(
+  name: string,
+): Promise<readonly BignameHistoryRow[]> {
+  const body = await getJson<{ data?: BignameHistoryRow[] }>(
+    `/v1/names/${encodeURIComponent(name)}/history?include=data&page_size=200`,
+  )
+  return body?.data ?? []
+}

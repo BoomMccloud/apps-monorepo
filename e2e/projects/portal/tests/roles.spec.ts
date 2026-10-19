@@ -51,6 +51,7 @@ import {
   test,
 } from '../../../fixtures/playwright.portal.fixture.js'
 import { publicClient, walletClient } from '../../../helpers/anvil-client.js'
+import { waitForBignameBlock } from '../../../helpers/bigname-sync.js'
 import {
   waitForIndexedBlock,
   waitForIndexedName,
@@ -73,6 +74,24 @@ import {
 } from '../../../helpers/transaction-modal.js'
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
+
+/**
+ * A read of one registration's role history from bigname: its permission
+ * events (`/v1/events?registration_id=…&type=permission`), which the explorer
+ * reads since #1354 before falling back to the node's logs.
+ */
+const isBignameRoleRead = (raw: string) => {
+  if (!raw.includes('/v1/events')) return false
+  const url = new URL(raw)
+  return (
+    url.pathname.endsWith('/v1/events') &&
+    url.searchParams.has('registration_id') &&
+    url.searchParams
+      .getAll('type')
+      .flatMap((t) => t.split(','))
+      .includes('permission')
+  )
+}
 
 /** `truncateAddress(addr, 6, 4)` — how the roles table renders an account. */
 const truncate = (address: string) =>
@@ -1483,6 +1502,13 @@ test.describe('Portal name roles — missing-privilege warnings (WEB-1469)', () 
   /** How many of a response's name role reads answered, and how many errored. */
   async function tallyRoleReads(response: import('@playwright/test').Response) {
     const tally = { clean: 0, degraded: 0 }
+    // With the explorer on bigname (#1354) a name's role history is its
+    // registration's permission events; the node is only the fallback.
+    if (isBignameRoleRead(response.url())) {
+      if (response.ok()) tally.clean++
+      else tally.degraded++
+      return tally
+    }
     const body = response.request().postData() ?? ''
     if (!body.includes('eth_getLogs') || !body.includes(EAC_ROLES_CHANGED))
       return tally
@@ -1549,8 +1575,13 @@ test.describe('Portal name roles — missing-privilege warnings (WEB-1469)', () 
     throw new Error(`no clean role read for ${where} in three loads`)
   }
 
-  const gotoWithCleanRoleRead = (page: Page, url: string) =>
-    navigateWithCleanRoleRead(page, () => page.goto(url), url)
+  // A name the explorer's indexer hasn't seen reads as unindexed, which
+  // sends the page to the node instead (and bigname indexes a fresh name a
+  // few blocks behind the chain).
+  const gotoWithCleanRoleRead = async (page: Page, url: string) => {
+    await waitForIndexedBlock()
+    return navigateWithCleanRoleRead(page, () => page.goto(url), url)
+  }
 
   /**
    * Badge absence is only meaningful once the role read has landed and the
@@ -2495,38 +2526,91 @@ test.describe('Portal name roles — role holders checked against the registry (
         row.asEACRolesChanged.account.toLowerCase() === account.toLowerCase(),
     )
 
-  /**
-   * Serves `RoleChangeEvents` from `rows` and records each request's
-   * variables. Pages like the indexer: `first` rows from `fromBlock` on, in
-   * block order.
-   */
-  async function serveIndexedHistory(page: Page, rows: IndexedRow[]) {
-    const requests: { fromBlock: number; first: number; resource: string }[] =
-      []
-    const ordered = [...rows].sort(
-      (a, b) =>
-        Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)) ||
-        Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]),
+  /** One bigname event row (`/v1/events`), as the explorer reads it. */
+  type BignameEventRow = {
+    readonly type: string
+    readonly block_number: number | null
+    readonly timestamp: string
+    readonly transaction_hash: string | null
+    readonly log_index: number
+    readonly contract_address: string | null
+    readonly data?: {
+      readonly address?: string
+      readonly powers?: readonly string[]
+      readonly [key: string]: unknown
+    }
+    readonly [key: string]: unknown
+  }
+
+  /** Rows granted to or revoked from `account`. */
+  const rowsOf = (account: Address) => (rows: readonly BignameEventRow[]) =>
+    rows.filter(
+      (row) => row.data?.address?.toLowerCase() === account.toLowerCase(),
     )
-    await page.route('**/graphql', (route) => {
-      const body = route.request().postData() ?? ''
-      if (!body.includes('RoleChangeEvents')) return route.fallback()
-      const { variables } = JSON.parse(body) as {
-        variables: { fromBlock: number; first: number; resource: string }
+
+  /** Every page of bigname's real answer to a role-history request. */
+  async function readRealHistory(
+    route: import('@playwright/test').Route,
+    url: URL,
+  ): Promise<BignameEventRow[]> {
+    const real: BignameEventRow[] = []
+    const all = new URL(url)
+    all.searchParams.delete('cursor')
+    let next: string | null = null
+    do {
+      if (next) all.searchParams.set('cursor', next)
+      const response = await route.fetch({ url: all.toString() })
+      const body = (await response.json()) as {
+        data?: BignameEventRow[]
+        page?: { next_cursor?: string | null; has_more?: boolean }
       }
-      requests.push(variables)
-      const page = ordered
-        .filter(
-          (row) =>
-            row.asEACRolesChanged.resource === variables.resource &&
-            Number(row.blockNumber) >= variables.fromBlock,
-        )
-        .slice(0, variables.first)
-      return route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ data: { eacRolesChangeds: page } }),
-      })
-    })
+      real.push(...(body.data ?? []))
+      next = body.page?.has_more ? (body.page.next_cursor ?? null) : null
+    } while (next)
+    return real
+  }
+
+  /**
+   * Serves the name's role history — bigname's permission events for its
+   * registration (`/v1/events?registration_id=…&type=permission`, which the
+   * explorer reads since #1354) — as `select` makes it from the real answer:
+   * dropped, filtered or padded. Paged by cursor the way bigname pages, at
+   * the request's `page_size`. Records each request.
+   */
+  async function serveIndexedHistory(
+    page: Page,
+    select: (real: readonly BignameEventRow[]) => readonly BignameEventRow[],
+  ) {
+    const requests: { cursor: string | null; pageSize: number }[] = []
+    let served: readonly BignameEventRow[] | null = null
+    await page.route(
+      (url) => isBignameRoleRead(url.toString()),
+      async (route) => {
+        const url = new URL(route.request().url())
+        const pageSize = Number(url.searchParams.get('page_size') ?? 100)
+        const cursor = url.searchParams.get('cursor')
+        requests.push({ cursor, pageSize })
+        served ??= select(await readRealHistory(route, url))
+        const offset = cursor ? Number(cursor) : 0
+        const slice = served.slice(offset, offset + pageSize)
+        const end = offset + slice.length
+        const hasMore = end < served.length
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: slice,
+            page: {
+              cursor: cursor ?? null,
+              next_cursor: hasMore ? String(end) : null,
+              page_size: pageSize,
+              total_count: served.length,
+              has_more: hasMore,
+            },
+            meta: {},
+          }),
+        })
+      },
+    )
     return requests
   }
 
@@ -2630,6 +2714,9 @@ test.describe('Portal name roles — role holders checked against the registry (
       (await readNameRoles({ label }, owner)).decoded.length,
       'setup: the owner holds roles on chain',
     ).toBeGreaterThan(0)
+    // The explorer reads the name's registration from bigname before its
+    // role history, so the name — grant included — must be indexed first.
+    await waitForBignameBlock()
     const resource = await readResource(label)
     const rows = await chainRoleRows(resource)
     expect(
@@ -2673,7 +2760,7 @@ test.describe('Portal name roles — role holders checked against the registry (
     )
 
     // The indexer has nothing for the name, as one lagging behind it would.
-    const indexed = await serveIndexedHistory(page, [])
+    const indexed = await serveIndexedHistory(page, () => [])
     const node = await watchNodeRoleReads(page, resource)
     await page.goto(rolesPage(name))
     const panel = await panelSettled(page)
@@ -2704,14 +2791,14 @@ test.describe('Portal name roles — role holders checked against the registry (
     wallets,
   }) => {
     await connectWithHeadlessWallet(page, wallet)
-    const { name, owner, manager, resource, rows } = await nameWithManager(
+    const { name, owner, manager, resource } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-short',
     )
 
     // The registration's grants are indexed; the manager's later grant isn't.
-    await serveIndexedHistory(page, rowsFor(rows, owner))
+    await serveIndexedHistory(page, rowsOf(owner))
     const node = await watchNodeRoleReads(page, resource)
     await page.goto(rolesPage(name))
     const panel = await panelSettled(page)
@@ -2748,7 +2835,7 @@ test.describe('Portal name roles — role holders checked against the registry (
       'roles-1484-down',
     )
 
-    await serveIndexedHistory(page, [])
+    await serveIndexedHistory(page, () => [])
     const node = await watchNodeRoleReads(page, resource, { fail: true })
     await page.goto(rolesPage(name))
     await panelSettled(page)
@@ -2768,13 +2855,13 @@ test.describe('Portal name roles — role holders checked against the registry (
     makeName,
     wallets,
   }) => {
-    const { name, owner, manager, resource, rows } = await nameWithManager(
+    const { name, owner, manager, resource } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-flag',
     )
 
-    await serveIndexedHistory(page, rowsFor(rows, owner))
+    await serveIndexedHistory(page, rowsOf(owner))
     await watchNodeRoleReads(page, resource, { fail: true })
 
     // Roles: the warning, plus the holders that were found.
@@ -2822,32 +2909,39 @@ test.describe('Portal name roles — role holders checked against the registry (
     makeName,
     wallets,
   }) => {
-    const { name, owner, manager, resource, rows } = await nameWithManager(
+    const { name, owner, manager, resource } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-paged',
     )
 
-    // A thousand older changes on the same resource, ahead of the real ones:
-    // a throwaway account granted and revoked, two changes a block, ending
-    // revoked. It holds nothing, so the registry agrees with the replay.
+    // A thousand older changes ahead of the real ones: a throwaway account
+    // granted and revoked Set Resolver, ending revoked. It holds nothing, so
+    // the registry agrees with the replay — more than one 200-row page.
     const churner = privateKeyToAddress(generatePrivateKey()).toLowerCase()
-    const resourceTopic = resourceHex(resource)
-    const noise: IndexedRow[] = Array.from({ length: 1_000 }, (_, i) => ({
-      id: `${keccak256(toHex(`web-1484-${churner}-${i >> 1}`))}-${i % 2}`,
-      blockNumber: String(ROLES_FROM_BLOCK + BigInt(i >> 1)),
-      timestamp: '1700000000',
-      transactionHash: keccak256(toHex(`web-1484-${churner}-${i >> 1}`)),
-      asEACRolesChanged: {
-        resource: resourceTopic,
-        account: churner as Address,
-        oldRoleBitmap: i % 2 === 0 ? '0x0' : '0x1',
-        newRoleBitmap: i % 2 === 0 ? '0x1' : '0x0',
-      },
-    }))
-    const lastNoiseBlock = Number(ROLES_FROM_BLOCK) + 499
-
-    const indexed = await serveIndexedHistory(page, [...noise, ...rows])
+    const noise = (real: readonly BignameEventRow[]): BignameEventRow[] => {
+      const template = real[0]
+      if (!template) throw new Error('setup: bigname has no permission rows')
+      return Array.from({ length: 1_000 }, (_, i) => ({
+        ...template,
+        id: keccak256(toHex(`web-1484-${churner}-${i}`)),
+        block_number: Number(ROLES_FROM_BLOCK) + (i >> 1),
+        timestamp: '1700000000',
+        transaction_hash: keccak256(toHex(`web-1484-${churner}-${i >> 1}`)),
+        log_index: i % 2,
+        data: {
+          ...template.data,
+          address: churner,
+          powers: i % 2 === 0 ? ['set_resolver'] : [],
+          added_powers: i % 2 === 0 ? ['set_resolver'] : [],
+          removed_powers: i % 2 === 0 ? [] : ['set_resolver'],
+        },
+      }))
+    }
+    const indexed = await serveIndexedHistory(page, (real) => [
+      ...noise(real),
+      ...real,
+    ])
     const node = await watchNodeRoleReads(page, resource)
     await page.goto(rolesPage(name))
     const panel = await panelSettled(page)
@@ -2859,13 +2953,12 @@ test.describe('Portal name roles — role holders checked against the registry (
     await expect(panel.locator('tbody tr')).toHaveCount(2)
     await expect(page.locator('main').getByText(UNVERIFIED)).toHaveCount(0)
 
-    // The second page starts at the last block the first one read, so the
-    // two rows straddling it are re-read and deduped rather than skipped.
-    const pages = indexed.filter((r) => r.resource === resourceTopic)
+    // Every page was read from bigname by cursor, the first without one.
+    expect(indexed[0]?.cursor, 'the first page starts the walk').toBeNull()
     expect(
-      pages.map((r) => r.fromBlock).slice(0, 2),
+      indexed.length,
       'pre-fix: one full page and no second request',
-    ).toEqual([Number(ROLES_FROM_BLOCK), lastNoiseBlock])
+    ).toBeGreaterThan(1)
     expect(
       node.count,
       'pre-fix: a full first page went straight to the node scan',
@@ -2880,14 +2973,14 @@ test.describe('Portal name roles — role holders checked against the registry (
     wallets,
   }) => {
     await connectWithHeadlessWallet(page, wallet)
-    const { name, label, owner, manager, rows } = await nameWithManager(
+    const { name, label, owner, manager } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-xfer',
     )
     const recipient = accounts.getAddress('user4')
 
-    await serveIndexedHistory(page, rowsFor(rows, owner))
+    await serveIndexedHistory(page, rowsOf(owner))
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await expect(
       page.getByRole('heading', { name: 'Transfer ownership' }),
@@ -2931,13 +3024,13 @@ test.describe('Portal name roles — role holders checked against the registry (
     wallets,
   }) => {
     await connectWithHeadlessWallet(page, wallet)
-    const { name, owner, resource, rows } = await nameWithManager(
+    const { name, owner, resource } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-xfer-down',
     )
 
-    await serveIndexedHistory(page, rowsFor(rows, owner))
+    await serveIndexedHistory(page, rowsOf(owner))
     await watchNodeRoleReads(page, resource, { fail: true })
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await expect(
@@ -2963,13 +3056,13 @@ test.describe('Portal name roles — role holders checked against the registry (
     makeName,
     wallets,
   }) => {
-    const { name, owner, manager, resource, rows } = await nameWithManager(
+    const { name, owner, manager, resource } = await nameWithManager(
       makeName,
       wallets,
       'roles-1484-guard',
     )
 
-    await serveIndexedHistory(page, rows)
+    await serveIndexedHistory(page, (real) => real)
     const node = await watchNodeRoleReads(page, resource)
     await page.goto(rolesPage(name))
     const panel = await panelSettled(page)
