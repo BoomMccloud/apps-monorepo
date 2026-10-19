@@ -1,3 +1,7 @@
+// greptile: file-naming-conventions: the Manager names the file of a query
+// factory `<name>.query.ts`, as the nine files under
+// features/register-v2/data/queries do; the rule's list of names has none for
+// a query file.
 import { ResultFn, TaggedError } from '@ens-apps/utils/neverthrow'
 import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
