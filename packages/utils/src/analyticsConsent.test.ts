@@ -57,6 +57,17 @@ describe('declineAnalytics', () => {
     expect(client.set_config).toHaveBeenCalledWith(collectionOff)
   })
 
+  it('hands the SDK settings that say the project has no product tours, which it stops only on being told so', () => {
+    const client = fakeClient()
+
+    declineAnalytics(client satisfies AnalyticsClient)
+
+    expect(client._onRemoteConfig).toHaveBeenCalledExactlyOnceWith({
+      ok: true,
+      config: { productTours: false },
+    })
+  })
+
   it('lets go of the requests waiting to be tried again after it opts out and before it resets', () => {
     const client = fakeClient()
 

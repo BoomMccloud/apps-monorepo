@@ -343,6 +343,9 @@ export const declineAnalytics = (client: AnalyticsClient): void => {
   appliedChoice.set(client, 'denied')
   client.opt_out_capturing()
   client.set_config(collectionOff)
+  // The SDK stops its product tours only when the project's settings say that
+  // they are off, so it is handed settings that say so.
+  client._onRemoteConfig({ ok: true, config: { productTours: false } })
   dismissSurveys()
   void client.shutdown()
   client.reset(true)
