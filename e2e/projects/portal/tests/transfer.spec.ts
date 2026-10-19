@@ -21,6 +21,7 @@ import {
   labelhash,
   namehash,
   parseAbi,
+  toFunctionSelector,
   zeroAddress,
 } from 'viem'
 import {
@@ -47,6 +48,7 @@ import { CHILD_FUSES, makeV1Subname } from '../../../fixtures/makeV1Subname.js'
 import {
   connectWithHeadlessWallet,
   expect,
+  type PortalFixtures,
   test,
 } from '../../../fixtures/playwright.portal.fixture.js'
 import {
@@ -2170,9 +2172,11 @@ test.describe('Portal name transfer — subnames', () => {
     await transferButton.click()
 
     // Inherited resolver and no subregistry of its own, so the plan is the
-    // single-step one: nothing to detach.
+    // single-step one: nothing to detach. The deployer kept its root roles, so
+    // the subregistry isn't emancipated and the move is `unsafeTransfer`
+    // (`safeTransferFrom` reverts 0x54838f98; WEB-1829 / #1391).
     await driveTransactionsToSuccess(page, wallet, [
-      transferTxId(name, 'transfer-token'),
+      transferTxId(name, 'transfer-token-unsafe'),
     ])
 
     // Chain first — the rendering is checked after, never instead.
@@ -2328,7 +2332,7 @@ test.describe('Portal name transfer — subnames', () => {
 
     await transferButton.click()
     await driveTransactionsToSuccess(page, wallet, [
-      transferTxId(name, 'transfer-token'),
+      transferTxId(name, 'transfer-token-unsafe'),
     ])
 
     await expect
@@ -2422,6 +2426,287 @@ test.describe('Portal name transfer — subnames', () => {
     ).toBeVisible({ timeout: 60_000 })
     await expect(page.getByText('Transfer not available')).toBeHidden()
   })
+
+  /**
+   * Subnames in an unemancipated registry — WEB-1829 / #1391.
+   *
+   * Bug: `PermissionedRegistry._update` refuses `safeTransferFrom` with
+   * `TransferUnsafeUntilRegistryIsEmancipated()` (`0x54838f98`) while any
+   * account holds a root role on the registry. A subregistry whose deployer
+   * (the parent owner) kept its root roles is always in that state, so the
+   * move preflight reverted for every subname in it and the explorer said
+   * "The transfer itself would fail". The plan only fell back to
+   * `unsafeTransfer` when other accounts held roles on the name itself.
+   *
+   * Fix: the transfer prep reads `isEmancipated()` from the registry and
+   * plans `transfer-token-unsafe` when it is false.
+   *
+   * What these reach that the hook unit tests don't: the real contract
+   * answer (the unit tests mock `isEmancipated`), the real revert, the
+   * calldata the wallet actually signed, and the decision flipping back to
+   * `safeTransferFrom` once the same registry is emancipated on chain.
+   */
+  test.describe('unemancipated subregistry (WEB-1829, #1391)', () => {
+    const REGISTRY_ROOT_ABI = parseAbi([
+      'function isEmancipated() view returns (bool)',
+      'function roles(uint256 resource, address account) view returns (uint256)',
+      'function revokeRootRoles(uint256 roleBitmap, address account) returns (bool)',
+    ])
+    const SELECTOR = {
+      safeTransferFrom: toFunctionSelector(
+        'safeTransferFrom(address,address,uint256,uint256,bytes)',
+      ),
+      unsafeTransfer: toFunctionSelector(
+        'unsafeTransfer(address,uint256,bytes)',
+      ),
+    }
+    // Multicall3: deployed, and not an ERC-1155 receiver.
+    const NOT_A_RECEIVER: Address = '0xcA11bde05977b3631167028862bE2a173976CA11'
+    const REFUSAL = 'The transfer itself would fail, so nothing was sent.'
+
+    const isEmancipated = (registry: Address) =>
+      publicClient.readContract({
+        address: registry,
+        abi: REGISTRY_ROOT_ABI,
+        functionName: 'isEmancipated',
+      })
+
+    const rootRoles = (registry: Address, account: Address) =>
+      publicClient.readContract({
+        address: registry,
+        abi: REGISTRY_ROOT_ABI,
+        functionName: 'roles',
+        args: [0n, account],
+      })
+
+    /**
+     * The selector of the newest tx `from` sent to `to`, from the chain. This
+     * is the call the wallet signed, not the app's own step label.
+     */
+    async function lastSelectorSent(from: Address, to: Address) {
+      const latest = await publicClient.getBlockNumber({ cacheTime: 0 })
+      for (let n = latest; n > latest - 30n && n >= 0n; n--) {
+        const block = await publicClient.getBlock({
+          blockNumber: n,
+          includeTransactions: true,
+        })
+        const tx = [...block.transactions]
+          .reverse()
+          .find(
+            (t) =>
+              t.from.toLowerCase() === from.toLowerCase() &&
+              t.to?.toLowerCase() === to.toLowerCase(),
+          )
+        if (tx) return tx.input.slice(0, 10)
+      }
+      return null
+    }
+
+    /**
+     * The ticket's shape: `user2` owns the parent and deployed its
+     * subregistry, so it holds every root role there; `sub` belongs to the
+     * connected wallet (`user`), which holds no root role.
+     */
+    async function subnameInForeignSubregistry(
+      label: string,
+      { makeName, accounts }: Pick<PortalFixtures, 'makeName' | 'accounts'>,
+    ) {
+      const parentName = await makeName({ label, owner: 'user2' })
+      const parentLabel = parentName.replace(/\.eth$/, '')
+      const { subregistry } = await makeSubnameUnder(
+        { parentLabel, subnameOwner: accounts.getAddress('user') },
+        accounts.getPrivateKey('user2'),
+      )
+      return { name: `sub.${parentName}`, parentName, subregistry }
+    }
+
+    /** Wait for the form to settle, click Transfer, and wait for an outcome. */
+    async function submitTransfer(
+      page: Page,
+      name: string,
+      recipient: Address,
+    ) {
+      await page.goto(transferRoute(name))
+      await page.getByPlaceholder('ENS name or address').fill(recipient)
+      const transferButton = page.getByRole('button', { name: 'Transfer name' })
+      await expect(transferButton).toBeEnabled({ timeout: 60_000 })
+      await transferButton.click()
+      const dialog = page.locator('[data-slot="dialog-content"]')
+      const refusal = page.locator('main').getByText(REFUSAL)
+      // A positive outcome either way, so the refusal check below isn't
+      // read off a page that simply hasn't reacted yet.
+      await expect(dialog.or(refusal).first()).toBeVisible({ timeout: 60_000 })
+      return { dialog, refusal }
+    }
+
+    // Not `@smoke` yet: under E2E_MOCK_INDEXER=true (CI) the mock doesn't
+    // serve the explorer's bigname root-role read, so the form stays disabled
+    // ("Couldn't check who else holds permissions"), as F41 and F42 do here.
+    test('moves a subname in a subregistry its parent owner still holds root roles on, with unsafeTransfer (ticket repro)', async ({
+      portalPage: page,
+      wallet,
+      accounts,
+      makeName,
+    }) => {
+      test.setTimeout(300_000)
+      await connectWithHeadlessWallet(page, wallet)
+
+      const owner = accounts.getAddress('user')
+      const parentOwner = accounts.getAddress('user2')
+      const recipient = accounts.getAddress('user3')
+      const { name, parentName, subregistry } =
+        await subnameInForeignSubregistry('xfer-1829-repro', {
+          makeName,
+          accounts,
+        })
+
+      // The state from the ticket, read from the contract.
+      expect(
+        await isEmancipated(subregistry),
+        'precondition: the subregistry is not emancipated',
+      ).toBe(false)
+      const parentRootRoles = await rootRoles(subregistry, parentOwner)
+      expect(
+        parentRootRoles,
+        'precondition: the parent owner holds root roles on it',
+      ).not.toBe(0n)
+      expect(
+        await rootRoles(subregistry, owner),
+        'precondition: the sender holds no root role (roleHolderCount 1)',
+      ).toBe(0n)
+
+      const { refusal } = await submitTransfer(page, name, recipient)
+      await expect(
+        refusal,
+        'the move must not be refused: before #1391 the preflight simulated safeTransferFrom, which reverts 0x54838f98 here',
+      ).toHaveCount(0)
+
+      await driveTransactionsToSuccess(page, wallet, [
+        transferTxId(name, 'transfer-token-unsafe'),
+      ])
+
+      await expect
+        .poll(
+          async () =>
+            ((await getOwner(publicClient as never, { name })) as Address) ??
+            '',
+          {
+            message: 'the subname must move to the recipient',
+            timeout: 60_000,
+          },
+        )
+        .toBe(recipient)
+      expect(
+        await lastSelectorSent(owner, subregistry),
+        'the wallet must have signed unsafeTransfer',
+      ).toBe(SELECTOR.unsafeTransfer)
+      // `unsafeTransfer` leaves the registry's root roles alone, which is
+      // what the form's parent-authority warning tells the sender.
+      expect(
+        await rootRoles(subregistry, parentOwner),
+        `the owner of ${parentName} keeps its root roles`,
+      ).toBe(parentRootRoles)
+    })
+
+    // Positive control: the same shape, emancipated on chain first. The plan
+    // must go back to `safeTransferFrom`, which shows the switch follows the
+    // contract's answer and not "this is a subname". A guard: it passes before
+    // #1391 too.
+    test('moves the same subname with safeTransferFrom once the parent owner gives up its root roles (control)', async ({
+      portalPage: page,
+      wallet,
+      accounts,
+      makeName,
+    }) => {
+      test.setTimeout(300_000)
+      await connectWithHeadlessWallet(page, wallet)
+
+      const owner = accounts.getAddress('user')
+      const parentOwner = accounts.getAddress('user2')
+      const recipient = accounts.getAddress('user3')
+      const { name, subregistry } = await subnameInForeignSubregistry(
+        'xfer-1829-eman',
+        { makeName, accounts },
+      )
+
+      const hash = await getOwnerClient(
+        accounts.getPrivateKey('user2'),
+      ).sendTransaction({
+        to: subregistry,
+        data: encodeFunctionData({
+          abi: REGISTRY_ROOT_ABI,
+          functionName: 'revokeRootRoles',
+          args: [FULL_ROLE_BITMAP, parentOwner],
+        }),
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+      expect(
+        await isEmancipated(subregistry),
+        'precondition: with no root holder left the subregistry is emancipated',
+      ).toBe(true)
+
+      const { refusal } = await submitTransfer(page, name, recipient)
+      await expect(refusal).toHaveCount(0)
+      await driveTransactionsToSuccess(page, wallet, [
+        transferTxId(name, 'transfer-token'),
+      ])
+
+      await expect
+        .poll(
+          async () =>
+            ((await getOwner(publicClient as never, { name })) as Address) ??
+            '',
+          {
+            message: 'the subname must move to the recipient',
+            timeout: 60_000,
+          },
+        )
+        .toBe(recipient)
+      expect(
+        await lastSelectorSent(owner, subregistry),
+        'an emancipated registry keeps the safe transfer',
+      ).toBe(SELECTOR.safeTransferFrom)
+    })
+
+    // Guard: `unsafeTransfer` skips the emancipation check, not the ERC-1155
+    // receiver hook. A contract that can't take the token is still refused
+    // before anything is sent. Refused before #1391 too, for the other reason.
+    test('still refuses a recipient contract that cannot receive the token, and moves nothing', async ({
+      portalPage: page,
+      wallet,
+      accounts,
+      makeName,
+    }) => {
+      test.setTimeout(300_000)
+      await connectWithHeadlessWallet(page, wallet)
+
+      const owner = accounts.getAddress('user')
+      const { name, subregistry } = await subnameInForeignSubregistry(
+        'xfer-1829-recv',
+        { makeName, accounts },
+      )
+      expect(await isEmancipated(subregistry)).toBe(false)
+
+      const { dialog, refusal } = await submitTransfer(
+        page,
+        name,
+        NOT_A_RECEIVER,
+      )
+      await expect(
+        refusal,
+        'a non-receiver must be refused at preflight',
+      ).toBeVisible()
+      await expect(dialog, 'and no transaction may be offered').toHaveCount(0)
+      expect(
+        (await getOwner(publicClient as never, { name })) as Address,
+        'the subname must not move',
+      ).toBe(owner)
+      expect(
+        await lastSelectorSent(owner, subregistry),
+        'nothing was sent to the subregistry',
+      ).toBe(null)
+    })
+  })
 })
 
 /**
@@ -2437,7 +2722,8 @@ test.describe('Portal name transfer — subnames', () => {
  *
  * The `subnames` block above deliberately covers only the INHERITED-resolver
  * shape, where no detach option renders and so the plan is a single
- * `transfer-token` — no irreversible step to get wrong. Unit tests
+ * `transfer-token-unsafe` (every subregistry here is unemancipated, #1391)
+ * — no irreversible step to get wrong. Unit tests
  * (`useTransferDetachTargets.test.ts`) prove the switches render for an
  * own-resolver name, but a rendered switch is not an executed plan: they mock
  * every contract, so they cannot catch a step running against the wrong
@@ -2541,7 +2827,7 @@ test.describe('Portal name transfer — subnames, irreversible steps', () => {
     // fails loudly if the plan silently changes shape.
     await driveTransactionsToSuccess(page, wallet, [
       transferTxId(name, 'detach-resolver'),
-      transferTxId(name, 'transfer-token'),
+      transferTxId(name, 'transfer-token-unsafe'),
     ])
 
     await expect
@@ -2652,7 +2938,7 @@ test.describe('Portal name transfer — subnames, irreversible steps', () => {
     // genuinely ran.
     await driveTransactionsToSuccess(page, wallet, [
       transferTxId(name, 'set-eth-addr'),
-      transferTxId(name, 'transfer-token'),
+      transferTxId(name, 'transfer-token-unsafe'),
     ])
 
     // THE ORACLE — this is expected to FAIL until the defect is fixed, the same
