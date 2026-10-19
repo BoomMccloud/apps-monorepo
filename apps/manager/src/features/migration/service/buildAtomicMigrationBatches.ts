@@ -656,7 +656,7 @@ const buildResolverSetupFragment = (params: {
   readonly includeWalletCoAdminGrant: boolean
 }): NameExecutionFragment => {
   const contracts = getDestinationContracts(params.chainId)
-  const hcaWrites = params.resolverWriter === 'hca'
+  const isHcaWriter = params.resolverWriter === 'hca'
   return {
     innerExecutions: [
       ...(params.includeResolverDeployment
@@ -672,7 +672,7 @@ const buildResolverSetupFragment = (params: {
             },
           ]
         : []),
-      ...(params.includeWalletCoAdminGrant && hcaWrites
+      ...(params.includeWalletCoAdminGrant && isHcaWriter
         ? [
             {
               phase: 'wallet-co-admin-grant' as const,
@@ -700,7 +700,7 @@ const buildResolverSetupFragment = (params: {
             salt: computeResolverSalt(params.hca),
           },
           // The HCA's grant is what it lost; the wallet's is what replaces it.
-          ...(hcaWrites
+          ...(isHcaWriter
             ? [
                 {
                   id: expectationId(params.name, 'resolver-root-roles'),
@@ -1345,13 +1345,19 @@ const createAtomicPrefixEstimator = (params: {
   }
 }
 
+// The wallet replay is its own transaction, so it is held to the same cap.
+const batchGas = (batch: AtomicMigrationBatch): bigint =>
+  batch.walletEstimatedGas > batch.estimatedGas
+    ? batch.walletEstimatedGas
+    : batch.estimatedGas
+
 const singleNameGasLimitError = (
   batch: AtomicMigrationBatch,
   maxOuterGas: bigint,
 ): AtomicMigrationNameGasLimitExceededError =>
   new AtomicMigrationNameGasLimitExceededError({
     ensName: batch.names[0] ?? 'unknown',
-    estimatedGas: batch.estimatedGas,
+    estimatedGas: batchGas(batch),
     maxOuterGas,
   })
 
@@ -1363,14 +1369,14 @@ const findLargestAtomicPrefixWithinGasLimit = async (params: {
   let lowerSize = 1
   let upperSize = params.overLimitSize
   let lowerBatch = await params.estimatePrefix(lowerSize)
-  if (lowerBatch.estimatedGas > params.maxOuterGas) {
+  if (batchGas(lowerBatch) > params.maxOuterGas) {
     throw singleNameGasLimitError(lowerBatch, params.maxOuterGas)
   }
 
   while (upperSize - lowerSize > 1) {
     const midpoint = Math.floor((lowerSize + upperSize) / 2)
     const candidate = await params.estimatePrefix(midpoint)
-    if (candidate.estimatedGas <= params.maxOuterGas) {
+    if (batchGas(candidate) <= params.maxOuterGas) {
       lowerSize = midpoint
       lowerBatch = candidate
       continue
@@ -1408,7 +1414,7 @@ const buildFirstAtomicMigrationBatch = async (params: {
   )
   const estimatePrefix = createAtomicPrefixEstimator(params)
   const hintedBatch = await estimatePrefix(hint)
-  if (hintedBatch.estimatedGas <= params.maxOuterGas) return hintedBatch
+  if (batchGas(hintedBatch) <= params.maxOuterGas) return hintedBatch
 
   return findLargestAtomicPrefixWithinGasLimit({
     overLimitSize: hint,
@@ -1476,7 +1482,7 @@ export const buildAtomicMigrationBatches = async (
       estimateBatchGas: params.estimateBatchGas,
     })
 
-    if (candidate.estimatedGas <= params.maxOuterGas) {
+    if (batchGas(candidate) <= params.maxOuterGas) {
       currentNameExecutions = candidateNameExecutions
       currentBatch = candidate
       continue
@@ -1485,7 +1491,7 @@ export const buildAtomicMigrationBatches = async (
     if (!currentBatch) {
       throw new AtomicMigrationNameGasLimitExceededError({
         ensName: nameExecution.classified.domain.name,
-        estimatedGas: candidate.estimatedGas,
+        estimatedGas: batchGas(candidate),
         maxOuterGas: params.maxOuterGas,
       })
     }
@@ -1499,10 +1505,10 @@ export const buildAtomicMigrationBatches = async (
       nameExecutions: [nameExecution],
       estimateBatchGas: params.estimateBatchGas,
     })
-    if (singleNameBatch.estimatedGas > params.maxOuterGas) {
+    if (batchGas(singleNameBatch) > params.maxOuterGas) {
       throw new AtomicMigrationNameGasLimitExceededError({
         ensName: nameExecution.classified.domain.name,
-        estimatedGas: singleNameBatch.estimatedGas,
+        estimatedGas: batchGas(singleNameBatch),
         maxOuterGas: params.maxOuterGas,
       })
     }
