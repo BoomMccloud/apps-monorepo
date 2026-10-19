@@ -114,8 +114,7 @@ name's timestamp differs.
 
 ## Left running
 
-- Dev servers on :3000/:3001, run from
-  `.claude/worktrees/pr-1391-unemancipated-transfer`. That worktree is
-  `e2e-tests-coverage` + #1391 + `e2e/portal-bigname`, with real-bigname env.
+- No dev servers. The verify worktree (`pr-1391-unemancipated-transfer`) is removed.
 - Docker stack (anvil, bigname, panoptes, alto, paymaster, mockestrator) untouched.
-- Branches `test/verify-pr-1391-unemancipated-transfer` and `pr-1391-head` still exist.
+- Branches `test/verify-pr-1391-unemancipated-transfer` (its test commit is
+  `818c7f405` here) and `pr-1391-head` still exist locally. They're safe to delete.
