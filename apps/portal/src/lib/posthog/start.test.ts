@@ -1,6 +1,7 @@
+import { LEGACY_POSTHOG_PROJECT_KEYS } from '@ens-apps/utils/analyticsLegacyStorage'
 import { startAnalyticsSdk } from '@ens-apps/utils/analyticsStart'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LEGACY_POSTHOG_PROJECT_KEYS, startPostHog } from './start'
+import { startPostHog } from './start'
 
 vi.mock('@ens-apps/utils/analyticsStart', () => ({
   startAnalyticsSdk: vi.fn(() => 'pending'),

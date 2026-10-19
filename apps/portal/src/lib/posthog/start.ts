@@ -1,17 +1,8 @@
 import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
+import { LEGACY_POSTHOG_PROJECT_KEYS } from '@ens-apps/utils/analyticsLegacyStorage'
 import { startAnalyticsSdk } from '@ens-apps/utils/analyticsStart'
 import posthog from './client'
 import { startupConfig } from './config'
-
-/**
- * The PostHog project the Explorer used before it joined the Manager's (the
- * ticket's one-project decision). A returning visitor's browser still holds
- * that project's visitor id, which is a wallet address once they connected
- * one; the SDK clears only the current project's, so the start clears these.
- */
-export const LEGACY_POSTHOG_PROJECT_KEYS = [
-  'phc_1Md3nkBli5dtiu6CE9ERfaCYye84aE8PUhQNBjNdzCh',
-] as const
 
 /**
  * Start the SDK, then apply the visitor's earlier choice

@@ -8,6 +8,18 @@
  * device.
  */
 
+/**
+ * The PostHog project the Explorer used before it joined the Manager's (the
+ * ticket's one-project decision). A returning visitor's browser still holds
+ * that project's visitor id, which is a wallet address once they connected
+ * one, and the SDK clears only the current project's. The entries sit in
+ * storage and in cookies the Explorer shared with its parent domain, so both
+ * apps clear them at start-up.
+ */
+export const LEGACY_POSTHOG_PROJECT_KEYS = [
+  'phc_1Md3nkBli5dtiu6CE9ERfaCYye84aE8PUhQNBjNdzCh',
+] as const
+
 /** The names the SDK writes for a project: its persistence, window and consent entries. */
 const belongsTo =
   (projectKey: string) =>
