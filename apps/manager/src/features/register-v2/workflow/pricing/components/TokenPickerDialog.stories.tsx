@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { arbitrumSepolia, baseSepolia, optimismSepolia } from 'viem/chains'
 import { DAI, USDCIcon, USDTIcon } from '@/components/atoms/StableCoinsIcons'
 import { Button } from '@/components/ui/button'
+import type { L2Source } from '@/l2Sources'
 import type { StablecoinBalance } from '@/lib/smart-account'
 import type { SUPPORTED_TOKEN } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
@@ -44,7 +45,12 @@ const l2Row = (
 ): L2PaymentRow => ({
   option: {
     id: l2PaymentOptionId(chain.id),
-    source: { chain, usdc: FUNDED_USDC.address, rpcUrls: [] },
+    source: {
+      chain,
+      usdc: FUNDED_USDC.address,
+      rpcUrls: [],
+      client: {} as L2Source['client'],
+    },
     balanceRaw,
     status,
   },
