@@ -380,6 +380,9 @@ export const expectRecordingsSent = async (
       (window as PostHogWindow).posthog?.startSessionRecording?.(),
     )
   }
+  // The recorder sends once it has seen the visitor active.
+  await page.mouse.move(8, 8)
+  await page.mouse.move(80, 80)
   await expect
     .poll(
       () =>
