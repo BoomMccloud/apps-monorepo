@@ -40,6 +40,8 @@ type NetworkAnswers = {
   /** What a request carrying events gets, each time one arrives. */
   readonly events?: () => Response | Promise<Response>
   readonly projectSettings?: object
+  /** The surveys the project serves; none by default. */
+  readonly surveys?: readonly object[]
 }
 
 /** The answers of PostHog's host, by path. */
@@ -47,6 +49,7 @@ export const answering =
   ({
     events = () => Response.json({ status: 1 }),
     projectSettings = PROJECT_SETTINGS,
+    surveys = [],
   }: NetworkAnswers = {}) =>
   async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     const { pathname } = new URL(urlOf(input))
@@ -54,7 +57,7 @@ export const answering =
       return Response.json(projectSettings)
     }
     if (pathname.startsWith('/api/surveys')) {
-      return Response.json({ surveys: [] })
+      return Response.json({ surveys })
     }
     if (pathname.startsWith('/flags')) {
       return Response.json({ flags: {}, featureFlags: {} })

@@ -299,6 +299,27 @@ const forgetTabSession = (client: AnalyticsClient): void => {
 }
 
 /**
+ * The element the SDK mounts each displayed survey in has a class of this
+ * form: `PostHogSurvey-<survey id>`.
+ */
+const SURVEY_HOST_SELECTOR = '[class*="PostHogSurvey-"]'
+
+/**
+ * A survey on screen at a Decline stays interactive, and its answers are kept
+ * in storage as the visitor goes through its questions, so it goes off the
+ * page. The SDK's reset, which follows, clears what it kept. A survey taken
+ * off holds the SDK's focus until the page loads again, so none shows after a
+ * Decline and an Accept without a reload.
+ */
+const dismissSurveys = (): void => {
+  for (const host of globalThis.document?.querySelectorAll(
+    SURVEY_HOST_SELECTOR,
+  ) ?? []) {
+    host.remove()
+  }
+}
+
+/**
  * Decline: collection stops at once, and nothing captured before it is sent
  * after it, since the send guard holds back every request while the choice is
  * not Accept. The choice goes first, so that what stopping a part of the
@@ -313,6 +334,7 @@ export const declineAnalytics = (client: AnalyticsClient): void => {
   appliedChoice.set(client, 'denied')
   client.opt_out_capturing()
   client.set_config(collectionOff)
+  dismissSurveys()
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)

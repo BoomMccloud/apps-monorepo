@@ -84,6 +84,31 @@ const visitorCookie = (): Readonly<Record<string, unknown>> => {
 
 const sentSince = async (count: number) => (await network.wire()).slice(count)
 
+// A survey of two questions, as the project serves it, shown as a popover.
+const SURVEY = {
+  id: 'survey-1',
+  name: 'Feedback',
+  type: 'popover',
+  start_date: '2020-01-01T00:00:00Z',
+  end_date: null,
+  current_iteration: null,
+  current_iteration_start_date: null,
+  conditions: null,
+  appearance: { displayThankYouMessage: true },
+  questions: [
+    { type: 'open', question: 'What did you think?', id: 'q1' },
+    { type: 'open', question: 'And then?', id: 'q2' },
+  ],
+  feature_flag_keys: null,
+  linked_flag_key: null,
+  targeting_flag_key: null,
+  internal_targeting_flag_key: null,
+  schedule: 'always',
+} as const
+
+const surveysOnPage = (): number =>
+  document.querySelectorAll('[class*="PostHogSurvey-"]').length
+
 describe('the analytics choice on the installed SDK', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -296,6 +321,21 @@ describe('the analytics choice on the installed SDK', () => {
       await advance(4000)
 
       expect(eventNames(await sentSince(sentBefore))).toEqual([])
+    })
+
+    it('takes a survey off the page, so none takes answers after it, and keeps no answer', async () => {
+      network.reset({ surveys: [SURVEY] })
+      const client = await startAccepted()
+      await flush()
+      // The control: the survey is on the page after Accept.
+      expect(surveysOnPage()).toBe(1)
+      localStorage.setItem('inProgressSurvey_survey-1', '{"q1":"typed"}')
+
+      declineAnalytics(client)
+      await flush()
+
+      expect(surveysOnPage()).toBe(0)
+      expect(Object.keys(localStorage)).toEqual([])
     })
 
     it('forgets the device, so a later Accept starts afresh', async () => {
