@@ -65,9 +65,12 @@ fetch the rules and stores them, once they pass a check that every switch can
 be decided, in the Worker's own `POSTHOG_SWITCH_RULES` KV namespace, which
 `wrangler deploy` provisions; requests only read KV. Each Worker, mainnet
 included, needs its own `POSTHOG_PROJECT_SECRET_API_KEY` Worker secret; without
-it nothing is stored and every switch is off. KV persists across deploys, so a
-Worker has no rules only after its first deploy, until its job has run once
-(within a minute); a later deploy keeps the stored rules. A preview version
+it nothing new is stored, and a Worker that holds no rules has every switch
+off. KV persists across deploys, so a Worker has no rules only after its first
+deploy, until its job has run once (within a minute); a later deploy keeps the
+stored rules. Each run downloads the rules whole, which PostHog counts as [10
+flag requests](https://posthog.com/docs/feature-flags/local-evaluation), 14,400
+a day per Worker at one run a minute; the mainnet Worker runs the same cron. A preview version
 reads the namespace its Worker already has (`wrangler versions upload` inherits
 a binding the Worker holds), so it decides from the rules that Worker's job
 stored. A dev server and `vite preview` run no cron and keep a namespace of
