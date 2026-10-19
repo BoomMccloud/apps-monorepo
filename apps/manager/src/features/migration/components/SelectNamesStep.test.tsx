@@ -120,10 +120,10 @@ describe('SelectNamesStep', () => {
   })
 
   it('keeps the analytics banner above its footer while it is shown', () => {
-    const footerHeight = 96
+    const FOOTER_HEIGHT = 96
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      height: footerHeight,
-      top: window.innerHeight - footerHeight,
+      height: FOOTER_HEIGHT,
+      top: window.innerHeight - FOOTER_HEIGHT,
     } as DOMRect)
     const clearance = () =>
       document.documentElement.style.getPropertyValue(
@@ -132,7 +132,7 @@ describe('SelectNamesStep', () => {
 
     const { unmount } = renderStep()
 
-    expect(clearance()).toBe(`${footerHeight}px`)
+    expect(clearance()).toBe(`${FOOTER_HEIGHT}px`)
 
     unmount()
 

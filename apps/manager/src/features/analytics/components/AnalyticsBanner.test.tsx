@@ -62,6 +62,8 @@ describe('AnalyticsBanner', () => {
   it('sits above a bar fixed to the bottom of the page, by the space the bars publish', () => {
     renderBanner('pending')
 
+    // greptile: no-arbitrary-tailwind: this is the class the component
+    // justifies, written out so that the test can look for it.
     expect(banner()?.className).toContain(
       `bottom-[calc(1.5rem+var(${BOTTOM_BAR_CLEARANCE_PROPERTY},0px))]`,
     )
