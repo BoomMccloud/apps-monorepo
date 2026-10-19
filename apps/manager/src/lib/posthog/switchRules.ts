@@ -63,7 +63,7 @@ const cohortProperties = (
   id: string,
   entered: readonly string[],
 ): readonly Property[] => {
-  const group = cohorts[id]
+  const group = Object.hasOwn(cohorts, id) ? cohorts[id] : undefined
   return entered.includes(id) || !group
     ? []
     : groupProperties(cohorts, group, [...entered, id])
@@ -101,6 +101,28 @@ const reachableProperties = (
       : [property],
   )
 
+/**
+ * The operators posthog-node's local evaluation decides for a person property
+ * that holds a string, as the address does. The others, such as the semver and
+ * date operators, make it give up on the visitor (`InconclusiveMatchError`),
+ * and a visitor it gives up on gets every switch off. `is_set` and
+ * `is_not_set` are named for their own reasons.
+ */
+const DECIDED_OPERATORS: ReadonlySet<string> = new Set([
+  'exact',
+  'is_not',
+  'icontains',
+  'not_icontains',
+  'regex',
+  'not_regex',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'is_set',
+  'is_not_set',
+])
+
 /** What in one property of a switch's rule the server could not decide. */
 const propertyProblems = (
   rules: SwitchRules,
@@ -119,7 +141,7 @@ const propertyProblems = (
     : []),
   ...match(property)
     .with({ type: 'cohort' }, ({ value }) =>
-      String(value) in rules.cohorts
+      Object.hasOwn(rules.cohorts, String(value))
         ? []
         : [
             `${name}: uses cohort ${String(value)}, which the rules do not hold`,
@@ -134,7 +156,13 @@ const propertyProblems = (
     .with({ key: P.not(SUPPLIED_PROPERTY) }, ({ key }) => [
       `${name}: uses the property ${String(key)}, which the server does not supply (it supplies ${SUPPLIED_PROPERTY})`,
     ])
-    .otherwise(() => []),
+    .otherwise(({ operator }) =>
+      operator === undefined || DECIDED_OPERATORS.has(operator)
+        ? []
+        : [
+            `${name}: uses the operator ${operator}, which posthog-node cannot evaluate`,
+          ],
+    ),
 ]
 
 /** What in a switch's own rule PostHog alone could decide. */
@@ -147,7 +175,8 @@ const ruleProblems = (
   // PostHog's download holds objects; rules that do not are refused, not read.
   if (
     !(rule.filters?.groups ?? []).every(isRecord) ||
-    !propertiesOf(rule).every(isRecord)
+    !propertiesOf(rule).every(isRecord) ||
+    !reachableProperties(rules, rule).every(isRecord)
   ) {
     return [`${name}: holds a condition or a property that is not an object`]
   }

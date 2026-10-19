@@ -392,6 +392,112 @@ describe('checkSwitchRules', () => {
     )
   })
 
+  it.each([
+    'semver_gt',
+    'is_date_before',
+    'is_date_after',
+    'a_new_operator',
+  ])('names a condition on the address with the operator %s, which posthog-node cannot evaluate, though the two sample visitors never reach it', async (operator) => {
+    const rules = switchRules({
+      migration: flagRule('migration', [
+        {
+          properties: [
+            {
+              key: 'address',
+              type: 'person',
+              operator: 'is_not',
+              value: [TEST_WALLET.toLowerCase()],
+            },
+          ],
+          rollout_percentage: 100,
+        },
+        {
+          properties: [
+            { key: 'address', type: 'person', operator, value: '1.0.0' },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+    // The wallet the first condition leaves out meets the second, which
+    // posthog-node cannot decide, so every switch is off for it.
+    const excluded = await evaluateSwitches(rules, switchVisitor(TEST_WALLET))
+    expect(excluded).not.toHaveProperty('migration')
+
+    expect(await checkSwitchRules(rules)).toContain(
+      `migration: uses the operator ${operator}, which posthog-node cannot evaluate`,
+    )
+  })
+
+  it.each([
+    'exact',
+    'is_not',
+    'icontains',
+    'not_icontains',
+    'regex',
+    'not_regex',
+    'gt',
+    'gte',
+    'lt',
+    'lte',
+  ])('passes a condition on the address with the operator %s', async (operator) => {
+    const rules = switchRules({
+      migration: flagRule('migration', [
+        {
+          properties: [
+            { key: 'address', type: 'person', operator, value: '0xabc' },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+
+    expect(await checkSwitchRules(rules)).toEqual([])
+  })
+
+  it('refuses a cohort whose members are not objects, instead of reading them', async () => {
+    const rules = {
+      ...switchRules({
+        i18n: flagRule('i18n', [
+          {
+            properties: [
+              { key: 'id', type: 'cohort', operator: 'in', value: 9 },
+            ],
+            rollout_percentage: 100,
+          },
+        ]),
+      }),
+      cohorts: {
+        '9': { type: 'OR', values: [null, 'text'] } as unknown as Cohort,
+      },
+    }
+
+    expect(await checkSwitchRules(rules)).toContain(
+      'i18n: holds a condition or a property that is not an object',
+    )
+  })
+
+  it.each([
+    'constructor',
+    '__proto__',
+    'toString',
+  ])('does not take the cohort %s for one the rules hold, because Object has a member of that name', async (name) => {
+    const rules = switchRules({
+      i18n: flagRule('i18n', [
+        {
+          properties: [
+            { key: 'id', type: 'cohort', operator: 'in', value: name },
+          ],
+          rollout_percentage: 100,
+        },
+      ]),
+    })
+
+    expect(await checkSwitchRules(rules)).toContain(
+      `i18n: uses cohort ${name}, which the rules do not hold`,
+    )
+  })
+
   it('refuses a rule whose conditions or properties are not objects, instead of reading them', async () => {
     const problems = await checkSwitchRules(
       switchRules({
