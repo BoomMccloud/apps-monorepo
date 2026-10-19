@@ -325,10 +325,6 @@ const nameWithRecords = async (
 
 test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () => {
   test.beforeEach(async () => {
-    test.fail(
-      explorerReadsBigname,
-      'E2E-039: bigname files every resolver-shaped event under the name, and the explorer shows them all',
-    )
     if (explorerReadsBigname) return
     shimUnavailable ??= await checkShim()
     test.skip(!!shimUnavailable, shimUnavailable ?? '')
@@ -361,8 +357,9 @@ test.describe('V1 name history shows only the assigned resolver (WEB-1445)', () 
     // assigned resolver still renders.
     await expect(
       main.getByRole('button', {
-        // The address badge adds its copy / explorer labels to the name.
-        name: new RegExp(`^set address to .*${shortAddress(owner.address)}`),
+        // The address badge adds its copy / explorer labels to the name, and
+        // the newest row its date in front.
+        name: new RegExp(`set address to .*${shortAddress(owner.address)}`),
       }),
     ).toBeVisible()
 
