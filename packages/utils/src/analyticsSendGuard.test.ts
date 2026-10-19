@@ -153,6 +153,42 @@ describe('the send guard', () => {
   })
 })
 
+describe("PostHog's own domain", () => {
+  beforeEach(() => {
+    network.reset()
+  })
+
+  it.each([
+    'https://app.posthog.com/e/',
+    'https://us.posthog.com/e/',
+    'https://us.i.posthog.com/e/',
+    'https://eu.i.posthog.com/e/',
+    'https://us-assets.i.posthog.com/static/recorder.js',
+    'https://posthog.com/e/',
+  ])('is held while the visitor has declined, whichever host the SDK was given: %s', async (url) => {
+    guardPostHogSends(clientWith('denied', 'https://edge.example'))
+
+    await fetch(url, { method: 'POST', body: '[]' })
+    const queued = navigator.sendBeacon(url, 'data')
+
+    expect(network.fetch).not.toHaveBeenCalled()
+    expect(queued).toBe(true)
+    expect(network.sendBeacon).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'https://notposthog.com/e/',
+    'https://posthog.com.example/e/',
+    'https://example.org/posthog.com/e/',
+  ])('leaves a request to %s alone', async (url) => {
+    guardPostHogSends(clientWith('denied', 'https://edge.example'))
+
+    await fetch(url)
+
+    expect(network.fetch).toHaveBeenCalledOnce()
+  })
+})
+
 describe('a second evaluation of the guard module', () => {
   beforeEach(() => {
     network.reset()

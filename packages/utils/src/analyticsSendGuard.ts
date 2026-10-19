@@ -8,11 +8,12 @@
  * choice through the SDK's public status call alone, so a choice changed or
  * removed in another tab applies at once, and a visitor who has not chosen
  * counts as declined. It acts only on requests to the host the SDK was
- * configured with. A held request is answered as if it were delivered, 200 for
- * a fetch and `true` for a beacon, so the SDK neither retries nor logs it, and
- * what it carried is gone. The SDK sends with `XMLHttpRequest` only where
- * there is no `fetch`, which the apps cannot run without, so that transport
- * is left alone.
+ * configured with, and to PostHog's own domain, which the SDK sends to when it
+ * is given one of PostHog's other host names. A held request is answered as if
+ * it were delivered, 200 for a fetch and `true` for a beacon, so the SDK
+ * neither retries nor logs it, and what it carried is gone. The SDK sends with
+ * `XMLHttpRequest` only where there is no `fetch`, which the apps cannot run
+ * without, so that transport is left alone.
  *
  * The SDK keeps the `fetch` it finds when its module loads, so this module has
  * to run before the SDK's. In each app the one module that imports the SDK,
@@ -39,19 +40,24 @@ const isGranted = (client: GuardedClient): boolean => {
   }
 }
 
+/** PostHog's own domain: its ingestion hosts, `us.i.posthog.com` and the rest. */
+const POSTHOG_DOMAIN = /(?:^|\.)posthog\.com$/iu
+
 /**
- * Whether the address is under the host the SDK sends to, its path included:
- * a host that is only a path on the page's own origin holds that path and not
- * the page's other requests, and a host that is empty holds none of them.
+ * Whether the address is under the host the SDK sends to, its path included,
+ * or on PostHog's own domain: a host that is only a path on the page's own
+ * origin holds that path and not the page's other requests, and a host that is
+ * empty holds none of them.
  */
 const isToHostOf = (
   client: GuardedClient,
   input: RequestInfo | URL,
 ): boolean => {
   try {
-    if (client.config.api_host.trim() === '') return false
     const base = globalThis.location?.href
     const target = new URL(urlOf(input), base)
+    if (POSTHOG_DOMAIN.test(target.hostname)) return true
+    if (client.config.api_host.trim() === '') return false
     const host = new URL(client.config.api_host, base)
     const prefix = host.pathname.replace(/\/+$/u, '')
     return (
