@@ -298,6 +298,48 @@ describe('the analytics choice on the installed SDK', () => {
       expect(eventNames(await sentSince(sentAtDecline))).toEqual([])
     })
 
+    it('sends nothing from the requests waiting to be tried again, though the visitor accepts again before they are', async () => {
+      network.fetch.mockImplementation(
+        answering({ events: () => new Response('', { status: 502 }) }),
+      )
+      const client = await startAccepted()
+      client.capture('old-retry', { wallet_address: WALLET })
+      await flush()
+      // The request failed, so it waits to be tried again.
+      expect(eventNames(await network.wire())).toContain('old-retry')
+
+      network.fetch.mockImplementation(answering())
+      declineAnalytics(client)
+      await acceptAnalytics(client, CHOICE)
+      const sentAtAccept = (await network.wire()).length
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(eventNames(await sentSince(sentAtAccept))).not.toContain(
+        'old-retry',
+      )
+    })
+
+    it('sends nothing from a request in flight at the press that fails after the visitor accepts again', async () => {
+      const answer = Promise.withResolvers<Response>()
+      network.fetch.mockImplementation(
+        answering({ events: () => answer.promise }),
+      )
+      const client = await startAccepted()
+      client.capture('in-flight', { wallet_address: WALLET })
+      await flush()
+      expect(eventNames(await network.wire())).toContain('in-flight')
+
+      declineAnalytics(client)
+      await acceptAnalytics(client, CHOICE)
+      const sentAtAccept = (await network.wire()).length
+      answer.resolve(new Response('', { status: 502 }))
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(eventNames(await sentSince(sentAtAccept))).not.toContain(
+        'in-flight',
+      )
+    })
+
     it('sends nothing from an event captured in the same task as the press, which the SDK compresses first', async () => {
       const client = await startAccepted({ disable_compression: false })
       const advance = (ms: number) => settle(vi.advanceTimersByTimeAsync, ms)

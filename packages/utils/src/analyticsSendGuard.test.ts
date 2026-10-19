@@ -5,7 +5,9 @@ import { installPostHogNetwork } from './postHogTestKit'
 // The guard wraps the `fetch` and `sendBeacon` it finds when it loads, so the
 // network goes in first.
 const network = installPostHogNetwork()
-const { guardPostHogSends } = await import('./analyticsSendGuard')
+const { endConsentPeriod, guardPostHogSends } = await import(
+  './analyticsSendGuard'
+)
 
 const HOST = 'https://posthog.example'
 const EVENTS_URL = `${HOST}/e/`
@@ -186,6 +188,78 @@ describe("PostHog's own domain", () => {
     await fetch(url)
 
     expect(network.fetch).toHaveBeenCalledOnce()
+  })
+})
+
+describe("a period of the visitor's choice", () => {
+  beforeEach(() => {
+    network.reset()
+    guardPostHogSends(clientWith('granted'))
+  })
+
+  it('ends at a Decline: a request that left before it and fails after it is answered as delivered, so the SDK does not try it again', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+
+    const sent = fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+    endConsentPeriod()
+    answer.resolve(new Response('', { status: 502 }))
+
+    expect((await sent).status).toBe(200)
+  })
+
+  it('answers a network error after the period ended as delivered too', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+
+    const sent = fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+    endConsentPeriod()
+    answer.reject(new TypeError('network down'))
+
+    expect((await sent).status).toBe(200)
+  })
+
+  it('lets the failure of a request of the current period through, since the SDK tries it again', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+    endConsentPeriod()
+
+    const sent = fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+    answer.resolve(new Response('', { status: 502 }))
+
+    expect((await sent).status).toBe(502)
+  })
+
+  it('lets a network error of the current period through', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+
+    const sent = fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+    answer.reject(new TypeError('network down'))
+
+    await expect(sent).rejects.toThrow('network down')
+  })
+
+  it('leaves the answer to a request that succeeds as it is, after the period ended too', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+
+    const sent = fetch(EVENTS_URL, { method: 'POST', body: '[]' })
+    endConsentPeriod()
+    answer.resolve(new Response('{"status":1}', { status: 200 }))
+
+    expect(await (await sent).text()).toBe('{"status":1}')
+  })
+
+  it('does not touch the answers to requests that are not for PostHog', async () => {
+    const answer = Promise.withResolvers<Response>()
+    network.fetch.mockImplementation(() => answer.promise)
+
+    const sent = fetch('https://app.example/api/anything')
+    endConsentPeriod()
+    answer.resolve(new Response('', { status: 502 }))
+
+    expect((await sent).status).toBe(502)
   })
 })
 

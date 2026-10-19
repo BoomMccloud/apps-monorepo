@@ -40,6 +40,7 @@ describe('declineAnalytics', () => {
     register: vi.fn(),
     opt_in_capturing: vi.fn(),
     opt_out_capturing: vi.fn(),
+    shutdown: vi.fn(() => Promise.resolve()),
     reset: vi.fn(),
     set_config: vi.fn(),
     _onRemoteConfig: vi.fn(),
@@ -54,6 +55,18 @@ describe('declineAnalytics', () => {
     const [turnedOff] = client.set_config.mock.invocationCallOrder
     expect(firstOptOut).toBeLessThan(turnedOff ?? 0)
     expect(client.set_config).toHaveBeenCalledWith(collectionOff)
+  })
+
+  it('lets go of the requests waiting to be tried again after it opts out and before it resets', () => {
+    const client = fakeClient()
+
+    declineAnalytics(client satisfies AnalyticsClient)
+
+    const [firstOptOut] = client.opt_out_capturing.mock.invocationCallOrder
+    const [shutDown] = client.shutdown.mock.invocationCallOrder
+    const [reset] = client.reset.mock.invocationCallOrder
+    expect(firstOptOut).toBeLessThan(shutDown ?? 0)
+    expect(shutDown).toBeLessThan(reset ?? 0)
   })
 
   it('puts the choice back after the reset that erases it', () => {
@@ -77,6 +90,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
     register: vi.fn(),
     opt_in_capturing: vi.fn(),
     opt_out_capturing: vi.fn(),
+    shutdown: vi.fn(() => Promise.resolve()),
     reset: vi.fn(),
     set_config: vi.fn(),
     _onRemoteConfig: vi.fn(),

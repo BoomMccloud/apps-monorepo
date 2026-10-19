@@ -15,6 +15,11 @@
  * `XMLHttpRequest` only where there is no `fetch`, which the apps cannot run
  * without, so that transport is left alone.
  *
+ * A Decline ends a period of the visitor's choice (`endConsentPeriod`). A
+ * request that left in one period and fails after it ended is answered as
+ * delivered too, so that the SDK keeps no copy of it to try again in a later
+ * period, after the visitor has accepted again.
+ *
  * The SDK keeps the `fetch` it finds when its module loads, so this module has
  * to run before the SDK's. In each app the one module that imports the SDK,
  * lib/posthog/client.ts, imports this first, which holds in a production
@@ -73,46 +78,82 @@ const isToHostOf = (
 
 const INSTALLED = '__ensAnalyticsSendGuardInstalled'
 
-/**
- * Wrap `fetch` and `sendBeacon` once, in a browser only, and return the call
- * that tells the wrappers which client to consult. They go in when this module
- * loads, before the SDK's module does, and the SDK is started later, so the
- * client reaches them through that call and lives in the closure that reads it.
- * A module evaluated again (a hot reload, a second copy in a bundle) hands its
- * client to the wrappers already in place, through the first call.
- */
-const install = (): ((client: GuardedClient) => void) => {
-  let consulted: GuardedClient | undefined
-  const consult = (client: GuardedClient): void => {
-    consulted = client
-  }
-  const isHeld = (input: RequestInfo | URL): boolean =>
-    consulted !== undefined &&
-    isToHostOf(consulted, input) &&
-    !isGranted(consulted)
+/** What the wrappers in place are told: the client to consult, and a Decline. */
+interface Guard {
+  readonly consult: (client: GuardedClient) => void
+  readonly endPeriod: () => void
+}
 
-  const page = globalThis as typeof globalThis & {
-    [INSTALLED]?: (client: GuardedClient) => void
+const delivered = (): Response => new Response('{}', { status: 200 })
+
+/**
+ * Wrap `fetch` and `sendBeacon` once, in a browser only, and return the calls
+ * that tell the wrappers which client to consult and when a Decline ends a
+ * period of the choice. They go in when this module loads, before the SDK's
+ * module does, and the SDK is started later, so the client reaches them
+ * through that call and lives in the closure that reads it. A module evaluated
+ * again (a hot reload, a second copy in a bundle) hands its client to the
+ * wrappers already in place, through the first call.
+ */
+const install = (): Guard => {
+  let consulted: GuardedClient | undefined
+  // The Declines so far; a request leaves in the period this number names.
+  let period = 0
+  const guard: Guard = {
+    consult: (client) => {
+      consulted = client
+    },
+    endPeriod: () => {
+      period += 1
+    },
   }
-  if (typeof window === 'undefined') return consult
+  const clientToHostOf = (
+    input: RequestInfo | URL,
+  ): GuardedClient | undefined => {
+    const client = consulted
+    return client !== undefined && isToHostOf(client, input)
+      ? client
+      : undefined
+  }
+  const isHeld = (input: RequestInfo | URL): boolean => {
+    const client = clientToHostOf(input)
+    return client !== undefined && !isGranted(client)
+  }
+  const deliveredIfStale = (answer: Promise<Response>): Promise<Response> => {
+    const sentIn = period
+    const isStale = (): boolean => period !== sentIn
+    return answer.then(
+      (response) => (!response.ok && isStale() ? delivered() : response),
+      (failure: unknown) => (isStale() ? delivered() : Promise.reject(failure)),
+    )
+  }
+
+  const page = globalThis as typeof globalThis & { [INSTALLED]?: Guard }
+  if (typeof window === 'undefined') return guard
   const installed = page[INSTALLED]
   if (installed) return installed
-  page[INSTALLED] = consult
+  page[INSTALLED] = guard
 
   const send = globalThis.fetch?.bind(globalThis)
   if (send) {
-    globalThis.fetch = (input, init) =>
-      isHeld(input)
-        ? Promise.resolve(new Response('{}', { status: 200 }))
-        : send(input, init)
+    globalThis.fetch = (input, init) => {
+      if (isHeld(input)) return Promise.resolve(delivered())
+      const answer = send(input, init)
+      return clientToHostOf(input) ? deliveredIfStale(answer) : answer
+    }
   }
   const beacon = globalThis.navigator?.sendBeacon?.bind(globalThis.navigator)
   if (beacon) {
     globalThis.navigator.sendBeacon = (url, data) =>
       isHeld(url) ? true : beacon(url, data)
   }
-  return consult
+  return guard
 }
 
+const guard = install()
+
 /** Hold back every request to the client's host while its visitor has not accepted. */
-export const guardPostHogSends = install()
+export const guardPostHogSends = guard.consult
+
+/** The visitor has declined: what already left and fails from now on is not tried again. */
+export const endConsentPeriod = guard.endPeriod

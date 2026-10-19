@@ -14,7 +14,7 @@ import { fromPromise, ok } from 'neverthrow'
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'
 import type { Address } from 'viem'
 import { scrubErrorReport } from './analyticsErrorReports'
-import { guardPostHogSends } from './analyticsSendGuard'
+import { endConsentPeriod, guardPostHogSends } from './analyticsSendGuard'
 import { isRecord } from './isRecord'
 import { ResultFn, TaggedError } from './neverthrow'
 
@@ -177,6 +177,11 @@ export interface AnalyticsClient {
   opt_out_capturing(): void
   /** With `true`, the device id is forgotten along with the visitor id. */
   reset(shouldResetDeviceId?: boolean): void
+  /**
+   * Sends what is still queued, through `sendBeacon`, and empties the queue
+   * of requests waiting to be tried again.
+   */
+  shutdown(): Promise<void>
   set_config(config: Readonly<Partial<CollectionSettings>>): void
   /**
    * The SDK's own hand-off of the project's settings to its recordings,
@@ -324,17 +329,22 @@ const dismissSurveys = (): void => {
  * after it, since the send guard holds back every request while the choice is
  * not Accept. The choice goes first, so that what stopping a part of the
  * collection would still send, such as the recorder's last chunk, is held
- * back too. The SDK keeps the visitor id in memory after an opt-out, and
- * only a reset clears it; the reset forgets the device too, so a later Accept
- * does not tie new events to old ones, and it erases the choice, so the
- * choice is put back.
+ * back too. What is waiting to be tried again is let go the same way, through
+ * the SDK's shutdown, and the guard ends the period, so that a request in
+ * flight that fails later is not tried again either: a visitor who accepts
+ * again at once does not send what was captured before. The SDK keeps the
+ * visitor id in memory after an opt-out, and only a reset clears it; the
+ * reset forgets the device too, so a later Accept does not tie new events to
+ * old ones, and it erases the choice, so the choice is put back.
  */
 export const declineAnalytics = (client: AnalyticsClient): void => {
   guardPostHogSends(client)
+  endConsentPeriod()
   appliedChoice.set(client, 'denied')
   client.opt_out_capturing()
   client.set_config(collectionOff)
   dismissSurveys()
+  void client.shutdown()
   client.reset(true)
   client.opt_out_capturing()
   forgetTabSession(client)
