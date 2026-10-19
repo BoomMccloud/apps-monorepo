@@ -254,6 +254,17 @@ Workers runtimes collide at startup.
 
 ## History
 
+**2026-10-19:** the local bigname image was rebuilt from bigname `main`
+(`5982ba628`) plus the four dev patches, on the local branch
+`e2e/anvil-fork-start-2026-10-19` (worktree `~/ens/bigname-e2e-rebuild`). The
+manager since #1324's final version reads `/v1/resolvers/{chain}/{address}/records`
+(bigname #1117), which the 2026-10-10 image did not serve — so every locked
+migration failed closed with "Couldn't verify your name records". The new
+image is tagged `bigname:e2e-anvil-fork` (the old one is kept as
+`bigname:e2e-anvil-fork-2026-10-10`); after switching, reset bigname
+(`reset-bigname.sh`).
+
+
 #1324 merged to `main` on 2026-10-14 and `main` was merged here on 2026-10-15
 (`5af31ea36`); the harness worktree is retired and the apps under test run
 from this checkout. The stack was assembled on 2026-10-10 on the branch
