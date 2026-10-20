@@ -88,6 +88,9 @@ const indexerMock = createIndexerMock()
 const users = ['user', 'user2', 'user3', 'user4'] as const
 export type User = (typeof users)[number]
 
+const isUser = (value: string): value is User =>
+  (users as readonly string[]).includes(value)
+
 export function createAccounts(): PortalAccounts {
   const mnemonic = DEFAULT_MNEMONIC
 
@@ -189,7 +192,7 @@ async function ensurePortalStablecoinBalances(address: Address) {
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
-type PortalFixtures = {
+export type PortalFixtures = {
   /** Headless web3 wallet backend — use to authorize transactions. */
   wallet: Web3ProviderBackend
   /** Test accounts derived from the Anvil mnemonic. */
@@ -234,18 +237,13 @@ type PortalFixtures = {
 export const test = base.extend<PortalFixtures>({
   mockIndexerEnabled: [false, { option: true }],
 
-  // Install the mock indexer only when a test opted in locally via
-  // `mockIndexerEnabled` — deliberately NOT on the global `E2E_MOCK_INDEXER`
-  // flag the way playwright.manager.fixture.ts does. `e2e/.env` sets that
-  // flag to `true` for manager's own `useMigratedNamesCount` hook (see
-  // a2c56c6a1); reading it here too would silently mock every portal
-  // indexer query in the whole suite instead of just the handful of tests
-  // that ask for it. The portal suite mixes mocked and real-indexer tests
-  // within the same spec file, so the opt-in has to be per-test.
+  // The portal reads bigname like the manager (#1354), so the shared bigname
+  // mock goes in whenever `E2E_MOCK_INDEXER=true` (CI). A test can still opt
+  // in on its own with `mockIndexerEnabled` while the rest of a run uses the
+  // local bigname.
   page: async ({ page, mockIndexerEnabled }, use) => {
-    if (mockIndexerEnabled) {
-      await indexerMock.install(page)
-    }
+    if (mockIndexerEnabled) await indexerMock.install(page)
+    else await indexerMock.installIfEnabled(page)
     await use(page)
   },
 
@@ -283,7 +281,23 @@ export const test = base.extend<PortalFixtures>({
   },
 
   makeName: async ({ accounts, time }, use) => {
-    await use(createMakeName({ accounts, time }))
+    const inner = createMakeName({ accounts, time })
+    await use(async (config, options) => {
+      const name = await inner(config, options)
+      // Registered on the fork only, so the bigname mock has to be told.
+      if (indexerMock.enabled)
+        indexerMock.addName({
+          name,
+          owner: accounts.getAddress(
+            config.owner && isUser(config.owner) ? config.owner : 'user2',
+          ),
+          records: config.records,
+          ...(config.duration !== undefined && {
+            expiryDate: Math.floor(Date.now() / 1000) + config.duration,
+          }),
+        })
+      return name
+    })
   },
 
   makeMigratedName: async ({ accounts }, use) => {
