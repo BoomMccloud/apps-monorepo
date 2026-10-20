@@ -135,6 +135,7 @@ table is the durable record.
 | Scenario | App | Summary | What's missing | Investigated |
 |---|---|---|---|---|
 | F6 | portal | Batch transfer (multiple names), incl. one-error-aborts-all `safeBatchTransferFrom` semantics | The names dashboard (`routes/addr/$addr/names.tsx`) has real multi-select row checkboxes, but the only bulk action wired to the selection is **Extend** (renewal). There is no batch-transfer button, route, or modal, and a repo-wide search of `apps/portal/src` for `safeBatchTransferFrom`/`batchTransfer` returns zero hits — the frontend never calls that entrypoint. `SendNameForm.tsx` (the only transfer UI) takes exactly one `name` prop. | 2026-08-29 |
+| B25 | manager | Renew V1 and V2 names together | The explorer's names list renews a mixed V1 + V2 selection in one flow (one approval per renewer, then one `renew` per name; B19–B24). The manager's dashboard Renew dialog takes held **V2** `.eth` 2LDs only: V1 rows render without a select button (`MyNamesList.tsx:184`, `selectable={!isV1 && …}`), the selection bar is hidden in the V1 view (`NamesTable.tsx:299`), and the batch always goes to the V2 renewer (`useBulkRenewSubmit.ts:171-174`). A V1 name renews alone on `/renew-v1/$name`, or, in grace, inside the upgrade flow (`ETHRenewerV1.renewBatch`, V1 names only). A holder of both kinds renews them in separate flows in the manager. Pinned by `manager/tests/bulk-renew.spec.ts` (B25) so a change either way is deliberate; needs a product ruling on whether the manager should match the explorer. | 2026-10-20 |
 
 ---
 
