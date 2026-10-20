@@ -74,6 +74,13 @@ import {
 } from '../../../helpers/transaction-modal.js'
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
+
+/**
+ * How long the transfer button may take to enable. It waits on the role-holder
+ * check, which under the bigname route mock reads the name's role logs from
+ * the node: a scan the roles suite measured near 30s on this fork.
+ */
+const TRANSFER_READY_TIMEOUT = 60_000
 const ANVIL_RPC_URL = process.env.ANVIL_RPC_URL ?? 'http://127.0.0.1:8545'
 
 // Same chain contracts `makeName` reads from — see e2e/fixtures/makeName.ts.
@@ -251,7 +258,9 @@ test.describe('Portal name transfer', () => {
     // ── 2. Fill the recipient and submit ──────────────────────────────
     await page.getByPlaceholder('ENS name or address').fill(recipient)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     // ── 3. Authorize the on-chain transfer ────────────────────────────
@@ -302,7 +311,9 @@ test.describe('Portal name transfer', () => {
     ).toBeChecked({ timeout: 15_000 })
 
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     // Detaching the resolver adds a step that must run before the token
@@ -357,7 +368,9 @@ test.describe('Portal name transfer', () => {
     })
 
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     // See "transfers a name from wallet A to wallet B" — a fresh name always
@@ -465,7 +478,9 @@ test.describe('Portal name transfer', () => {
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await page.getByPlaceholder('ENS name or address').fill(newOwner)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
     // A fresh name always has a resolver attached, so it's detached by
     // default as part of the transfer — the new owner starts with none.
@@ -600,7 +615,9 @@ test.describe('Portal name transfer', () => {
     await expect(detachRegistrySwitch).not.toBeChecked()
 
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     // With both detach options off, buildTransferPlan.ts collapses the plan
@@ -753,7 +770,9 @@ test.describe('Portal name transfer', () => {
     await expect(setEthAddressSwitch).toBeChecked()
 
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     await driveTransactionsToSuccess(page, wallet, [
@@ -853,7 +872,9 @@ test.describe('Portal name transfer', () => {
       const transferButton = page.getByRole('button', {
         name: 'Transfer name',
       })
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
       await transferButton.click()
 
       await driveTransactionsToSuccess(page, wallet, [
@@ -940,7 +961,9 @@ test.describe('Portal name transfer', () => {
       const transferButton = page.getByRole('button', {
         name: 'Transfer name',
       })
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
       await transferButton.click()
 
       await driveTransactionsToSuccess(page, wallet, [
@@ -1003,7 +1026,9 @@ test.describe('Portal name transfer', () => {
     await expect(detachRegistrySwitch).toBeChecked()
 
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     await driveTransactionsToSuccess(page, wallet, [
@@ -1093,7 +1118,9 @@ test.describe('Portal name transfer', () => {
       const transferButton = page.getByRole('button', {
         name: 'Transfer name',
       })
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
 
       // ── Turning the option on surfaces the real blast radius ──────────
       await detachRegistrySwitch.click()
@@ -1119,7 +1146,9 @@ test.describe('Portal name transfer', () => {
       // ── Ticking the box unblocks it ────────────────────────────────────
       await expect(consentCheckbox).toBeVisible()
       await consentCheckbox.click()
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
 
       // ── Resetting the toggle voids the tick (getDetachConsentKey) ──────
       await detachRegistrySwitch.click() // off
@@ -1135,7 +1164,9 @@ test.describe('Portal name transfer', () => {
 
       // ── Re-ticking lets the real, on-chain detach go through ───────────
       await consentCheckbox.click()
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
       await transferButton.click()
 
       await driveTransactionsToSuccess(page, wallet, [
@@ -1212,7 +1243,9 @@ test.describe('Portal name transfer', () => {
       const transferButton = page.getByRole('button', {
         name: 'Transfer name',
       })
-      await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+      await expect(transferButton).toBeEnabled({
+        timeout: TRANSFER_READY_TIMEOUT,
+      })
       await transferButton.click()
 
       await driveTransactionsToSuccess(page, wallet, [
@@ -1289,7 +1322,9 @@ test.describe('Portal name transfer', () => {
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await page.getByPlaceholder('ENS name or address').fill(recipient)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     await driveTransactionsToSuccess(page, wallet, [
@@ -1344,7 +1379,9 @@ test.describe('Portal name transfer', () => {
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await page.getByPlaceholder('ENS name or address').fill(recipient)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     const dialog = page.locator('[data-slot="dialog-content"]')
@@ -1562,7 +1599,9 @@ test.describe('Portal name transfer — wallet on an undeclared chain (WEB-281)'
       .getByPlaceholder('ENS name or address')
       .fill(accounts.getAddress('user2'))
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     const dialog = await submitFirstStep(page, wallet)
@@ -1903,7 +1942,9 @@ test.describe('Portal name transfer — migrated V1 names', () => {
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await page.getByPlaceholder('ENS name or address').fill(recipient)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     await driveTransactionsToSuccess(page, wallet, [
@@ -2011,7 +2052,9 @@ test.describe('Portal name transfer — migrated V1 names', () => {
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
     await page.getByPlaceholder('ENS name or address').fill(notAReceiver)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
-    await expect(transferButton).toBeEnabled({ timeout: 15_000 })
+    await expect(transferButton).toBeEnabled({
+      timeout: TRANSFER_READY_TIMEOUT,
+    })
     await transferButton.click()
 
     // Drive the modal as far as it will go, authorising whatever it asks for.
