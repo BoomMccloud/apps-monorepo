@@ -5,6 +5,65 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 52 — 2026-10-20 · bulk renewal in both apps; V1 + V2 together (B8, B9, B19–B26)
+
+**Result:** PASS B19–B26; B8 and B9 brought back to green after #1389. Two
+gaps remain open (below). Runs were real mode on the local stack against
+main + #1354: manager on 3012 (smart account) and 3014 (`VITE_FF_USE_EOA=true`),
+explorer on 3013.
+
+**What changed under the old tests:** #1389 (WEB-1803) moved a smart-account
+bulk renewal onto owner-signed intents: up to 25 names per intent, a
+`renewBatch` (or a lone `renew`), preceded by "Approve the renewal payment?"
+when the HCA can't cover the quote. B8 and B9 had been failing since then:
+B8 waited behind the prompt, and B9 waited for per-name sends that this route
+never makes. B9's per-name refusal now runs only with `E2E_MANAGER_SIGNER=eoa`
+against an EOA-mode manager. A second B9 covers the intent route by emptying
+the HCA, which the fork keeps at about 1M USDC.
+
+**New:**
+- **Explorer** (`registration.spec.ts`): B19–B24, a mixed V1 + V2 Extend.
+  - B22 measured that the names list omits a name in price cooldown entirely.
+  - B24 blocks the dev build's auto-refill of the wallet.
+- **Manager:**
+  - B25 (`bulk-renew.spec.ts`): only the V2 name of a mixed wallet can be bulk-renewed. Logged as a product gap in `e2e-defects.md`.
+  - B26: 26 names go out as a 25-name `renewBatch` plus a `renew`.
+  - The mixed upgrade test now checks that the active V1 name is not renewed.
+
+**Flaky:** B25 failed 2 of 10 runs, both in one batch: "1 selected" never
+appeared after Select all. It hasn't reproduced since. The test now logs the
+selection bar's text when this happens.
+
+**UX notes, not filed:** on the wallet route a failed run shows the raw RPC
+error ("An unknown RPC error occurred. Request Arguments: …"), and the
+failure step doesn't say which names already renewed.
+
+### Open gap 1 — bulk renew to a picked date and in DAI (B27, Y7)
+
+Every bulk test uses the default one-year span in USDC.
+- **Manager:** in the Renew dialog, choose "Renew to date" (`features/bulk-renew/components/RenewToDatePopover.tsx`). The earliest date it allows is the latest selected expiry plus the minimum duration (`useBulkRenew.ts:91-100`).
+- **Explorer:** "Pick by date" in `MultiNameExtendSettings` (`ExtensionDurationOrExpiryPicker`).
+- **Oracle:** every name's new expiry equals the picked date. The charge equals the sum of `getRenewPrice` for each name's own span, so names with different current expiries pay different amounts.
+- **DAI (Y7):**
+  - Manager, intent route: the rent in DAI plus the intent fee in USDC (`hcaRenewal.ts:276-277`). The gas limit is 150k higher when rent isn't in USDC.
+  - Explorer: one DAI approval per renewer, the same oracle as B21.
+- **Reuse:**
+  - the B21 `Leg` helpers and `expectRenewedOnce` (explorer);
+  - `approveRenewalFundingUntil` and `moveToken` in `migration-time.spec.ts` (manager).
+
+### Open gap 2 — renew in the manager, observe in the explorer (X6)
+
+Not started; it needs the cross-app fixture (`projects/cross-app/`, HW7).
+1. Put a V2 name in grace (`makeV2Name({ duration: -2 * DAY })`).
+2. Open it in the explorer: grace badge, expiry in the past.
+3. Bulk-renew it in the manager (smart-account route, approve the funding prompt).
+4. Wait for bigname, then reload the explorer. The grace badge is gone, the new expiry shows on the name page and in `/addr/$addr/names`, and the name is selectable for Extend again.
+5. Reverse: Extend in the explorer, and the manager dashboard drops the grace banner and badge (B6/B7 selectors).
+
+Watch for: the explorer caches; reload only after `waitForBignameBlock`.
+
+**In flight:** nothing.
+
 ## Iteration 51 — 2026-10-11 · two tabs, one label (A22) → E2E-030
 
 **Result:** DEFECT A22 (new **E2E-030**, S3), in both modes.

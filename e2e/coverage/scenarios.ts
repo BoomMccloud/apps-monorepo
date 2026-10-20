@@ -1174,6 +1174,15 @@ const renewalB: Scenario[] = [
     'Bulk renew more names than one smart-account intent holds (25 + 1)',
     'two intents: a renewBatch carrying 25 names and a renew carrying the last; every lease moves by one year, once',
   ),
+  s(
+    'B27',
+    'P2',
+    '5.B',
+    'renewal',
+    'manager',
+    'Bulk renew to a picked date (manager "Renew to date" and the explorer\'s "Pick by date")',
+    'every selected name ends on the picked date; each name is charged for its own span (latest expiry + minimum sets the earliest date)',
+  ),
 ]
 
 // ── R0 · §G Migration V1→V2 — the deepest matrix ─────────────────────────
