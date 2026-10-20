@@ -192,6 +192,8 @@ export function createBignameMock() {
         : {
             owner,
             manager: owner,
+            // The portal reads a name's role history by its registration.
+            registration_id: `mock-registration-${namehash(d.name)}`,
             // An ENSv1 name in grace keeps its owner but reads expired.
             status: isPastExpiry(d) ? 'expired' : 'active',
           }),
@@ -453,6 +455,13 @@ export function createBignameMock() {
       method: 'GET',
       path: /^\/v1\/(registries|resolvers)\/[^/]+\/[^/]+$/,
       reply: () => notFound,
+    },
+    // Root role holders: none the mock knows of, and the list is complete.
+    {
+      method: 'GET',
+      path: /^\/v1\/permissions$/,
+      reply: () =>
+        ok({ ...EMPTY_PAGE, meta: { ...META, completeness: 'full' } }),
     },
     {
       method: 'GET',
