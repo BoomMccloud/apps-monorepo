@@ -81,6 +81,12 @@ const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
  * the node: a scan the roles suite measured near 30s on this fork.
  */
 const TRANSFER_READY_TIMEOUT = 60_000
+
+/**
+ * Multicall3: deployed on every chain, and not an ERC-1155 receiver, so
+ * `NameWrapper.safeTransferFrom` to it reverts.
+ */
+const NOT_A_RECEIVER: Address = '0xcA11bde05977b3631167028862bE2a173976CA11'
 const ANVIL_RPC_URL = process.env.ANVIL_RPC_URL ?? 'http://127.0.0.1:8545'
 
 // Same chain contracts `makeName` reads from — see e2e/fixtures/makeName.ts.
@@ -2042,15 +2048,12 @@ test.describe('Portal name transfer — migrated V1 names', () => {
     const name = await makeName({ label: 'transfer-f5', owner: 'user' })
     const label = name.replace(/\.eth$/, '')
     const owner = accounts.getAddress('user')
-    // Multicall3: definitely deployed, definitely not an ERC-1155 receiver, so
-    // safeTransferFrom to it reverts.
-    const notAReceiver = '0xcA11bde05977b3631167028862bE2a173976CA11'
 
     const [resolverBefore] = await readResolverAndSubregistry(label)
     expect(resolverBefore).not.toBe(zeroAddress)
 
     await page.goto(`${PORTAL_APP_URL}/${name}/ownership/transfer`)
-    await page.getByPlaceholder('ENS name or address').fill(notAReceiver)
+    await page.getByPlaceholder('ENS name or address').fill(NOT_A_RECEIVER)
     const transferButton = page.getByRole('button', { name: 'Transfer name' })
     await expect(transferButton).toBeEnabled({
       timeout: TRANSFER_READY_TIMEOUT,
@@ -2501,8 +2504,6 @@ test.describe('Portal name transfer — subnames', () => {
         'unsafeTransfer(address,uint256,bytes)',
       ),
     }
-    // Multicall3: deployed, and not an ERC-1155 receiver.
-    const NOT_A_RECEIVER: Address = '0xcA11bde05977b3631167028862bE2a173976CA11'
     const REFUSAL = 'The transfer itself would fail, so nothing was sent.'
 
     const isEmancipated = (registry: Address) =>
@@ -4333,9 +4334,6 @@ test.describe('Portal name transfer — ETH address record ahead of the move (WE
     /Your wallet isn’t allowed to detach this name’s resolver, so it stays attached/
   const STRANDED_COPY =
     /The transfer didn’t go through, so you still own this name/
-  // Deployed on the fork, and not an ERC-1155 receiver: a recipient running
-  // this code makes `NameWrapper.safeTransferFrom` revert.
-  const NOT_A_RECEIVER = '0xcA11bde05977b3631167028862bE2a173976CA11'
   const V1_REGISTRY_RESOLVER_ABI = parseAbi([
     'function resolver(bytes32 node) view returns (address)',
   ])

@@ -38,6 +38,7 @@ import {
 } from 'viem'
 import { type PrivateKeyAccount, privateKeyToAccount } from 'viem/accounts'
 import {
+  CERTIFIED_V1_RESOLVER,
   createMakeV1Name,
   V1_PUBLIC_RESOLVER,
 } from '../../../fixtures/makeV1Name.js'
@@ -62,8 +63,7 @@ const V1_REGISTRY = ensL1Contracts[supportedL1Chains.sepolia].ensLegacyRegistry
  * is authorised on it (see the resolver notes in `makeV1Name.ts`). It emits the
  * value-bearing `TextChanged(bytes32,string,string,string)`.
  */
-const OTHER_PUBLIC_RESOLVER =
-  '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5' as Address
+const OTHER_PUBLIC_RESOLVER = CERTIFIED_V1_RESOLVER
 
 /**
  * Contracts nobody assigned to any name: minimal emitters planted with
