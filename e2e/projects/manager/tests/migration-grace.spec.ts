@@ -437,6 +437,8 @@ test.describe('Grace-period names in migration (WEB-424)', () => {
     ]
     await serveV1Names(page, names, { indexer: mockIndexer })
     await syncBrowserToChain(page)
+    const activeTokenId = BigInt(labelhash(active.replace(/\.eth$/, '')))
+    const activeExpiry = await nameExpires(activeTokenId)
 
     // ── Dashboard: upgrade copy, plus the renewal note for the grace name ──
     await page.goto(`${MANAGER_APP_URL}/dashboard`)
@@ -485,6 +487,10 @@ test.describe('Grace-period names in migration (WEB-424)', () => {
     // (renewed but not synced) makes the wrapped transfer revert, so this
     // migration succeeding is the wrapper-sync oracle.
     expect(await nameExpires(grace.tokenId)).toBeGreaterThan(grace.expiry)
+    expect(
+      await nameExpires(activeTokenId),
+      'the active name is upgraded, not renewed',
+    ).toBe(activeExpiry)
     await assertUnlockedMigration(grace.label)
     await assertUnlockedMigration(active.replace(/\.eth$/, ''))
   })

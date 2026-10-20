@@ -1122,6 +1122,58 @@ const renewalB: Scenario[] = [
       'the same on-chain expiry results from all four routes',
     ],
   ]),
+  // Bulk Extend with V1 and V2 names in one selection (explorer), and what the
+  // manager offers instead. Added 2026-10-20.
+  ...suite('5.B', 'renewal', 'portal', 'P2', [
+    [
+      'B19',
+      'Bulk Extend a V1 name in grace with an active V2 name',
+      'one approval per renewer for exactly its price; both leases move; the V1 lease ends in the future (out of grace)',
+    ],
+    [
+      'B20',
+      'Bulk Extend unwrapped and wrapped V1 names with a V2 name',
+      "every lease moves by the same span; the wrapped name's NameWrapper expiry keeps its gap to the registrar lease",
+    ],
+    [
+      'B21',
+      'Bulk Extend two V1 and two V2 names',
+      "exactly two approvals (one per renewer, each its names' summed price); the dialog total is the charge to the cent",
+    ],
+    [
+      'B22',
+      'A name past grace in a bulk Extend selection',
+      'left out of the flow; the rest renew; its expiry is untouched',
+    ],
+    [
+      'B23',
+      'A renew refused mid-way through a mixed bulk Extend',
+      'the names before it stay renewed; Try again finishes the rest; each name renews once and is charged once',
+    ],
+    [
+      'B24',
+      'Bulk Extend with neither USDC nor DAI covering the total',
+      'no token offered, the insufficient-balance notice shows, nothing can start and nothing is sent',
+    ],
+  ]),
+  s(
+    'B25',
+    'P2',
+    '5.B',
+    'renewal',
+    'manager',
+    'Bulk renew from the dashboard with a V1 and a V2 name held',
+    'only the V2 name can be selected and is in the dialog; the manager offers no mixed renewal (product gap vs the explorer)',
+  ),
+  s(
+    'B26',
+    'P2',
+    '5.B',
+    'renewal',
+    'manager',
+    'Bulk renew more names than one smart-account intent holds (25 + 1)',
+    'two intents: a renewBatch carrying 25 names and a renew carrying the last; every lease moves by one year, once',
+  ),
 ]
 
 // ── R0 · §G Migration V1→V2 — the deepest matrix ─────────────────────────
