@@ -5,6 +5,171 @@ The file `/e2e-goal` reads first. One section per iteration, newest at the top.
 
 ---
 
+## Iteration 53 — 2026-10-20 · 4LD coverage, V1 first: plan, not started
+
+**Status:** planned and handed over. Nothing below is built yet.
+
+**Scope, as decided by the user:** a coverage set for 4LD names (`d.c.b.eth`)
+covering migration, transfer, roles and permissions, records, primary name,
+and expiry at depth. The pass is split by version:
+- **V1 4LDs first.** V2 4LDs follow in their own pass, using IDs Q50 and up.
+- **Hybrid approach.** Display and ownership cells go through the generated V1
+  shape matrix. Actions are hand-written specs that reuse the matrix seeder.
+
+### Where the 4LD risk is in the code
+
+No app caps depth: every registry walk is an ensjs or on-chain loop
+(`canonicalRegistry.ts` `MAX_LABELS = 128` is only a safety stop). The risk is
+code that looks one level up, or only at the `.eth` 2LD:
+
+- **Explorer V1 state** (`apps/portal/src/.../getV1NameState.ts:237-272`):
+  - It reads one parent level, plus the `.eth` ancestor via `getEth2LDAncestor` (`tldHelpers.ts:113-118`).
+  - It never reads the 3LD's own wrapper expiry for a 4LD.
+  - Only the immediate parent may reassign (`rules.ts:104-141`).
+  - `packages/v1-name-shapes/src/shapes.ts:17-33` explains why each 4LD shape must name the path it probes.
+- **Explorer authority** (`useParentAuthority.ts:115-185`):
+  - Only the immediate parent is surfaced.
+  - A grandparent who can repoint the 3LD is not shown (open question **SUB-F3**, `docs/transfer-subname-web128-test-plan.md:190-195`).
+- **Manager migration** (`packages/migration/src/service/classifyNames.ts`):
+  - **Copy route.** An unwrapped registry subname is `registry-child` (`:284-310`) and an unlocked wrapped one is `unlocked-child` (`:416-446`). Both need every ancestor up to the 2LD in the selected set as a copy (`hasCompleteCopyRoute` `:563-584`, rechecked in `copyMigrationReadiness.ts:78-100`), or the name gets `missing-parent`.
+  - **Wrapped routes.** Emancipated is `detached-child` (`:390-415`); locked is `locked-child`, and CANNOT_TRANSFER makes it ineligible (`:449-483`).
+  - **Unlocked children of locked parents** are not copied.
+  - **Discovery** lists the names the user holds a role on, with no tree walk (`v1Names.ts:52-82`). A 4LD only appears if the user holds a role on it.
+  - **Registries:** one UserRegistry per copy parent, salt `namehash(parent)` (`userRegistryMigration.ts:35-58`), chained with `setParent` and run parent first (`buildAtomicMigrationBatches.ts:422-492`, `:1187-1197`).
+- **Manager profile:**
+  - V1 names are read-only, "upgrade required" (`profileEditability.ts:5-20`).
+  - Primary-name candidates are V2 only, `owner` relation, any depth (`getPrimaryNameDomains.ts:30-51`). So a V1 4LD can never be picked as primary in the manager.
+
+### Coverage today
+
+- **V1 4LD migration:**
+  - GS6 (locked chain) PASS, GS14 (registry copy chain) PASS, GS10 (unlocked wrapped chain) DEFECT E2E-025.
+  - All in `projects/manager/tests/migration-subname.spec.ts` (`:266`, `:710`, `:896`).
+- **Matrix 4LD shapes 40–45** (`shapes.ts:306-377`, seeded by `matrix/seed.ts`):
+  - VT/VF are mostly PASS; VK42/43/45 are DEFECT (E2E-016).
+  - **VV40–45 and most of slot 44 are not-started** only because `matrix/expectations.ts` has no `overview` entry (or, for slot 44, entries for its other tabs). Filling them is data, not code.
+- **V2:** only D3 (`projects/portal/tests/subnames.spec.ts:110`), which creates a 4LD.
+
+### Fixtures and observers to reuse
+
+| Purpose | What to use |
+|---|---|
+| Seed names | `makeV1Subname` (dotted `parentName`, wrapped parent; `fixtures/makeV1Subname.ts:125`) |
+| | `makeV1RegistrySubname` (registry child; seeds bigname labels; `:76`) |
+| | `createMakeV1Name`, `unwrapChild` (`fixtures/v1-tails.ts:136`) |
+| | `setV1RecordsOn` (`fixtures/v1-records.ts:283`) |
+| | `matrix/seed.ts` `seedChild`/`seedShape`, `matrix/run.ts` `seedForSuite` |
+| Show names to the apps | `serveV1Names` (tree; real mode only: CI mock skips trees, `helpers/v1-names.ts:143`) |
+| Observe | `resolveRegistryPath`, `assertUserRegistryAttached`, `assertCopyRegistered` (`helpers/migration-assertions.ts:274-520`) |
+| | `expectRecordsResolve` (UR, any depth) |
+| | `waitForBignameName` |
+| | `readPrimaryName` |
+| Drive flows | `openMigrationFlow` / `runMigrationFlow`, `driveTransactionsToSuccess` |
+| | the cross-app fixture (`fixtures/playwright.cross-app.fixture.ts`) |
+
+**Missing:**
+- There is no on-chain set-primary helper; tests use the UI.
+- `helpers/v2-transfer.ts` only handles 2LDs. That only matters after migration.
+- Role-assertion messages print `label.eth`, which is cosmetic.
+
+### Step 0 — register the family (do this first)
+
+- `coverage/scenarios.ts`:
+  - add prefix **`Q`** ("4LD names") to `AREA_TIER`, with a default of R2;
+  - give each row a `{ tier }` override: R0 for migrate, transfer, reclaim and fuse writes;
+  - add Q1–Q24 below as not-started.
+- `docs/e2e-test-catalogue.md`: add "### Q — 4LD names (V1 first)" to Part 3.
+
+### Step 1 — fixture `fixtures/makeV1FourLD.ts`
+
+`makeV1FourLD({ twoLd, threeLd, fourLd, owners, records? })`:
+- **levels:**
+  - `twoLd`: `unwrapped | wrapped | locked | emancipated`
+  - `threeLd` and `fourLd`: `registry | unlocked | emancipated | locked`, plus extra fuses
+- **owners:** per level, from `user | user2 | user3`.
+- It composes the fixtures above, following `seedChild`.
+- It returns names and nodes, plus per-level owner, fuses and expiry read back from chain.
+
+### Step 2 — matrix fills (portal, generated)
+
+- `matrix/expectations.ts`:
+  - `overview` for shapes 40–45, giving VV40–45;
+  - the remaining slot-44 tabs, using the existing `readOnlyTabs` and refusal helpers.
+- Add shapes only for a new code path. Candidate: **n=46** `4ld-emancipated+locked-3ld+locked-2ld:owner`, the `detached-child` route.
+- Then run `pnpm --filter @ens-apps/e2e matrix:generate` and `matrix:docs`. CI runs `--check`.
+
+### Step 3 — hand-written actions
+
+**Migration**, `projects/manager/tests/migration-4ld.spec.ts`. Add `4ld` to the `manager-migration` testMatch in `projects/manager/playwright.migration.config.ts`.
+
+| ID | Case | Oracle (chain first) |
+|---|---|---|
+| Q1 | Orphan: the user holds only a registry 4LD under someone else's 3LD | Not offered, or ineligible `missing-parent`; nothing written |
+| Q2 | Registry 4LD → unlocked wrapped 3LD → unwrapped 2LD, all the user's | One UserRegistry per level; `getParent` links; 4LD registered to the source owner; records resolve |
+| Q3 | Emancipated 4LD under a locked 3LD the user doesn't own | `detached-child` route: migrates alone, or the UI says why not |
+| Q4 | Locked 2LD → locked 3LD → unlocked (non-PCC) wrapped 4LD | Not copied. **Does it still resolve after the parents migrate?** (E2E-031-like risk) |
+| Q5 | Locked chain with CANNOT_TRANSFER on the 4LD | 4LD ineligible; 2LD and 3LD still migrate |
+| Q6 | Selection tree | 4LD row at depth 2; can't be toggled alone; toggling the 2LD selects all three |
+| Q7 | After migration (GS14 chain) | Records resolve through UR; editable in the manager profile and the explorer editor; explorer registry tree shows 5 rows |
+| Q8 | Ancestors upgraded in an earlier session, the 4LD later | **Is it still offered?** The ancestor rule wants the ancestors in the set. Pin it, or DEFECT if stranded |
+
+**Explorer actions**, `projects/portal/tests/v1-4ld.spec.ts`:
+
+| ID | Case | Oracle |
+|---|---|---|
+| Q9 | The owner transfers a wrapped 4LD | NameWrapper `ownerOf` = recipient; records still resolve |
+| Q10 | The owner transfers a registry-only 4LD | Registry `owner(node)` = recipient |
+| Q11 | The 3LD owner reclaims an unemancipated wrapped 4LD | Owner changed; the old owner loses control |
+| Q12 | The 3LD owner faces an emancipated 4LD | No reassign offered; a direct `setSubnodeOwner` reverts |
+| Q13 | The 2LD owner (grandparent, unwrapped chain) | Can take back the 3LD, then the 4LD, on chain. The explorer names only the 3LD (SUB-F3): product-ruling row |
+| Q14 | The owner edits the 4LD's records in the explorer | Resolves through UR; the manager shows it read-only, "upgrade required" |
+| Q15 | The owner burns CANNOT_TRANSFER on a locked 4LD | `getData` fuses include it; the transfer form is gone |
+
+**Cross-app and primary**, `projects/cross-app/tests/v1-4ld-observers.spec.ts`:
+
+| ID | Case | Oracle |
+|---|---|---|
+| Q16 | After Q9/Q10 | The recipient's manager dashboard lists the 4LD (and offers it for upgrade if eligible); the sender's no longer does |
+| Q17 | Set a V1 4LD (addr(60) = owner) as primary in the explorer | `readPrimaryName(owner)` = the 4LD; the manager shows it |
+| Q18 | The manager's primary picker | Excludes V1 names: pin, and add a product-gap row next to E2E-035 |
+| Q19 | Migrate the primary 4LD | Primary still resolves both ways |
+
+**Expiry and grace at depth.** These go last, in the time projects.
+
+| ID | Case | Oracle |
+|---|---|---|
+| Q20 | 2LD in grace | Wrapped 4LD expiry clamped; the explorer shows ancestor-expired and refuses transfer |
+| Q21 | Renew the 2LD in grace, then upgrade | The 4LD is copied with its chain |
+| Q22 | 2LD past grace | The 4LD isn't listed and doesn't resolve |
+| Q23 | 3LD wrapper expired, 2LD active | The explorer reads only the 2LD's expiry: check its claim against chain |
+| Q24 | INV3/4/5 sweep on 4LD pages after Q2/Q9 | Every offered action executes or is refused with a reason |
+
+### How to run
+
+- **Stack:** the local e2e stack (anvil fork pinned at 11898021, bigname :5660), from the `.claude/worktrees/e2e-run` worktree (main + #1354).
+- **Servers:**
+
+  | Port | App | Started with |
+  |---|---|---|
+  | 3012 | manager, smart account | `VITE_FF_USE_EOA=false VITE_USE_MOCK_WALLET=false` |
+  | 3013 | explorer | `VITE_USE_MOCK_WALLET=false` |
+
+  - Both also need `VITE_BIGNAME_API_URL=http://127.0.0.1:5660 VITE_PUBLIC_POSTHOG_HOST=https://edge.ens.domains`.
+  - Start manager dev servers one at a time: in parallel they collide on workerd's port 9229 and its SQLite state.
+- **Env:** `E2E_MOCK_INDEXER=false` (real mode; V1 trees don't run in CI mock mode), `E2E_EXPLORER_INDEXER=bigname`, `MANAGER_APP_URL`, `PORTAL_APP_URL`.
+- **Clock:** time-moving tests (grace) go in the `manager-migration-time` project or the matrix `time` group. Seed grace names first in a test, before other names.
+
+### Rules
+
+- Chain reads beat text (`docs/e2e-build-goal.md:94-110`).
+- Observe every state change from each affected actor in both apps (`docs/e2e-gap-analysis.md` §5).
+- Where V1 and V2 differ, mark the row "needs product ruling".
+- Findings go into `docs/e2e-defects.md`: DEFECT plus `test.fail`, or PRODUCT-GAP.
+- Finish with `pnpm coverage`, and raise `coverage/baseline.json` tiers that went up.
+- Known gate issue: R3 baseline 168 vs actual 167 since `620deb52b`. Raised with the user; don't lower it.
+
+**In flight:** nothing (planning only).
+
 ## Iteration 52 — 2026-10-20 · bulk renewal in both apps; V1 + V2 together (B8, B9, B19–B26)
 
 **Result:** PASS B19–B26; B8 and B9 brought back to green after #1389. Two
