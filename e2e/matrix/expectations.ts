@@ -92,6 +92,26 @@ type TabId = string
  */
 
 /**
+ * The resolver tab. A V1 resolver is set on the name's registry slot (or its
+ * NameWrapper token), so whoever holds that slot is offered "Change resolver"
+ * unless CANNOT_SET_RESOLVER is burnt; anyone else — a registrant without the
+ * slot, a parent, a stranger — is not (`useCanSetResolver`, `canSetV1Resolver`).
+ * Measured 2026-10-21: all 26 shapes split exactly along that line.
+ */
+const resolverTab = (what: string, setsResolver: boolean): TabExpectation =>
+  setsResolver
+    ? {
+        title: `offers the holder of ${what} the resolver edit`,
+        heading: 'Resolver',
+        ctas: [{ name: 'Change resolver', state: 'enabled' }],
+      }
+    : {
+        title: `renders the resolver tab, and offers ${what} no resolver edit to this wallet`,
+        heading: 'Resolver',
+        ctas: [{ name: 'Change resolver', state: 'absent' }],
+      }
+
+/**
  * The read-only tabs, which vary by wrap class rather than by who is looking.
  *
  * Written as a builder because nine shapes x eight tabs of near-identical
@@ -103,11 +123,14 @@ type TabId = string
 const readOnlyTabs = ({
   token,
   fuses,
+  setsResolver = false,
 }: {
   /** The contract the Token tab must name. */
   readonly token: 'BaseRegistrar' | 'NameWrapper'
   /** Fuses tab: the burnt fuse to look for, or the not-wrapped message. */
   readonly fuses: TabExpectation
+  /** Whether the connected wallet may set the resolver (see `resolverTab`). */
+  readonly setsResolver?: boolean
 }): Record<string, TabExpectation> => ({
   fuses,
   token: {
@@ -152,14 +175,7 @@ const readOnlyTabs = ({
     // pass on the holder's address by coincidence.
     records: { ethAddress: 'shown' },
   },
-  resolver: {
-    title: 'renders the resolver tab, and offers a V1 name no resolver edit',
-    // The route refuses V1 outright ("Not Available for V1 Names"), so the tab
-    // withholding the control is consistent — it is the silence that is worth
-    // pinning, in case a later change starts offering a CTA that dead-ends.
-    heading: 'Resolver',
-    ctas: [{ name: 'Change resolver', state: 'absent' }],
-  },
+  resolver: resolverTab('a V1 name', setsResolver),
 })
 
 /** The fuses tab for a name that is not wrapped and so has none. */
@@ -230,9 +246,12 @@ const v2OnlyRefusals: Record<string, TabExpectation> = {
 const subnameReadOnlyTabs = ({
   token,
   fuses,
+  setsResolver = false,
 }: {
   readonly token: TabExpectation
   readonly fuses: TabExpectation
+  /** Whether the connected wallet may set the resolver (see `resolverTab`). */
+  readonly setsResolver?: boolean
 }): Record<string, TabExpectation> => ({
   fuses,
   token,
@@ -264,11 +283,7 @@ const subnameReadOnlyTabs = ({
     records: { ethAddress: 'shown' },
     // Unblocked by HW10, as above.
   },
-  resolver: {
-    title: 'renders the resolver tab for a V1 subname',
-    heading: 'Resolver',
-    ctas: [{ name: 'Change resolver', state: 'absent' }],
-  },
+  resolver: resolverTab('a V1 subname', setsResolver),
 })
 
 /**
@@ -319,7 +334,11 @@ export const EXPECTATIONS: Partial<
   // are one wallet the rows are right, and where they diverge the Owner row
   // follows the controller. One variable, one outcome.
   '2ld-unwrapped:owner': {
-    ...readOnlyTabs({ token: 'BaseRegistrar', fuses: NO_FUSES }),
+    ...readOnlyTabs({
+      setsResolver: true,
+      token: 'BaseRegistrar',
+      fuses: NO_FUSES,
+    }),
     ...v2OnlyRefusals,
     overview: {
       title: 'names the registrant as owner',
@@ -340,7 +359,11 @@ export const EXPECTATIONS: Partial<
   },
 
   '2ld-unwrapped:manager': {
-    ...readOnlyTabs({ token: 'BaseRegistrar', fuses: NO_FUSES }),
+    ...readOnlyTabs({
+      setsResolver: true,
+      token: 'BaseRegistrar',
+      fuses: NO_FUSES,
+    }),
     overview: {
       title: 'names the registrant as owner, not the wallet that manages it',
       rows: [{ kind: 'address-row', label: 'Owner', shows: 'registrant' }],
@@ -402,6 +425,7 @@ export const EXPECTATIONS: Partial<
   // ── Wrapped 2LDs: one holder, read from the NameWrapper ───────────────
   '2ld-emancipated:owner': {
     ...readOnlyTabs({
+      setsResolver: true,
       token: 'NameWrapper',
       fuses: burntFuse('Is Dot ETH', ['Cannot Unwrap', 'Cannot Transfer']),
     }),
@@ -443,6 +467,7 @@ export const EXPECTATIONS: Partial<
 
   '2ld-locked:owner': {
     ...readOnlyTabs({
+      setsResolver: true,
       token: 'NameWrapper',
       fuses: burntFuse('Cannot Unwrap', [
         'Cannot Transfer',
@@ -477,6 +502,7 @@ export const EXPECTATIONS: Partial<
 
   '2ld-locked-no-transfer:owner': {
     ...readOnlyTabs({
+      setsResolver: true,
       token: 'NameWrapper',
       fuses: burntFuse('Cannot Transfer', ['Cannot Set Resolver']),
     }),
@@ -510,7 +536,11 @@ export const EXPECTATIONS: Partial<
 
   // ── Three-level ───────────────────────────────────────────────────────
   '3ld-registry+unwrapped-2ld:owner': {
-    ...subnameReadOnlyTabs({ token: NO_TOKEN, fuses: NO_FUSES }),
+    ...subnameReadOnlyTabs({
+      setsResolver: true,
+      token: NO_TOKEN,
+      fuses: NO_FUSES,
+    }),
     overview: {
       title: 'names the registry owner of a subname that has no token',
       rows: [{ kind: 'address-row', label: 'Owner', shows: 'controller' }],
@@ -560,6 +590,7 @@ export const EXPECTATIONS: Partial<
 
   '3ld-wrapped+emancipated-2ld:owner': {
     ...subnameReadOnlyTabs({
+      setsResolver: true,
       token: WRAPPED_TOKEN,
       fuses: fuseState([], ['Parent Cannot Control', 'Cannot Unwrap']),
     }),
@@ -606,6 +637,7 @@ export const EXPECTATIONS: Partial<
 
   '3ld-emancipated+locked-2ld:owner': {
     ...subnameReadOnlyTabs({
+      setsResolver: true,
       token: WRAPPED_TOKEN,
       fuses: fuseState(['Parent Cannot Control'], ['Cannot Unwrap']),
     }),
@@ -640,6 +672,7 @@ export const EXPECTATIONS: Partial<
 
   '3ld-locked+locked-2ld:owner': {
     ...subnameReadOnlyTabs({
+      setsResolver: true,
       token: WRAPPED_TOKEN,
       fuses: fuseState(['Parent Cannot Control', 'Cannot Unwrap'], []),
     }),
@@ -689,6 +722,7 @@ export const EXPECTATIONS: Partial<
 
   '3ld-wrapped+unwrapped-2ld:owner': {
     ...subnameReadOnlyTabs({
+      setsResolver: true,
       token: WRAPPED_TOKEN,
       fuses: fuseState([], ['Parent Cannot Control', 'Cannot Unwrap']),
     }),
@@ -732,6 +766,7 @@ export const EXPECTATIONS: Partial<
       rows: [{ kind: 'address-row', label: 'Owner', shows: 'wrapperOwner' }],
     },
     ...subnameReadOnlyTabs({
+      setsResolver: true,
       token: WRAPPED_TOKEN,
       fuses: fuseState(['Parent Cannot Control', 'Cannot Unwrap'], []),
     }),
@@ -775,7 +810,11 @@ export const EXPECTATIONS: Partial<
       title: 'names the on-chain holder at depth four',
       rows: [{ kind: 'address-row', label: 'Owner', shows: 'controller' }],
     },
-    ...subnameReadOnlyTabs({ token: NO_TOKEN, fuses: NO_FUSES }),
+    ...subnameReadOnlyTabs({
+      setsResolver: true,
+      token: NO_TOKEN,
+      fuses: NO_FUSES,
+    }),
     ownership: {
       title: 'names the registry owner two levels below the 2LD',
       rows: registrySubnameRows,
