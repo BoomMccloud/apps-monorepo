@@ -7,11 +7,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { AnalyticsBanner } from './AnalyticsBanner'
 
-vi.mock('@tanstack/react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
-  useLocation: () => '/',
-}))
-
 const renderBanner = (consent: AnalyticsConsentState) => {
   const accept = vi.fn()
   const decline = vi.fn()
@@ -52,6 +47,23 @@ describe('AnalyticsBanner', () => {
     )
     expect(policy).toHaveAttribute('target', '_blank')
     expect(policy).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('sits at the bottom of the screen on a phone, and keeps its corner from 640 px', () => {
+    renderBanner('pending')
+
+    // greptile: no-arbitrary-tailwind: this is the class the component
+    // justifies, written out so that the test can look for it.
+    expect(banner()).toHaveClass(
+      'bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))]',
+      'sm:bottom-6',
+      'sm:right-6',
+    )
+    expect(
+      Array.from(banner()?.classList ?? []).filter(
+        (name) => name.startsWith('top-') || name.startsWith('sm:top-'),
+      ),
+    ).toEqual([])
   })
 
   it('says where the choice can be changed', () => {

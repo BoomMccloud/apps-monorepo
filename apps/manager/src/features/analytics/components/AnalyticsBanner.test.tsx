@@ -49,6 +49,23 @@ describe('AnalyticsBanner', () => {
     expect(policy).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
+  it('sits at the bottom of the screen on a phone, and keeps its corner from 480 px', () => {
+    renderBanner('pending')
+
+    // greptile: no-arbitrary-tailwind: this is the class the component
+    // justifies, written out so that the test can look for it.
+    expect(banner()).toHaveClass(
+      'bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))]',
+      'xs:bottom-6',
+      'xs:left-6',
+    )
+    expect(
+      Array.from(banner()?.classList ?? []).filter(
+        (name) => name.startsWith('top-') || name.startsWith('xs:top-'),
+      ),
+    ).toEqual([])
+  })
+
   it('says where the choice can be changed', () => {
     renderBanner('pending')
 

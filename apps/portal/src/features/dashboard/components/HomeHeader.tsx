@@ -7,7 +7,7 @@ import { ExplorerLogoSVG } from '@/assets/explorer-logo'
  * the sidebar header's `px-6 pt-6`.
  */
 export const HomeHeader = () => (
-  <header className="shrink-0" data-app-header>
+  <header className="shrink-0">
     <Link to="/" className="flex items-center">
       <ExplorerLogoSVG />
     </Link>

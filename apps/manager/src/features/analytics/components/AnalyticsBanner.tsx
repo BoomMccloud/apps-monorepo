@@ -10,9 +10,10 @@ import { cn } from '@/lib/utils'
 
 /**
  * The analytics banner: a card floating over the page until the visitor
- * chooses, in either ENS app. On a phone it sits at the top, under the
- * header; from 480 px wide, in the bottom-left corner, clear of the toasts
- * on the right. It stays under every dialog, the wallet modal included.
+ * chooses, in either ENS app. On a phone it sits at the bottom of the
+ * screen, where a thumb reaches it; from 480 px wide, in the bottom-left
+ * corner, clear of the toasts on the right. It stays under every dialog, the
+ * wallet modal included.
  */
 export const AnalyticsBanner = () => {
   const { consent, accept, decline } = useAnalyticsConsent()
@@ -24,8 +25,11 @@ export const AnalyticsBanner = () => {
     <section
       aria-labelledby={headingId}
       className={cn(
-        'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
-        'xs:inset-x-auto xs:top-auto xs:bottom-6 xs:left-6 xs:w-80',
+        // greptile: no-arbitrary-tailwind: the gap above the bottom edge is the
+        // gap at the sides plus the device's safe area, which only the browser
+        // knows, so no spacing token fits.
+        'fixed inset-x-2.5 bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))] z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
+        'xs:inset-x-auto xs:bottom-6 xs:left-6 xs:w-80',
         floatingWrapperGlassClassName,
       )}
     >
