@@ -73,7 +73,7 @@ vi.mock('@/features/wallet/hooks/useConnectedReverseName', () => ({
   useConnectedReverseName: () => ({ data: 'sub1234.eth' }),
 }))
 
-// eslint-disable-next-line import/first
+// eslint-disable-next-line import/first -- imported after the vi.mock calls above, as the file always did; this repository runs no import/first rule
 import { SelectNamesStep } from './SelectNamesStep'
 
 const readyGasEstimate: MigrationGasEstimateState = {
