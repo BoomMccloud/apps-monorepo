@@ -16,8 +16,7 @@ const refreshOnSchedule = async (
   // entry point, and nowhere else. The Workers runtime counts a `scheduled`
   // handler that resolves as a good run and learns of a failed one only from
   // a rejection, so the Result cannot be chained or returned past this
-  // handler. agent-lint's agent/no-throw allows it for the same reason: a
-  // tagged error thrown inside a function that a library expects to throw.
+  // handler.
   refreshed.match(
     () => undefined,
     (failure) => {
