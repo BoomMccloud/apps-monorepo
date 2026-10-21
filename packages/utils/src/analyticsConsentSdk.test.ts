@@ -107,7 +107,6 @@ const SURVEY = {
 } as const
 
 const surveysOnPage = (): number => {
-  // eslint-disable-next-line agent/no-foreign-testid -- The SDK mounts a survey in a shadow root under an element of this class, which has no role, label or text to find it by.
   const hosts = document.querySelectorAll('[class*="PostHogSurvey-"]')
   return hosts.length
 }
