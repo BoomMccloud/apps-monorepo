@@ -122,57 +122,20 @@ const InvalidSubregistryMessage = ({
   />
 )
 
-interface V2SubnamesContentProps {
+interface SubregistryMessageProps {
   readonly name: string
+  readonly parentRegistryAddress: Address | undefined
+  /** Set when the name points at a subregistry that isn't an ENS registry. */
+  readonly invalidSubregistry?: Address
 }
 
-const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
+const SubregistryMessage = ({
+  name,
+  parentRegistryAddress,
+  invalidSubregistry,
+}: SubregistryMessageProps) => {
   const { address: connectedAccount } = useAccount()
 
-  const {
-    data: registriesData,
-    isLoading: registriesLoading,
-    error: registriesError,
-  } = useQuery(getNameRegistriesQueryOptions({ name }))
-
-  // The subregistry is always the first element (index 0) in the registries array
-  // For 2LD "foo.eth": [subregistry, ethRegistry, root]
-  // For 3LD "sub.foo.eth": [subregistry, fooRegistry, ethRegistry, root]
-  // For 4LD "x.sub.foo.eth": [subregistry, subRegistry, fooRegistry, ethRegistry, root]
-  const subregistryAddress = registriesData?.[0]
-  const hasSubregistry =
-    subregistryAddress && subregistryAddress !== zeroAddress
-
-  // bigname serves subnames whatever the subregistry is now (WEB-1885).
-  const {
-    data: hasRegistry = false,
-    isLoading: isRegistryLoading,
-    error: registryCheckError,
-  } = useQuery({
-    ...getSupportsInterfacesQueryOptions({
-      address: subregistryAddress as Address,
-      interfaces: [REGISTRY_INTERFACE_ID],
-    }),
-    select: ([supportsRegistry]) => supportsRegistry === true,
-    enabled: Boolean(hasSubregistry),
-  })
-
-  // ROLE_REGISTRAR on the subregistry's ROOT resource, which is what `register`
-  // checks and where a registry-wide grant lands. Omitting `label` is what
-  // selects that: a label of any kind — `''` included — asks about
-  // `labelhash(label)` instead, a resource nobody is ever granted roles on, so
-  // the answer was always false however the account was granted the role.
-  const { data: hasRegistrarRole } = useQuery({
-    ...getHasRolesQueryOptions({
-      registryAddress: subregistryAddress as Address,
-      roles: ['ROLE_REGISTRAR'],
-      account: connectedAccount as Address,
-    }),
-    enabled: hasRegistry && Boolean(connectedAccount),
-  })
-
-  // Check if connected account can deploy a subregistry (ROLE_SET_SUBREGISTRY on parent registry)
-  const parentRegistryAddress = registriesData?.[1]
   // The name's own id, not its displayed label: a label rendered `[<64 hex>]`
   // does not say which name it is, so the id is resolved once and the gate
   // asks about that (WEB-1458). No id means no permission, never root.
@@ -180,7 +143,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
   const { data: readNameResourceId } = useQuery({
     ...getNameResourceIdQueryOptions({
       name,
-      registryAddress: parentRegistryAddress ?? undefined,
+      registryAddress: parentRegistryAddress,
     }),
     enabled: idFromName === null && Boolean(parentRegistryAddress),
   })
@@ -195,8 +158,46 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
     enabled:
       Boolean(parentRegistryAddress) &&
       Boolean(connectedAccount) &&
-      Boolean(nameResourceId) &&
-      !hasRegistry,
+      Boolean(nameResourceId),
+  })
+
+  return invalidSubregistry ? (
+    <InvalidSubregistryMessage
+      name={name}
+      canDeploy={Boolean(hasSetSubregistryRole)}
+      subregistry={invalidSubregistry}
+    />
+  ) : (
+    <NoSubregistryMessage
+      name={name}
+      canDeploy={Boolean(hasSetSubregistryRole)}
+    />
+  )
+}
+
+interface SubregistrySubnamesProps {
+  readonly name: string
+  readonly subregistryAddress: Address
+}
+
+const SubregistrySubnames = ({
+  name,
+  subregistryAddress,
+}: SubregistrySubnamesProps) => {
+  const { address: connectedAccount } = useAccount()
+
+  // ROLE_REGISTRAR on the subregistry's ROOT resource, which is what `register`
+  // checks and where a registry-wide grant lands. Omitting `label` is what
+  // selects that: a label of any kind — `''` included — asks about
+  // `labelhash(label)` instead, a resource nobody is ever granted roles on, so
+  // the answer was always false however the account was granted the role.
+  const { data: hasRegistrarRole } = useQuery({
+    ...getHasRolesQueryOptions({
+      registryAddress: subregistryAddress,
+      roles: ['ROLE_REGISTRAR'],
+      account: connectedAccount as Address,
+    }),
+    enabled: Boolean(connectedAccount),
   })
 
   const {
@@ -209,7 +210,6 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
     fetchNextPage,
   } = useInfiniteQuery({
     ...getSubnamePagesQueryOptions({ name, protocolVersion: 'ENSv2' }),
-    enabled: hasRegistry,
   })
   const subnames = useMemo(
     () => subnamePages?.pages.flatMap((page) => page.subnames),
@@ -222,7 +222,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
     error: deleteError,
   } = useDeleteSubname({
     name,
-    registryAddress: (subregistryAddress as Address) ?? zeroAddress,
+    registryAddress: subregistryAddress,
   })
 
   const servedNames = useMemo(
@@ -242,23 +242,20 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
           transactionName: `Delete ${row.name}`,
           // Matches the call deleteSubnameAsync submits (same registry, id and
           // chainId), so the modal's estimate stays byte-identical.
-          prepare:
-            hasSubregistry && subregistryAddress
-              ? ({ walletClient, chainId }: IntentContext) =>
-                  prepareDeleteSubnameTransaction({
-                    registryAddress: subregistryAddress,
-                    resourceId,
-                    walletClient,
-                    chainId,
-                    subname: row.name,
-                  })
-              : undefined,
+          prepare: ({ walletClient, chainId }: IntentContext) =>
+            prepareDeleteSubnameTransaction({
+              registryAddress: subregistryAddress,
+              resourceId,
+              walletClient,
+              chainId,
+              subname: row.name,
+            }),
           send: (id) =>
             deleteSubnameAsync({ subname: row.name, resourceId, id }),
         },
       ]
     },
-    [hasSubregistry, subregistryAddress, deleteSubnameAsync],
+    [subregistryAddress, deleteSubnameAsync],
   )
 
   const {
@@ -302,11 +299,11 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
   const { data: hasRootUnregisterRole, isPending: isRootUnregisterPending } =
     useQuery({
       ...getHasRolesQueryOptions({
-        registryAddress: subregistryAddress as Address,
+        registryAddress: subregistryAddress,
         roles: ['ROLE_UNREGISTER'],
         account: connectedAccount as Address,
       }),
-      enabled: hasRegistry && Boolean(connectedAccount),
+      enabled: Boolean(connectedAccount),
     })
 
   const unregisterResources = useMemo(
@@ -319,13 +316,12 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
 
   const { data: perRowUnregisterRoles } = useQuery({
     ...getResourceRolesQueryOptions({
-      registryAddress: (subregistryAddress as Address) ?? zeroAddress,
+      registryAddress: subregistryAddress,
       account: connectedAccount as Address,
       roles: ['ROLE_UNREGISTER'],
       resources: unregisterResources,
     }),
     enabled:
-      hasRegistry &&
       Boolean(connectedAccount) &&
       !isRootUnregisterPending &&
       hasRootUnregisterRole === false &&
@@ -359,51 +355,6 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
 
   const handleClearSelected = (selected: SubnameRow[]) =>
     queueForDeletion(selected)
-
-  if (registriesLoading) {
-    return <LoadingMessage title="Checking registry..." />
-  }
-
-  if (registriesError) {
-    return (
-      <ErrorMessage
-        title="Failed to load registry"
-        description={registriesError.cause?.message || registriesError.message}
-      />
-    )
-  }
-
-  if (!hasSubregistry) {
-    return (
-      <NoSubregistryMessage
-        name={name}
-        canDeploy={Boolean(hasSetSubregistryRole)}
-      />
-    )
-  }
-
-  if (isRegistryLoading) {
-    return <LoadingMessage title="Checking subregistry..." />
-  }
-
-  if (registryCheckError) {
-    return (
-      <ErrorMessage
-        title="Failed to check subregistry"
-        description={extractErrorMessage(registryCheckError, '')}
-      />
-    )
-  }
-
-  if (!hasRegistry) {
-    return (
-      <InvalidSubregistryMessage
-        name={name}
-        canDeploy={Boolean(hasSetSubregistryRole)}
-        subregistry={subregistryAddress}
-      />
-    )
-  }
 
   if (subnamesLoading) {
     return <LoadingMessage title="Loading subnames..." />
@@ -455,6 +406,107 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
         <TransactionModal transactions={deleteTransactions} />
       )}
     </>
+  )
+}
+
+interface SubregistryCheckProps {
+  readonly name: string
+  readonly subregistryAddress: Address
+  readonly parentRegistryAddress: Address | undefined
+}
+
+// bigname serves subnames whatever the subregistry is now (WEB-1885).
+const SubregistryCheck = ({
+  name,
+  subregistryAddress,
+  parentRegistryAddress,
+}: SubregistryCheckProps) => {
+  const {
+    data: isRegistry,
+    isLoading,
+    error,
+  } = useQuery({
+    ...getSupportsInterfacesQueryOptions({
+      address: subregistryAddress,
+      interfaces: [REGISTRY_INTERFACE_ID],
+    }),
+    select: ([supportsRegistry]) => supportsRegistry === true,
+  })
+
+  if (isLoading) {
+    return <LoadingMessage title="Checking subregistry..." />
+  }
+
+  if (error) {
+    return (
+      <ErrorMessage
+        title="Failed to check subregistry"
+        description={extractErrorMessage(error, '')}
+      />
+    )
+  }
+
+  if (!isRegistry) {
+    return (
+      <SubregistryMessage
+        name={name}
+        parentRegistryAddress={parentRegistryAddress}
+        invalidSubregistry={subregistryAddress}
+      />
+    )
+  }
+
+  return (
+    <SubregistrySubnames name={name} subregistryAddress={subregistryAddress} />
+  )
+}
+
+interface V2SubnamesContentProps {
+  readonly name: string
+}
+
+const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
+  const {
+    data: registriesData,
+    isLoading: registriesLoading,
+    error: registriesError,
+  } = useQuery(getNameRegistriesQueryOptions({ name }))
+
+  if (registriesLoading) {
+    return <LoadingMessage title="Checking registry..." />
+  }
+
+  if (registriesError) {
+    return (
+      <ErrorMessage
+        title="Failed to load registry"
+        description={registriesError.cause?.message || registriesError.message}
+      />
+    )
+  }
+
+  // The subregistry is always the first element (index 0) in the registries array
+  // For 2LD "foo.eth": [subregistry, ethRegistry, root]
+  // For 3LD "sub.foo.eth": [subregistry, fooRegistry, ethRegistry, root]
+  // For 4LD "x.sub.foo.eth": [subregistry, subRegistry, fooRegistry, ethRegistry, root]
+  const subregistryAddress = registriesData?.[0]
+  const parentRegistryAddress = registriesData?.[1] ?? undefined
+
+  if (!subregistryAddress || subregistryAddress === zeroAddress) {
+    return (
+      <SubregistryMessage
+        name={name}
+        parentRegistryAddress={parentRegistryAddress}
+      />
+    )
+  }
+
+  return (
+    <SubregistryCheck
+      name={name}
+      subregistryAddress={subregistryAddress}
+      parentRegistryAddress={parentRegistryAddress}
+    />
   )
 }
 
