@@ -19,8 +19,13 @@ export {
   HCA_STANDALONE_INTENT_GAS_LIMIT,
   HcaFundingDeclinedError,
   type HcaFundingPrompt,
+  type HcaFundingTokenLeg,
   HcaIntentFeeExceedsMaximumError,
   type HcaIntentFunding,
+  type HcaTokenSpend,
+  hcaMaxIntentFeeUsdcFor,
+  type PermitKind,
+  type PermitPurpose,
   type PlanHcaIntentFundingParams,
   planHcaIntentFunding,
 } from './helpers/hca-intent-funding'

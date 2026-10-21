@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router'
 import { ExternalLink } from 'react-external-link'
 
 const MENU_ITEM_CLASS =
@@ -9,15 +8,16 @@ export const HelpMenu = () => {
     <div className="flex flex-col gap-1">
       <ExternalLink
         className={MENU_ITEM_CLASS}
-        href="https://app.ens.domains/legal/terms-of-use"
+        href="https://ens.domains/legal/terms-of-use"
       >
         Terms of Use
       </ExternalLink>
-      {/* The Explorer's own notice, with the analytics choice; it links
-          onward to the full policy. */}
-      <Link className={MENU_ITEM_CLASS} to="/privacy">
+      <ExternalLink
+        className={MENU_ITEM_CLASS}
+        href="https://ens.domains/legal/privacy-policy"
+      >
         Privacy Policy
-      </Link>
+      </ExternalLink>
       <ExternalLink
         className={MENU_ITEM_CLASS}
         href="https://ens.domains/legal/trademark-guidelines"

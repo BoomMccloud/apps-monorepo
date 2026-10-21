@@ -12,6 +12,7 @@ import { getAddress } from 'viem'
 import { useChainId, useConnection } from 'wagmi'
 import * as ImageFallback from '@/components/atoms/ImageFallback'
 import { PatternAvatar } from '@/components/atoms/PatternAvatar/PatternAvatar'
+import { HcaFundingConfirmDialog } from '@/components/HcaFundingConfirmDialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -29,7 +30,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { HcaFundingConfirmDialog } from '@/features/profile/components/dialogs/HcaFundingConfirmDialog'
 import { ResolverSetupConfirmDialog } from '@/features/profile/components/dialogs/ResolverSetupConfirmDialog'
 import { useSetPrimaryName } from '@/features/profile/hooks/useSetPrimaryName'
 import {
@@ -62,6 +62,7 @@ import { resolveDomainLabel } from '../utils'
 import {
   isConfirmationForSelection,
   isConfirmBlocked,
+  isResolverSetupReplacing,
   needsPrimaryNameConfirmation,
   PRIMARY_NAME_PAGE_SIZE,
   type PrimaryNameConfirmation,
@@ -804,13 +805,22 @@ export const ChoosePrimaryNameDialog = ({
         }}
       />
       <HcaFundingConfirmDialog
+        description={<Trans>Setting a primary name is paid in USDC.</Trans>}
+        lines={[
+          {
+            label: <Trans>Network fee</Trans>,
+            amount: fundingPrompt?.quotedFeeUsdc ?? 0n,
+          },
+        ]}
         onApprove={approveFunding}
         onDecline={declineFunding}
         prompt={fundingPrompt}
+        title={<Trans>Approve the network fee?</Trans>}
       />
 
       <ResolverSetupConfirmDialog
         intent="primary-name"
+        isReplacing={isResolverSetupReplacing(confirmation)}
         onConfirm={() => {
           if (confirmation) void runConfirm(confirmation)
         }}
