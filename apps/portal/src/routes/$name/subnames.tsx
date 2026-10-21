@@ -99,7 +99,7 @@ const InvalidSubregistryMessage = ({
 }: InvalidSubregistryMessageProps) => (
   <MessageCard
     variant="warning"
-    icon={<AlertCircle size={24} strokeWidth={1.5} />}
+    icon={<AlertCircle className="size-6" strokeWidth={1.5} />}
     title="Invalid subregistry"
     description={
       <p>
@@ -360,7 +360,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
   const handleClearSelected = (selected: SubnameRow[]) =>
     queueForDeletion(selected)
 
-  if (registriesLoading || isRegistryLoading) {
+  if (registriesLoading) {
     return <LoadingMessage title="Checking registry..." />
   }
 
@@ -380,6 +380,10 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
         canDeploy={Boolean(hasSetSubregistryRole)}
       />
     )
+  }
+
+  if (isRegistryLoading) {
+    return <LoadingMessage title="Checking subregistry..." />
   }
 
   if (registryCheckError) {
