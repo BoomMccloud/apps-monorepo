@@ -187,7 +187,7 @@ export const pruneLinksAfterUnlink = (
 /** The overview only counts bound names, so it reads one row and the total. */
 const OVERVIEW_NODES_PAGE_SIZE = 1
 /** Events listed; a busy resolver's full feed is `/v1/events`, paged. */
-const RESOLVER_EVENTS_PAGE_SIZE = MAX_PAGE_SIZE
+export const RESOLVER_EVENTS_PAGE_SIZE = MAX_PAGE_SIZE
 
 /**
  * A `/links` row as a named link. The resolver's default record (the empty-name

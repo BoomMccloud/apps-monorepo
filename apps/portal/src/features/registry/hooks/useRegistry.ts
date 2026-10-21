@@ -34,6 +34,8 @@ export type RegistryInfo = {
   /** Declared role assignments: one account on two resources counts twice. */
   roleCount: number | undefined
   referencedBy: { name: string | null }[]
+  /** True when bigname has more referencing names than the first page lists. */
+  referencedByHasMore: boolean
 }
 
 const getRegistryInfo = (
@@ -66,6 +68,7 @@ const getRegistryInfo = (
         labelCount: registry.counts.labels ?? undefined,
         roleCount: registry.counts.roles ?? undefined,
         referencedBy: registry.referenced_by.data.map(({ name }) => ({ name })),
+        referencedByHasMore: registry.referenced_by.page.has_more,
       }
     })
 

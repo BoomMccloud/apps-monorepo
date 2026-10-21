@@ -1,31 +1,47 @@
+import { getChainContractAddress } from '@ensdomains/ensjs/chain'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Clock, GridIcon, SplitIcon, UserRoundCog } from 'lucide-react'
-import { match } from 'ts-pattern'
-import { CounterCard, CounterCardRow } from '@/components/CounterCard'
-import { ErrorMessage } from '@/components/ErrorMessage'
-import { HistorySectionHeader } from '@/components/HistorySectionHeader'
-import { LoadingMessage } from '@/components/LoadingMessage'
-import { NoResultsMessage } from '@/components/NoResultsMessage'
-import { NotFoundMessage } from '@/components/NotFoundMessage'
+import { createFileRoute } from '@tanstack/react-router'
+import { GridIcon, UserRoundCog } from 'lucide-react'
+import { type Address, isAddressEqual } from 'viem'
+import { HistoryIcon } from '@/assets/icons'
 import {
-  inlineAddressHeadingClassName,
-  PageHeading,
-} from '@/components/PageHeading'
-import { Button } from '@/components/ui/button'
-import { chain } from '@/config'
-import { ResolverDetails } from '@/features/resolver/components/ResolverDetails'
-import { ResolverEventsTable } from '@/features/resolver/components/ResolverEventsTable'
-import { ResolverTypeValue } from '@/features/resolver/components/ResolverTypeValue'
+  ContractAddressValue,
+  ContractCounterCard,
+  ContractCounterCardContent,
+  ContractCounterCards,
+  ContractDetailList,
+  ContractDetailRow,
+  ContractDocsValue,
+  ContractTypeValue,
+} from '@/components/ContractOverview'
+import { EntityBadge } from '@/components/EntityBadge'
+import { ErrorMessage } from '@/components/ErrorMessage'
+import { LoadingMessage } from '@/components/LoadingMessage'
+import { NotFoundMessage } from '@/components/NotFoundMessage'
+import { PageHeading } from '@/components/PageHeading'
+import {
+  countRecentEvents,
+  formatRecentEventCount,
+} from '@/features/history/countRecentEvents'
+import { useIsPermissionedResolver } from '@/features/resolver/hooks/useIsPermissionedResolver'
 import {
   getResolverOverviewQueryOptions,
+  RESOLVER_EVENTS_PAGE_SIZE,
   type ResolverEvent,
   resolverCollectionCount,
 } from '@/features/resolver/hooks/useResolverOverview'
+import { useSupportsInterfaces } from '@/hooks/useSupportsInterfaces'
+import { CONTRACT_DOCS } from '@/lib/constants/contractDocs'
+import {
+  RESOLVER_FEATURES,
+  RESOLVER_INTERFACE_IDS,
+  type ResolverInterfaceName,
+} from '@/lib/constants/resolverInterfaceIds'
+import { officialPublicResolverAddress } from '@/lib/constants/universalResolver'
+import { ensChain } from '@/lib/wagmi'
 import { extractErrorMessage } from '@/utils/errors/extractErrorMessage'
 import { truncateAddress } from '@/utils/formatting/truncateAddress'
 import { queryClient } from '@/utils/queryClient'
-import type { HttpsUrl } from '@/utils/types'
 
 export const Route = createFileRoute('/resolver/$address/')({
   component: RouteComponent,
@@ -38,46 +54,23 @@ export const Route = createFileRoute('/resolver/$address/')({
   },
 })
 
-const blockExplorerUrl = chain.blockExplorers.default.url
-const RECENT_EVENT_LIMIT = 5
-
-const RecentEvents = ({
-  events,
-}: {
-  readonly events: readonly ResolverEvent[] | null
-}) =>
-  match(events)
-    .with(null, () => (
-      <ErrorMessage
-        compact
-        description="Couldn't load this resolver's recent events. Full history may still load."
-      />
-    ))
-    .with([], () => (
-      <NoResultsMessage
-        title="No history yet"
-        description="Events for this resolver will appear here."
-        className="mx-0 my-0"
-      />
-    ))
-    .otherwise((rows) => (
-      <ResolverEventsTable events={rows} enableSidebar={false} />
-    ))
+const FACTORY_ADDRESS = getChainContractAddress({
+  chain: ensChain,
+  contract: 'ensVerifiableFactory',
+})
 
 function RouteComponent() {
-  const { address } = Route.useParams()
+  const { address: addressParam } = Route.useParams()
+  const address = addressParam as Address
 
   const {
     data: resolver,
     isLoading,
     error,
-  } = useQuery(getResolverOverviewQueryOptions({ address: address }))
-
-  const recentEvents = (resolver?.events ?? [])
-    .toSorted(
-      (a, b) => (b.timestamp ?? b.blockNumber) - (a.timestamp ?? a.blockNumber),
-    )
-    .slice(0, RECENT_EVENT_LIMIT)
+  } = useQuery(getResolverOverviewQueryOptions({ address }))
+  const { data: isPermissionedResolver } = useIsPermissionedResolver({
+    resolverAddress: address,
+  })
 
   if (isLoading) return <LoadingMessage />
 
@@ -89,52 +82,53 @@ function RouteComponent() {
       />
     )
 
+  const isPublicResolver = isAddressEqual(
+    address,
+    officialPublicResolverAddress,
+  )
+  const usedBy = resolverCollectionCount(
+    resolver?.nodeCount ?? null,
+    resolver?.nodeCountIsLowerBound ? 'partial' : 'full',
+  )
+
   return (
     <div className="flex flex-col gap-8">
-      <PageHeading>
-        Resolver{' '}
-        <span className={inlineAddressHeadingClassName}>
-          {truncateAddress(address)}
-        </span>
-      </PageHeading>
+      <PageHeading className="font-serif">Resolver contract</PageHeading>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <CounterCard to="/resolver/$address/nodes" params={{ address }}>
-          <CounterCardRow icon={GridIcon}>
-            <span className="font-medium">
-              {resolver?.nodeCount === null
-                ? 'Unknown'
-                : (resolver?.nodeCount ?? 0)}
-              {resolver?.nodeCountIsLowerBound && '+'}
-            </span>{' '}
-            nodes
-          </CounterCardRow>
-        </CounterCard>
-
-        <CounterCard to="/resolver/$address/roles" params={{ address }}>
-          <CounterCardRow icon={UserRoundCog}>
-            <span className="font-medium">
-              {resolverCollectionCount(
-                resolver?.roleHolderCount,
-                resolver?.rolesStatus,
-              )}
-            </span>{' '}
-            roles
-          </CounterCardRow>
-        </CounterCard>
-
-        <CounterCard to="/resolver/$address/links" params={{ address }}>
-          <CounterCardRow icon={SplitIcon}>
-            <span className="font-medium">
-              {resolverCollectionCount(
-                resolver?.linkCount,
-                resolver?.linksStatus,
-              )}
-            </span>{' '}
-            links
-          </CounterCardRow>
-        </CounterCard>
-      </div>
+      <ContractDetailList>
+        <ContractDetailRow label="Type">
+          <ContractTypeValue
+            isVerified={!!isPermissionedResolver || isPublicResolver}
+          >
+            {isPermissionedResolver
+              ? 'Verified ENS V2 owned resolver'
+              : isPublicResolver
+                ? 'Official ENS public resolver'
+                : 'Custom resolver'}
+          </ContractTypeValue>
+        </ContractDetailRow>
+        <ContractDetailRow label="Docs">
+          <ContractDocsValue href={CONTRACT_DOCS.resolver} />
+        </ContractDetailRow>
+        <ContractDetailRow label="Address">
+          <ContractAddressValue address={address} />
+        </ContractDetailRow>
+        {isPermissionedResolver ? (
+          <ContractDetailRow label="Factory">
+            <EntityBadge
+              variant="contract"
+              label="resolver factory"
+              address={FACTORY_ADDRESS}
+              className="font-normal"
+            >
+              {truncateAddress(FACTORY_ADDRESS, 6, 4)}
+            </EntityBadge>
+          </ContractDetailRow>
+        ) : null}
+        <ContractDetailRow label="Interfaces">
+          <InterfaceBadges resolverAddress={address} />
+        </ContractDetailRow>
+      </ContractDetailList>
 
       {resolver?.mirrorRegistry && (
         <p className="text-p text-muted-foreground">
@@ -144,36 +138,78 @@ function RouteComponent() {
         </p>
       )}
 
-      <ResolverDetails
-        resolverAddress={address}
-        typeValue={<ResolverTypeValue resolverAddress={address} />}
-        data={[
-          {
-            label: 'Contract',
-            value: address,
-            href: `${blockExplorerUrl}/address/${address}` as HttpsUrl,
-          },
-        ]}
-      />
+      <ContractCounterCards>
+        <ContractCounterCard to="/resolver/$address/nodes" params={{ address }}>
+          <ContractCounterCardContent
+            icon={GridIcon}
+            label="Used by"
+            value={usedBy === 'Unknown' ? usedBy : `${usedBy} names`}
+          />
+        </ContractCounterCard>
+        <ContractCounterCard to="/resolver/$address/roles" params={{ address }}>
+          <ContractCounterCardContent
+            icon={UserRoundCog}
+            label="Role holders"
+            value={resolverCollectionCount(
+              resolver?.roleHolderCount ?? null,
+              resolver?.rolesStatus ?? 'full',
+            )}
+          />
+        </ContractCounterCard>
+        <ContractCounterCard
+          to="/resolver/$address/history"
+          params={{ address }}
+        >
+          <ContractCounterCardContent
+            icon={HistoryIcon}
+            label="Events in last 30 days"
+            value={formatRecentEventCount(
+              recentEventsOf(resolver?.events ?? null),
+            )}
+          />
+        </ContractCounterCard>
+      </ContractCounterCards>
+    </div>
+  )
+}
 
-      <div className="flex flex-col gap-4 w-full">
-        <HistorySectionHeader
-          action={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-neutral-7"
-              asChild
-            >
-              <Link to="/resolver/$address/history" params={{ address }}>
-                <Clock className="size-4" />
-                Full history
-              </Link>
-            </Button>
-          }
-        />
-        <RecentEvents events={resolver?.events ? recentEvents : null} />
-      </div>
+const recentEventsOf = (events: readonly ResolverEvent[] | null) =>
+  events
+    ? countRecentEvents({
+        timestamps: events.flatMap((event) =>
+          event.timestamp === null ? [] : [event.timestamp],
+        ),
+        nowSeconds: Math.floor(Date.now() / 1000),
+        hasMore: events.length >= RESOLVER_EVENTS_PAGE_SIZE,
+      })
+    : null
+
+const InterfaceBadges = ({
+  resolverAddress,
+}: {
+  readonly resolverAddress: Address
+}) => {
+  const { data: supportsInterfaces, isLoading } = useSupportsInterfaces({
+    address: resolverAddress,
+    interfaces: Object.values(RESOLVER_INTERFACE_IDS),
+  })
+
+  if (isLoading) return <span className="text-neutral-4">…</span>
+  if (!supportsInterfaces)
+    return <span className="text-muted-foreground">—</span>
+
+  const names = Object.keys(RESOLVER_INTERFACE_IDS)
+    .filter((_, index) => supportsInterfaces[index])
+    .map((name) => RESOLVER_FEATURES[name as ResolverInterfaceName]?.name)
+    .filter((name): name is string => !!name)
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {names.map((name) => (
+        <EntityBadge key={name} variant="default" className="font-normal">
+          {name}
+        </EntityBadge>
+      ))}
     </div>
   )
 }
