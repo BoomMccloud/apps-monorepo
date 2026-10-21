@@ -3,20 +3,22 @@ import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { createQueryKey } from '@ens-apps/utils/tanstack-query/queryKey'
 import { erc165SupportsInterfaceSnippet } from '@ensdomains/ensjs-abi/erc165'
 import { fromPromise, ok } from 'neverthrow'
-import {
-  type Address,
-  BaseError,
-  ContractFunctionZeroDataError,
-  type Hex,
-  type ReadContractErrorType,
-} from 'viem'
+import type { Address, Hex, ReadContractErrorType } from 'viem'
 import { readContract } from 'viem/actions'
 import { getAction } from 'viem/utils'
 import { safeGetClient } from '@/lib/wagmi/helpers'
-import { isContractRevert } from '@/utils/errors/isContractRevert'
+import {
+  hasErrorNamed,
+  isContractRevert,
+} from '@/utils/errors/isContractRevert'
 
 /** ERC-165 id of `IRegistry`, which every registry reports, permissioned or not. */
 const REGISTRY_INTERFACE_ID: Hex = '0x51f67f40'
+
+// What viem throws when the address has no code to answer with.
+const ZERO_DATA_ERROR_NAMES: ReadonlySet<string> = new Set([
+  'ContractFunctionZeroDataError',
+])
 
 class GetIsRegistryError extends TaggedError('GetIsRegistryError')<{
   cause: ReadContractErrorType
@@ -48,9 +50,7 @@ export const getIsRegistry = ResultFn(async function* ({
     }).catch((error: unknown) => {
       if (
         isContractRevert(error) ||
-        (error instanceof BaseError &&
-          error.walk((e) => e instanceof ContractFunctionZeroDataError) !==
-            null)
+        hasErrorNamed(error, ZERO_DATA_ERROR_NAMES)
       )
         return false
       throw error
