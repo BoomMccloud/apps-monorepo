@@ -48,7 +48,7 @@ msgstr "{0} years"
 msgid "{0}% discount"
 msgstr "{0}% discount"
 
-#: src/features/migration/components/SubnameMigrationWarning.tsx
+#: src/features/migration/components/SubnameMigrationDialog.tsx
 msgid "{affectedCount, plural, one {# affected subname} other {# affected subnames}}"
 msgstr "{affectedCount, plural, one {# affected subname} other {# affected subnames}}"
 
@@ -60,6 +60,10 @@ msgstr "{amount} needed to register name"
 #: src/features/migration/components/WalletConfirmationStepsDialog.tsx
 msgid "{count, plural, one {# request} other {# requests}}"
 msgstr "{count, plural, one {# request} other {# requests}}"
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "{count, plural, one {# subname} other {# subnames}}"
+msgstr "{count, plural, one {# subname} other {# subnames}}"
 
 #: src/features/migration/components/WalletConfirmationStepsDialog.tsx
 msgid "{count, plural, one {Approve # name} other {Approve # names}}"
@@ -144,6 +148,10 @@ msgstr "{permits, plural, one {Your wallet will be asked to approve this exact a
 #: src/features/dashboard/components/NamesTable.tsx
 msgid "{selectedCount} selected"
 msgstr "{selectedCount} selected"
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "{selectedNameCount, plural, one {The selected name has subnames which will no longer resolve after upgrading to ENS v2.} other {The selected names have subnames which will no longer resolve after upgrading to ENS v2.}}"
+msgstr "{selectedNameCount, plural, one {The selected name has subnames which will no longer resolve after upgrading to ENS v2.} other {The selected names have subnames which will no longer resolve after upgrading to ENS v2.}}"
 
 #: src/features/migration/components/GameStep.tsx
 msgid "{selectedNameCount, plural, one {Upgrading your name...} other {Upgrading your names...}}"
@@ -276,6 +284,10 @@ msgstr "Addresses"
 #: src/features/wallet/components/EnableSessionModal.tsx
 msgid "After signing, your ENS operations (registrations, renewals, etc.) won't require additional wallet signatures."
 msgstr "After signing, your ENS operations (registrations, renewals, etc.) won't require additional wallet signatures."
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "After upgrading, recreate the subnames in <0>ENS Explorer</0>. Please contact <1>support</1> with any questions."
+msgstr "After upgrading, recreate the subnames in <0>ENS Explorer</0>. Please contact <1>support</1> with any questions."
 
 #: src/features/profile/components/view/AgentRecordCard.tsx
 msgid "Agent ID"
@@ -468,6 +480,7 @@ msgstr "Can you share your order number?"
 
 #: src/components/HcaFundingConfirmDialog.tsx
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
+#: src/features/migration/components/SubnameMigrationDialog.tsx
 #: src/features/notifications/settings/contact-methods/email.tsx
 #: src/features/notifications/settings/contact-methods/telegram.tsx
 #: src/features/profile/components/dialogs/edit-profile/EditProfileDialogFooter.tsx
@@ -497,7 +510,7 @@ msgstr "Carried over from your earlier attempt."
 msgid "Carving your name into the blockchain"
 msgstr "Carving your name into the blockchain"
 
-#: src/features/migration/components/SubnameMigrationWarning.tsx
+#: src/features/migration/components/SubnameMigrationDialog.tsx
 msgid "Check again"
 msgstr "Check again"
 
@@ -539,13 +552,17 @@ msgstr "Checking resolver"
 msgid "Checking status…"
 msgstr "Checking status…"
 
-#: src/features/migration/components/SubnameMigrationWarning.tsx
-msgid "Checking the impact on existing subnames..."
-msgstr "Checking the impact on existing subnames..."
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Checking subname impact..."
+msgstr "Checking subname impact..."
 
 #: src/features/renew/workflow/renewing/RenewingStep.tsx
 msgid "Checking the last attempt"
 msgstr "Checking the last attempt"
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Checking the latest name state before you continue."
+msgstr "Checking the latest name state before you continue."
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Checking token allowance"
@@ -570,6 +587,10 @@ msgstr "Checking whether your resolver is already deployed"
 #: src/features/migration/components/success/CommemorativeNftClaimDialog.tsx
 msgid "Checking your account…"
 msgstr "Checking your account…"
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Checking your subnames"
+msgstr "Checking your subnames"
 
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 msgid "Choose Primary Name"
@@ -707,6 +728,10 @@ msgstr "Contact methods"
 #: src/features/profile/components/dialogs/ResolverSetupConfirmDialog.tsx
 msgid "Continue"
 msgstr "Continue"
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Continue migration"
+msgstr "Continue migration"
 
 #: src/features/wallet/components/BackendAuthModal.tsx
 msgid "Continue without signing in"
@@ -1269,10 +1294,6 @@ msgstr "How it works"
 #: src/features/renew/components/ThirdPartyRenewalDialog.tsx
 msgid "I Understand"
 msgstr "I Understand"
-
-#: src/features/migration/components/SubnameMigrationWarning.tsx
-msgid "I understand that these subnames will stop resolving and want to continue."
-msgstr "I understand that these subnames will stop resolving and want to continue."
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Idle"
@@ -2561,6 +2582,10 @@ msgstr "Some names are more in-demand than others."
 msgid "Some names could not be loaded"
 msgstr "Some names could not be loaded"
 
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Some subnames will stop resolving"
+msgstr "Some subnames will stop resolving"
+
 #: src/features/migration/components/SelectNamesStep.tsx
 msgid "Something about your names changed since you last tried, so we can't safely pick up where you left off."
 msgstr "Something about your names changed since you last tried, so we can't safely pick up where you left off."
@@ -2641,10 +2666,6 @@ msgstr "Submitting the registration transaction"
 #: src/features/renew/workflow/renewing/RenewingStep.tsx
 msgid "Submitting token approval"
 msgstr "Submitting token approval"
-
-#: src/features/migration/components/SubnameMigrationWarning.tsx
-msgid "Subnames will stop resolving"
-msgstr "Subnames will stop resolving"
 
 #: src/features/bulk-renew/components/NamesBreakdown.tsx
 msgid "Subtotal:"
@@ -2731,9 +2752,13 @@ msgstr "The ENS domain has been successfully renewed."
 msgid "The fee hits $0 on"
 msgstr "The fee hits $0 on"
 
-#: src/features/migration/components/SubnameMigrationWarning.tsx
-msgid "The impact is unknown. Try again or contact support before upgrading."
-msgstr "The impact is unknown. Try again or contact support before upgrading."
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "The impact is unknown. Try again or contact <0>support</0> before upgrading."
+msgstr "The impact is unknown. Try again or contact <0>support</0> before upgrading."
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "The latest check found no affected subnames. You can continue with the upgrade."
+msgstr "The latest check found no affected subnames. You can continue with the upgrade."
 
 #: src/features/migration/commemorative-nft/claimMessages.ts
 msgid "The mint request was cancelled."
@@ -2787,10 +2812,6 @@ msgstr "The renewal price includes a 10% buffer: the rent is priced when the ren
 #: src/features/profile/components/dialogs/edit-profile/useEditProfileDialogSave.ts
 msgid "The replacement resolver could not be verified. Please try again."
 msgstr "The replacement resolver could not be verified. Please try again."
-
-#: src/features/migration/components/SubnameMigrationWarning.tsx
-msgid "The selected names have subnames that will no longer resolve after upgrading to ENSv2 and will need to be recreated. Please contact support if you have any questions."
-msgstr "The selected names have subnames that will no longer resolve after upgrading to ENSv2 and will need to be recreated. Please contact support if you have any questions."
 
 #: src/features/migration/service/migrationPreparationError.ts
 msgid "The upgrade contracts don't match this account. Please contact support."
@@ -3212,7 +3233,7 @@ msgstr "Wallet funded successfully"
 msgid "Wallet isn’t ready yet. Try again in a moment."
 msgstr "Wallet isn’t ready yet. Try again in a moment."
 
-#: src/features/migration/components/SubnameMigrationWarning.tsx
+#: src/features/migration/components/SubnameMigrationDialog.tsx
 msgid "We couldn't check your subnames"
 msgstr "We couldn't check your subnames"
 
@@ -3519,6 +3540,10 @@ msgstr "Your saved upgrade needs attention"
 #: src/lib/smart-account/SmartAccountContext.tsx
 msgid "Your smart account isn't set up on-chain yet. Sessions you signed for it still work once anyone sets it up, so revoking needs a setup transaction first."
 msgstr "Your smart account isn't set up on-chain yet. Sessions you signed for it still work once anyone sets it up, so revoking needs a setup transaction first."
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "Your subnames are unaffected"
+msgstr "Your subnames are unaffected"
 
 #: src/features/migration/service/migrationPreparationError.ts
 msgid "Your upgrade account doesn't match this wallet. Reconnect the owner wallet."

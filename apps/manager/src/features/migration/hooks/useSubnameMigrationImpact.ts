@@ -4,7 +4,7 @@ import {
 } from '@ens-apps/migration'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { PublicClient } from 'viem'
 import { bigname } from '@/lib/bigname'
 import { publicClient } from '@/lib/wagmi'
@@ -71,10 +71,6 @@ export const useSubnameMigrationImpact = ({
       ready,
     }
   }
-  const [acknowledgement, setAcknowledgement] = useState<{
-    readonly selectionKey: string
-    readonly fingerprint: string
-  } | null>(null)
   const query = useQuery({
     queryKey: qk('migration', 'subname_impact', { selectionKey }),
     queryFn: ({ signal }) =>
@@ -92,16 +88,6 @@ export const useSubnameMigrationImpact = ({
     refetchOnWindowFocus: 'always',
     retry: false,
   })
-  // Returning to an earlier selection must not restore a previous checkbox.
-  // Rechecking after a focus change also withdraws the old acknowledgement.
-  useEffect(() => {
-    setAcknowledgement((previous) =>
-      query.isFetching || previous?.selectionKey !== selectionKey
-        ? null
-        : previous,
-    )
-  }, [selectionKey, query.isFetching])
-
   const status =
     selected.size === 0
       ? 'idle'
@@ -110,17 +96,12 @@ export const useSubnameMigrationImpact = ({
         : query.isError
           ? 'error'
           : 'ready'
-  const acknowledged =
-    acknowledgement !== null &&
-    acknowledgement.selectionKey === selectionKey &&
-    acknowledgement.fingerprint === query.data?.fingerprint
-  const canStart =
-    enabled &&
-    status === 'ready' &&
-    (query.data?.affectedCount === 0 || acknowledged)
+  const canReview = ready && selected.size > 0
 
-  const checkBeforeStart = async (): Promise<boolean> => {
-    if (!canStart) return false
+  const checkBeforeStart = async (
+    confirmedFingerprint?: string,
+  ): Promise<boolean> => {
+    if (!canReview || status !== 'ready') return false
     const current = query.data
     const revision = currentSelection.current.revision
     const result = await query.refetch()
@@ -132,25 +113,20 @@ export const useSubnameMigrationImpact = ({
       currentSelection.current.key === selectionKey &&
       currentSelection.current.revision === revision &&
       currentSelection.current.ready &&
-      result.data.fingerprint === current?.fingerprint
+      result.data.fingerprint === current?.fingerprint &&
+      (result.data.affectedCount === 0 ||
+        result.data.fingerprint === confirmedFingerprint)
     )
   }
 
   return {
     status,
     impact: query.data,
-    acknowledged,
-    canStart,
+    selectionKey,
+    canReview,
     checkBeforeStart,
     retry: () => {
       void query.refetch()
-    },
-    acknowledge: (checked: boolean) => {
-      setAcknowledgement(
-        checked && status === 'ready' && query.data
-          ? { selectionKey, fingerprint: query.data.fingerprint }
-          : null,
-      )
     },
   }
 }

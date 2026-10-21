@@ -18,7 +18,7 @@ import { GrainOverlay } from '@/features/migration/components/GrainOverlay'
 import { MigrationPrimaryButton } from '@/features/migration/components/MigrationPrimaryButton'
 import { MigrationSuccessDialog } from '@/features/migration/components/MigrationSuccessDialog'
 import { SelectNamesStep } from '@/features/migration/components/SelectNamesStep'
-import { SubnameMigrationWarning } from '@/features/migration/components/SubnameMigrationWarning'
+import { SubnameMigrationDialog } from '@/features/migration/components/SubnameMigrationDialog'
 import { CommemorativeNftClaimDialog } from '@/features/migration/components/success/CommemorativeNftClaimDialog'
 import { useEligibleV1Names } from '@/features/migration/hooks/useEligibleV1Names'
 import { useGraceRenewalGasEstimate } from '@/features/migration/hooks/useGraceRenewalGasEstimate'
@@ -28,6 +28,7 @@ import {
 } from '@/features/migration/hooks/useGraceRenewalQuote'
 import { useMigrationGasEstimate } from '@/features/migration/hooks/useMigrationGasEstimate'
 import { useMigrationGasFunding } from '@/features/migration/hooks/useMigrationGasFunding'
+import { useSubnameMigrationConfirmation } from '@/features/migration/hooks/useSubnameMigrationConfirmation'
 import { useSubnameMigrationImpact } from '@/features/migration/hooks/useSubnameMigrationImpact'
 import { useSyncRenewedV1Names } from '@/features/migration/hooks/useSyncRenewedV1Names'
 import { useV1Names } from '@/features/migration/hooks/useV1Names'
@@ -491,10 +492,14 @@ export const MigrationPage = () => {
     uiActor,
   ])
 
-  const handleVerifiedBeginUpgrade = useCallback(async () => {
-    if (!(await subnameImpact.checkBeforeStart())) return false
-    return handleBeginUpgrade()
-  }, [subnameImpact.checkBeforeStart, handleBeginUpgrade])
+  const confirmation = useSubnameMigrationConfirmation({
+    impact: subnameImpact,
+    onConfirm: (action) => {
+      if (action === 'start') return handleBeginUpgrade()
+      uiActor.send({ type: 'retry' })
+      return true
+    },
+  })
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-clip">
@@ -522,10 +527,9 @@ export const MigrationPage = () => {
             gasFundingStatus={gasFundingStatus}
             onManagerRestorationChange={handleManagerRestorationChange}
             onNamesChange={handleNamesChange}
-            onNext={handleVerifiedBeginUpgrade}
+            onNext={() => confirmation.request('start')}
             renewal={renewal}
             renewalGasEstimate={renewalGasEstimate}
-            subnameImpact={subnameImpact}
           />
         ))
         .with('migrate', () => <GameStep />)
@@ -556,12 +560,6 @@ export const MigrationPage = () => {
               </div>
             </motion.div>
 
-            {needsRetryImpact && (
-              <div className="max-h-64 w-full max-w-lg overflow-y-auto">
-                <SubnameMigrationWarning state={subnameImpact} />
-              </div>
-            )}
-
             <motion.div
               animate={{ opacity: 1, y: 0 }}
               className="flex max-w-full flex-wrap justify-center gap-3"
@@ -576,14 +574,12 @@ export const MigrationPage = () => {
                 <Trans>Back</Trans>
               </button>
               <MigrationPrimaryButton
-                disabled={needsRetryImpact && !subnameImpact.canStart}
-                onClick={async () => {
-                  if (
-                    needsRetryImpact &&
-                    !(await subnameImpact.checkBeforeStart())
-                  )
-                    return
-                  uiActor.send({ type: 'retry' })
+                aria-disabled={confirmation.isChecking}
+                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                onClick={() => {
+                  if (confirmation.isChecking) return
+                  if (needsRetryImpact) void confirmation.request('retry')
+                  else uiActor.send({ type: 'retry' })
                 }}
                 type="button"
               >
@@ -605,6 +601,16 @@ export const MigrationPage = () => {
           ),
         )
         .exhaustive()}
+
+      <SubnameMigrationDialog
+        isChecking={confirmation.isChecking}
+        onCancel={confirmation.cancel}
+        onContinue={() => void confirmation.confirm()}
+        onRestoreFocus={confirmation.restoreFocus}
+        open={confirmation.open}
+        selectedNameCount={selectedNames.length}
+        state={subnameImpact}
+      />
 
       <AlertDialog.Root open={!!discardConfirmation}>
         <AlertDialog.Content>
