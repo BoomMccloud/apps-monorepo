@@ -38,7 +38,7 @@ const ImpactSummary = ({
   const affectedCount = state.impact?.affectedCount ?? 0
   const hasImpact = affectedCount > 0
   return (
-    <div aria-live="polite" className="mt-5 min-h-0 overflow-y-auto">
+    <div aria-live="polite" className="mt-5 shrink-0">
       {isLoading ? (
         <div
           className="flex items-center gap-2 py-3 text-ens-garnet-900/65 text-sm"
@@ -112,7 +112,7 @@ export const SubnameMigrationDialog = ({
   return (
     <Dialog onOpenChange={(next) => !next && onCancel()} open={open}>
       <DialogContent
-        className="gap-0 overflow-hidden rounded-3xl border-ens-garnet-900/10 bg-ens-quartz-100 p-6 text-ens-garnet-900 shadow-xl motion-reduce:animate-none sm:max-w-[520px] sm:p-8"
+        className="gap-0 overflow-y-auto rounded-3xl border-ens-garnet-900/10 bg-ens-quartz-100 p-6 text-ens-garnet-900 shadow-xl motion-reduce:animate-none sm:max-w-[520px] sm:p-8"
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           onRestoreFocus()
