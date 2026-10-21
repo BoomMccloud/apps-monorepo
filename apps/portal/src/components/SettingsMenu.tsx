@@ -1,6 +1,7 @@
 import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
 import { usePostHog } from '@posthog/react'
-import { MessageSquareTextIcon } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { MessageSquareTextIcon, ShieldCheckIcon } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import { ProfileSettingsIcon } from '@/assets/icons'
 import { cn } from '@/lib/utils'
@@ -65,6 +66,13 @@ export const SettingsMenu = ({
       <DropdownMenuContent side={side} align="end" className="min-w-52">
         <ThemeToggle />
         <FeedbackMenuItem />
+        {/* Every page with this menu reaches the analytics choice. */}
+        <DropdownMenuItem asChild>
+          <Link to="/privacy">
+            <ShieldCheckIcon className="size-4" />
+            Privacy settings
+          </Link>
+        </DropdownMenuItem>
         {/* <DropdownMenuItem asChild>
           <ExternalLink href="https://sepolia.etherscan.io">
             <ChipLinkIcon className="size-3" />

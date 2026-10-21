@@ -1,6 +1,7 @@
 import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { AnchorHTMLAttributes } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const displaySurvey = vi.fn()
@@ -11,6 +12,19 @@ vi.mock('@posthog/react', () => ({
 
 vi.mock('./ThemeToggle', () => ({
   ThemeToggle: () => <div data-testid="theme-toggle" />,
+}))
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: ({
+    children,
+    to,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { readonly to: string }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 // FEEDBACK_SURVEY_ID is read at module scope, so the env must be stubbed
@@ -83,5 +97,19 @@ describe('SettingsMenu', () => {
     await openMenu(menu, 'granted')
 
     expect(screen.queryByRole('menuitem', { name: /feedback/i })).toBeNull()
+  })
+
+  it.each([
+    'granted',
+    'denied',
+    'pending',
+    'unknown',
+  ] as const)('links the Privacy settings page, so every page with this menu reaches it, while the choice is %s', async (consent) => {
+    const menu = await importSettingsMenu(undefined)
+    await openMenu(menu, consent)
+
+    expect(
+      await screen.findByRole('menuitem', { name: 'Privacy settings' }),
+    ).toHaveAttribute('href', '/privacy')
   })
 })

@@ -91,12 +91,21 @@ const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^Connect( wallet)?$/ }).first()
 
 /**
- * Open the Help menu, which a page with the sidebar has, and follow its
- * Privacy settings entry.
+ * Open the Help menu, which a page with the resolver sidebar has, and follow
+ * its Privacy settings entry.
  */
-const openPrivacySettings = async (page: Page): Promise<void> => {
+const openPrivacySettingsFromHelp = async (page: Page): Promise<void> => {
   await page.getByRole('button', { name: 'Help', exact: true }).click()
   await page.getByRole('link', { name: 'Privacy settings' }).click()
+}
+
+/**
+ * Open the Settings menu, which the home page and every page with a sidebar
+ * have, and follow its Privacy settings entry.
+ */
+const openPrivacySettingsFromSettings = async (page: Page): Promise<void> => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Privacy settings' }).click()
 }
 
 const walletMenu = (page: Page) =>
@@ -220,7 +229,7 @@ test.describe('Explorer analytics choice', () => {
     await expectPolicyLink(policyLink(page))
     await page.setViewportSize(DESKTOP)
     await openFresh(page, RESOLVER_PAGE)
-    await openPrivacySettings(page)
+    await openPrivacySettingsFromHelp(page)
     await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
     await expect(analyticsNotice(page)).toBeVisible()
     await expect(banner).toBeVisible()
@@ -415,7 +424,7 @@ test.describe('Explorer analytics choice', () => {
     })
   })
 
-  test('C5: the notice, opened from the Help menu, says what is collected and why, who processes it, and how to ask for deletion', async ({
+  test('C5: the notice, opened from the Settings menu on the home page, says what is collected and why, who processes it, and how to ask for deletion', async ({
     page,
     context,
   }) => {
@@ -424,8 +433,8 @@ test.describe('Explorer analytics choice', () => {
       context,
       open: openFresh,
       origin: ORIGIN,
-      startPath: RESOLVER_PAGE,
-      openPrivacySettings,
+      startPath: '/',
+      openPrivacySettings: openPrivacySettingsFromSettings,
       noticePath: NOTICE_PATH,
     })
   })
