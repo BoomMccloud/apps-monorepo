@@ -28,7 +28,8 @@ export default defineConfig({
     {
       name: 'harness-manager',
       testDir: '../../specs',
-      testMatch: /harness-manager\.spec\.ts$/,
+      // The 4LD fixture gate seeds four trees: only the migration runs need it.
+      testMatch: /harness-manager(-4ld)?\.spec\.ts$/,
     },
     {
       name: 'manager-migration',
@@ -40,7 +41,7 @@ export default defineConfig({
       // Moves the shared fork clock forward for good (91 days), so it runs
       // after everything else here and nothing depends on it.
       name: 'manager-migration-time',
-      testMatch: /migration-(4ld-)?time\.spec\.ts$/,
+      testMatch: /migration-time\.spec\.ts$/,
       dependencies: ['manager-migration'],
     },
   ],

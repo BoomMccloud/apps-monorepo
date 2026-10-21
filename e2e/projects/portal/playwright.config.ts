@@ -64,7 +64,8 @@ export default defineConfig({
     {
       name: 'portal-v2-4ld-time',
       testMatch: /v2-4ld-time\.spec\.ts$/,
-      dependencies: ['harness'],
+      // Moves the shared clock forward for good: run after the action suite.
+      dependencies: ['portal-e2e'],
     },
   ],
 })

@@ -1,6 +1,6 @@
 /** Forward-only clock movement: run separately, after action suites. */
 import { getOwner } from '@ensdomains/ensjs/public/v2'
-import { labelhash, parseAbi } from 'viem'
+import { labelhash, parseAbi, zeroAddress } from 'viem'
 import { makeV2FourLD } from '../../../fixtures/makeV2FourLD.js'
 import {
   connectWithHeadlessWallet,
@@ -36,19 +36,25 @@ test('expired native 4LD cannot transfer while its ancestors stay active', {
   await time.increaseTime({
     seconds: Number(expiry - (await publicClient.getBlock()).timestamp) + 1,
   })
+  const status = await publicClient.readContract({
+    address: tree.leaf.registryAddress,
+    abi: parseAbi(['function getStatus(uint256 id) view returns (uint8)']),
+    functionName: 'getStatus',
+    args: [BigInt(labelhash(tree.leaf.label))],
+  })
+  // Chain first: an expired leaf is AVAILABLE (0) with no owner, not just
+  // "not registered" (RESERVED, 1, would also pass a looser check).
+  expect(status, 'the expired leaf is AVAILABLE').toBe(0)
+  expect(await getOwner(publicClient, { name: tree.name })).toBe(zeroAddress)
   await page.reload()
+  // Measured 2026-10-21: the page takes its no-owner branch for an expired
+  // V2 leaf (it reads as missing rather than expired).
   await expect(
-    page.getByText(/expired|not registered|not available/i).first(),
-  ).toBeVisible()
+    page.getByText(
+      `This subname doesn’t exist under ${tree.parent.name}, so there is nothing to transfer.`,
+    ),
+  ).toBeVisible({ timeout: 30_000 })
   await expect(page.getByPlaceholder('ENS name or address')).toHaveCount(0)
-  expect(
-    await publicClient.readContract({
-      address: tree.leaf.registryAddress,
-      abi: parseAbi(['function getStatus(uint256 id) view returns (uint8)']),
-      functionName: 'getStatus',
-      args: [BigInt(labelhash(tree.leaf.label))],
-    }),
-  ).not.toBe(2)
   expect(await getOwner(publicClient, { name: tree.parent.name })).toBe(
     wallets.address('owner'),
   )

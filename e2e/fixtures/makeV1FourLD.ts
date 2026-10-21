@@ -58,7 +58,7 @@ export const makeV1FourLD = async (
       : []
   const seeded = await seedShape(
     {
-      n: 4,
+      n: 90,
       id: 'action-4ld',
       path,
       tails,

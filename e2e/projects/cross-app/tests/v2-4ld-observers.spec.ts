@@ -58,10 +58,14 @@ test('manager sets a native 4LD primary name visible in explorer', {
     await signing
   }
   await expectRecordsResolve(tree.name, tree.records)
-  await explorer.page.goto(`${PORTAL_APP_URL}/addr/${account.address}`)
+  // The reverse-resolution table lists only reverse records, so the 4LD there
+  // is the primary name, not an owned-names row.
+  await explorer.page.goto(
+    `${PORTAL_APP_URL}/addr/${account.address}/reverse-resolution`,
+  )
   await expect(
-    explorer.page.getByText(tree.name, { exact: true }).first(),
-  ).toBeVisible()
+    explorer.page.getByRole('row').filter({ hasText: tree.name }).first(),
+  ).toBeVisible({ timeout: 30_000 })
 })
 
 test('native 4LD transfer changes both manager dashboard lists', {
@@ -71,6 +75,16 @@ test('native 4LD transfer changes both manager dashboard lists', {
     privateKeyToAccount(accounts.getPrivateKey('user')),
   )
   const recipient = accounts.getAddress('user2')
+  const moreOptions = manager.page.getByRole('button', {
+    name: `More options for ${tree.name}`,
+    exact: true,
+  })
+  const loadFailed = manager.page.getByText('Some names could not be loaded')
+  // Before: the sender's dashboard lists the leaf, so its absence later means
+  // the transfer, not a list that never loads 4LDs.
+  await manager.page.goto(`${MANAGER_APP_URL}/dashboard`)
+  await manager.page.getByPlaceholder('Search my names').fill(tree.name)
+  await expect(moreOptions).toBeVisible({ timeout: 60_000 })
   const { page, wallet } = explorer
   await page.goto(`${PORTAL_APP_URL}/${tree.name}/ownership/transfer`)
   await page.getByPlaceholder('ENS name or address').fill(recipient)
@@ -90,18 +104,19 @@ test('native 4LD transfer changes both manager dashboard lists', {
   await expect(
     manager.page.getByText('No names to display', { exact: true }),
   ).toBeVisible()
+  await expect(loadFailed, 'an empty list, not a failed one').toHaveCount(0)
   await asAccount(manager, accounts, 'user2')
   const welcome = manager.page.getByRole('dialog', {
     name: 'Welcome to the new ENS app!',
   })
-  if (await welcome.isVisible())
+  const search = manager.page.getByPlaceholder('Search my names')
+  // The welcome dialog can open after the dashboard does; settle first.
+  await expect(welcome.or(search)).toBeVisible({ timeout: 30_000 })
+  if (await welcome.isVisible()) {
     await welcome.getByRole('button', { name: 'Close', exact: true }).click()
-  await manager.page.getByPlaceholder('Search my names').fill(tree.name)
-  await expect(
-    manager.page.getByRole('button', {
-      name: `More options for ${tree.name}`,
-      exact: true,
-    }),
-  ).toBeVisible()
+    await expect(welcome).toHaveCount(0)
+  }
+  await search.fill(tree.name)
+  await expect(moreOptions).toBeVisible({ timeout: 60_000 })
   await expectRecordsResolve(tree.name, tree.records)
 })

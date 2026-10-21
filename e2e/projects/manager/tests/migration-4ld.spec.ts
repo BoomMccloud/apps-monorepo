@@ -98,11 +98,42 @@ test('an emancipated 4LD migrates independently of another owners locked ancesto
   await openMigrationFlow(page)
   await expect(rootRow(page, tree.name)).toBeVisible({ timeout: 60_000 })
   await selectOnlyRoots(page, [tree.name])
-  // The name is offered, but planning disables the button with a generic retry.
-  test.fail(true, 'E2E-040: detached 4LD alone cannot prepare its upgrade')
+  const before = await readChainTruth(tree.name)
+  // Either outcome the scenario allows: the leaf migrates alone, or planning
+  // says which prerequisite is missing. Only the generic retry is E2E-040.
+  const upgrade = page.getByRole('button', {
+    name: 'Upgrade 1 name',
+    exact: true,
+  })
+  const explained = page.getByText(
+    "Some subnames can't upgrade until their parent name is upgraded.",
+    { exact: false },
+  )
+  const generic = page.getByText("Couldn't prepare your upgrade.", {
+    exact: false,
+  })
+  await expect
+    .poll(
+      async () =>
+        (await upgrade.isEnabled().catch(() => false)) ||
+        (await explained.isVisible()) ||
+        (await generic.isVisible()),
+      { timeout: 90_000, message: 'planning settles' },
+    )
+    .toBe(true)
   await expect(
-    page.getByRole('button', { name: 'Upgrade 1 name', exact: true }),
-  ).toBeEnabled()
+    generic,
+    'E2E-040: a generic retry gives the owner no way forward',
+  ).toHaveCount(0)
+  const outcome = (await explained.isVisible()) ? 'explained' : 'migrates'
+  console.log(`[Q3] outcome: ${outcome}`)
+  if (outcome === 'explained') {
+    // #1433: the unmet ancestor is named before anything is sent.
+    await expect(upgrade).toBeDisabled()
+    expect(await readChainTruth(tree.name)).toEqual(before)
+    await expectRecordsResolve(tree.name, records)
+    return
+  }
   await runMigrationFlow(page, wallet, { roots: [tree.name] })
   await assertWrappedChildMigrated(tree.name, tree.fourLd.owner, {
     locked: false,
@@ -125,7 +156,19 @@ test('an unlocked 4LD keeps resolving when its locked ancestors migrate', {
   await openMigrationFlow(page)
   await expect(rootRow(page, tree.twoLd.name)).toBeVisible({ timeout: 60_000 })
   await expect(nestedRow(page, tree.threeLd.name)).toBeVisible()
-  await expect(anyRow(page, tree.name)).toHaveCount(0)
+  // E2E-031's oracle: before the owner confirms, the left-behind 4LD is shown
+  // as not upgradable, with the warning that it will stop resolving. Today it
+  // is silently absent, and migrating the ancestors then loses resolution
+  // (measured: UR text empty, V1 storage and holder intact — see E2E-031).
+  test.fail(
+    true,
+    'E2E-031: the 4LD left behind by its locked ancestors is not shown, and stops resolving after they migrate',
+  )
+  await expect(
+    page.getByText(tree.name, { exact: false }).first(),
+    'the 4LD is listed as not upgradable',
+  ).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/stop resolving/i).first()).toBeVisible()
   await runMigrationFlow(page, wallet, { roots: [tree.twoLd.name] })
   await assertWrappedChildMigrated(tree.threeLd.name, tree.threeLd.owner, {
     locked: true,
@@ -136,11 +179,6 @@ test('an unlocked 4LD keeps resolving when its locked ancestors migrate', {
   expect(
     (await readRecords(tree.name, ['com.twitter'], [])).texts['com.twitter'],
   ).toBe('fourld-migration')
-  test.fail(
-    true,
-    'E2E-031: unlocked 4LD records stop resolving after locked ancestors migrate',
-  )
-  await expectRecordsResolve(tree.name, records)
 })
 
 test('CANNOT_TRANSFER excludes the 4LD while its locked ancestors migrate', {
@@ -157,6 +195,8 @@ test('CANNOT_TRANSFER excludes the 4LD while its locked ancestors migrate', {
   await visibleTree(tree)
   await openMigrationFlow(page)
   await expect(rootRow(page, tree.twoLd.name)).toBeVisible({ timeout: 60_000 })
+  // The subtree has rendered, so the 4LD's absence is not a loading gap.
+  await expect(nestedRow(page, tree.threeLd.name)).toBeVisible()
   await expect(anyRow(page, tree.name)).toHaveCount(0)
   await runMigrationFlow(page, wallet, { roots: [tree.twoLd.name] })
   await assertWrappedChildMigrated(tree.threeLd.name, tree.threeLd.owner, {
@@ -201,6 +241,7 @@ test('a 4LD can still upgrade after its ancestors upgraded in an earlier session
   await visibleTree(tree)
   await openMigrationFlow(page)
   await expect(rootRow(page, tree.twoLd.name)).toBeVisible({ timeout: 60_000 })
+  await expect(nestedRow(page, tree.threeLd.name)).toBeVisible()
   await expect(anyRow(page, tree.name)).toHaveCount(0)
   await runMigrationFlow(page, wallet, { roots: [tree.twoLd.name] })
   await assertCopyRegistered(tree.threeLd.name, tree.threeLd.owner)
@@ -237,11 +278,17 @@ test('a 4LD can still upgrade after its ancestors upgraded in an earlier session
   await openMigrationFlow(page)
   await expect(rootRow(page, control)).toBeVisible({ timeout: 60_000 })
   expect(await readV2NameStatus(tree.name)).not.toBe(2)
+  // Either outcome the scenario allows: the leaf is offered and upgrades
+  // under its V2 ancestors, or it is shown with a reason. Silence is E2E-041.
   test.fail(
     true,
     'E2E-041: an existing V2 ancestor path strands a later V1 4LD copy',
   )
-  await expect(rootRow(page, tree.name)).toBeVisible()
+  await expect(
+    rootRow(page, tree.name).or(page.getByText(tree.name).first()),
+    'the leaf is offered, or listed with a reason',
+  ).toBeVisible({ timeout: 60_000 })
+  if (!(await rootRow(page, tree.name).isVisible())) return
   await runMigrationFlow(page, wallet, { roots: [tree.name] })
   await assertCopyRegistered(tree.name, owner)
   await expectRecordsResolve(tree.name, records)

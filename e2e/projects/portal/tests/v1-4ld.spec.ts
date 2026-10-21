@@ -13,6 +13,7 @@ import {
 import { publicClient, walletClient } from '../../../helpers/anvil-client.js'
 import {
   isRealBigname,
+  waitForBignameName,
   waitForBignameNames,
 } from '../../../helpers/bigname-sync.js'
 import { expectRecordsResolve } from '../../../helpers/resolve-records.js'
@@ -270,6 +271,11 @@ test('grandparent can reclaim through the 3LD although explorer exposes only imm
       account.address.toLowerCase(),
     )
   }
+  // The page reads the holder from the index too: wait for it to catch up.
+  await waitForBignameName(
+    tree.name,
+    (name) => name.owner?.toLowerCase() === account.address.toLowerCase(),
+  )
   await page.reload()
   await expect(page.getByPlaceholder('ENS name or address')).toBeVisible()
 })

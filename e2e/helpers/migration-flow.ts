@@ -192,9 +192,14 @@ export async function confirmAndAuthorize(
     await successIndicator.waitFor({ state: 'visible', timeout: 120_000 })
   } finally {
     // A failed migration must also stop the authorization loop; otherwise it
-    // keeps running during teardown and obscures the original failure.
+    // keeps running during teardown and obscures the original failure. Bound
+    // the wait: an in-flight authorize the wallet never answers (a send that
+    // errors) would otherwise turn that failure into a test timeout.
     migrationComplete = true
-    await authorizeAll
+    await Promise.race([
+      authorizeAll,
+      new Promise((resolve) => setTimeout(resolve, 10_000)),
+    ])
   }
 
   const doneButton = page.getByRole('button', { name: 'Go to dashboard' })

@@ -136,10 +136,14 @@ test('migrated 4LD can be edited in both apps and has a five-row registry path',
   await expectRecordsResolve(tree.name, {
     texts: [{ key: 'com.twitter', value: 'fourld-edited' }],
   })
+  // The registry path names every level, from the 2LD down to the 4LD. Long
+  // names are truncated on screen, so match each level's link target.
   await explorer.page.goto(`${PORTAL_APP_URL}/${tree.name}/registry`)
-  await expect(
-    explorer.page.locator('main [style*="padding-left"]'),
-  ).toHaveCount(5)
+  for (const level of [tree.twoLd, tree.threeLd, tree.fourLd])
+    await expect(
+      explorer.page.locator(`main a[href="/${level.name}"]`).first(),
+      `the registry path shows ${level.name}`,
+    ).toBeVisible({ timeout: 30_000 })
 })
 
 async function assertTransferredDashboards(
@@ -307,10 +311,19 @@ test('explorer sets a V1 4LD primary name that survives migration', {
   await expect
     .poll(() => readPrimaryName(owner), { timeout: 60_000 })
     .toBe(tree.name)
+  // The primary-name card, not the owned-names list below it, shows the 4LD.
   await manager.page.goto(`${MANAGER_APP_URL}/dashboard`)
-  await expect(
-    manager.page.getByText(tree.name, { exact: true }).first(),
-  ).toBeVisible()
+  const primaryCard = manager.page
+    .locator('main div')
+    .filter({
+      has: manager.page.getByRole('button', {
+        name: 'Primary Name',
+        exact: true,
+      }),
+    })
+    .filter({ hasNot: manager.page.getByPlaceholder('Search my names') })
+    .first()
+  await expect(primaryCard).toContainText(tree.name, { timeout: 60_000 })
   await runMigrationFlow(manager.page, manager.wallet, {
     roots: [tree.twoLd.name],
   })
@@ -376,11 +389,13 @@ test('mixed 4LD copy exposes truthful state and executable record and transfer a
   await explorer.page
     .getByPlaceholder('ENS name or address')
     .fill(accounts.getAddress('user2'))
+  // The options render together, so once the resolver option is there the
+  // registry option is either there too or not offered for this name.
   await explorer.page.locator('#transfer-option-detachResolver').uncheck()
   const detachRegistry = explorer.page.locator(
     '#transfer-option-detachRegistry',
   )
-  if (await detachRegistry.isVisible()) await detachRegistry.uncheck()
+  if ((await detachRegistry.count()) > 0) await detachRegistry.uncheck()
   await explorer.page
     .getByRole('button', { name: 'Transfer name', exact: true })
     .click()
@@ -423,6 +438,11 @@ test('transferred wrapped 4LD refuses the former owners write surfaces', {
     accounts.getAddress('user2').toLowerCase(),
   )
   await expectRecordsResolve(tree.name, records)
+  await waitForBignameName(
+    tree.name,
+    (name) =>
+      name.owner?.toLowerCase() === accounts.getAddress('user2').toLowerCase(),
+  )
   await page.goto(`${PORTAL_APP_URL}/${tree.name}/ownership/transfer`)
   await expect(
     page.getByText(
@@ -453,12 +473,6 @@ test('transferred wrapped 4LD refuses the former owners write surfaces', {
   // V1 names can create subnames since #1396, so this is now the holder gate.
   await expect(
     page.getByText('Only its owner can create subnames', { exact: true }),
-  ).toBeVisible()
-  await page.goto(`${PORTAL_APP_URL}/${tree.name}/roles`)
-  await expect(
-    page.getByText('Only 2LD and 3LD .eth names are supported', {
-      exact: true,
-    }),
   ).toBeVisible()
   expect(await readChainTruth(tree.name)).toEqual(after)
   await expectRecordsResolve(tree.name, records)

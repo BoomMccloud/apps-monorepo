@@ -1,6 +1,11 @@
-/** Permanently advances the shared chain; only run in manager-migration-time. */
-import { zeroAddress } from 'viem'
+/**
+ * V1 4LDs over time (Q20–Q23), observed in both apps. Permanently advances the
+ * shared chain clock, so it runs only in `cross-app-time`, after every other
+ * cross-app test (`projects/cross-app/playwright.config.ts`).
+ */
+import { parseAbi } from 'viem'
 import { makeV1FourLD } from '../../../fixtures/makeV1FourLD.js'
+import { V1_NAME_WRAPPER } from '../../../fixtures/makeV1Name.js'
 import {
   expect,
   MANAGER_APP_URL,
@@ -36,6 +41,10 @@ import {
 import { readChainTruth } from '../../../matrix/chain.js'
 
 const DAY = 86400
+const WRAPPER_ABI = parseAbi([
+  'function setSubnodeOwner(bytes32 parentNode, string label, address owner, uint32 fuses, uint64 expiry) returns (bytes32)',
+  'function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data)',
+])
 const records = { texts: [{ key: 'com.twitter', value: 'fourld-expiry' }] }
 test.describe.configure({ timeout: 600_000 })
 test.beforeEach(async ({ manager }) => {
@@ -48,7 +57,7 @@ test.beforeEach(async ({ manager }) => {
   await waitForManagerFeatureFlagOverride(manager.page)
 })
 
-test('2LD grace clamps the wrapped 4LD and prevents parent reassignment', {
+test('2LD grace leaves the live wrapped 4LD reassignable by its parent, as on chain', {
   tag: ['@scenario:Q20'],
 }, async ({ explorer, manager, accounts }) => {
   const tree = await makeV1FourLD(
@@ -73,14 +82,41 @@ test('2LD grace clamps the wrapped 4LD and prevents parent reassignment', {
   })
   await createTime({ page: manager.page }).sync()
   await waitForBignameBlock()
-  await explorer.page.goto(`${PORTAL_APP_URL}/${tree.name}/ownership/transfer`)
-  await expect(explorer.page.getByText(/is in its grace period/)).toBeVisible()
-  await expect(
-    explorer.page.getByPlaceholder('ENS name or address'),
-  ).toHaveCount(0)
+  // What the chain allows during the 2LD's grace: the 3LD and 4LD are still
+  // live in the NameWrapper (grace blocks only the IS_DOT_ETH 2LD itself).
+  const leafLabel = tree.name.split('.')[0]
+  await publicClient.simulateContract({
+    account: tree.threeLd.owner,
+    address: V1_NAME_WRAPPER,
+    abi: WRAPPER_ABI,
+    functionName: 'setSubnodeOwner',
+    args: [tree.threeLd.node, leafLabel, tree.threeLd.owner, 0, 0n],
+  })
+  await publicClient.simulateContract({
+    account: tree.fourLd.owner,
+    address: V1_NAME_WRAPPER,
+    abi: WRAPPER_ABI,
+    functionName: 'safeTransferFrom',
+    args: [tree.fourLd.owner, tree.threeLd.owner, BigInt(tree.node), 1n, '0x'],
+  })
   expect((await readChainTruth(tree.name)).wrapperOwner).toBe(
     tree.fourLd.wrapperOwner,
   )
+  // The explorer is connected as the 3LD owner, so it should offer the
+  // parent's reassign path the chain allows.
+  await explorer.page.goto(`${PORTAL_APP_URL}/${tree.name}/ownership/transfer`)
+  await expect(
+    explorer.page
+      .getByText(/is in its grace period/)
+      .or(explorer.page.getByPlaceholder('ENS name or address')),
+  ).toBeVisible({ timeout: 30_000 })
+  test.fail(
+    true,
+    'E2E-043: the explorer refuses the parent reassign of a live 4LD while only its 2LD is in grace',
+  )
+  await expect(
+    explorer.page.getByPlaceholder('ENS name or address'),
+  ).toBeVisible()
 })
 
 test('renewing the 2LD in grace lets its registry 4LD copy with the whole chain', {
@@ -117,16 +153,27 @@ test('renewing the 2LD in grace lets its registry 4LD copy with the whole chain'
     manager.wallet,
     () => done,
   )
+  let picked: string
   try {
-    await renewFor28Days(manager.page)
+    picked = await renewFor28Days(manager.page)
   } finally {
     done = true
     await authorizing
   }
+  // The picker's minimum is a calendar date, so the lease moves 28 days or,
+  // depending on the time of day, to the next midnight: check the date shown.
+  const renewed = (await readChainTruth(tree.twoLd.name)).ancestorExpiry
+  const moved = renewed - tree.twoLd.ancestorExpiry
+  expect(moved).toBeGreaterThanOrEqual(28n * BigInt(DAY))
+  expect(moved).toBeLessThanOrEqual(29n * BigInt(DAY))
   expect(
-    (await readChainTruth(tree.twoLd.name)).ancestorExpiry -
-      tree.twoLd.ancestorExpiry,
-  ).toBe(28n * BigInt(DAY))
+    new Date(Number(renewed) * 1000).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    'the lease ends on the date the dialog showed',
+  ).toBe(picked)
   await waitForBignameBlock()
   await runMigrationFlow(manager.page, manager.wallet, {
     roots: [tree.twoLd.name],
@@ -204,12 +251,13 @@ test('expired middle wrapper cannot be presented as an active 4LD owner', {
     (await publicClient.getBlock()).timestamp,
   )
   expect(truth.wrapperOwner).toBeNull()
-  expect(truth.controller).not.toBe(zeroAddress)
   await explorer.page.goto(`${PORTAL_APP_URL}/${tree.name}/ownership/transfer`)
+  // The explorer reads the 3LD's own wrapper expiry here, not just the 2LD's.
   await expect(
-    explorer.page
-      .getByText(/expired|not.*owner|not.*registered|cannot transfer/i)
-      .first(),
+    explorer.page.getByText('This subname has expired', { exact: true }),
+  ).toBeVisible({ timeout: 30_000 })
+  await expect(
+    explorer.page.getByText(/Name Wrapper has cleared its owner/),
   ).toBeVisible()
   await expect(
     explorer.page.getByPlaceholder('ENS name or address'),

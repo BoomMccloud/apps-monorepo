@@ -1,6 +1,13 @@
-import { getTextRecord } from '@ensdomains/ensjs/public'
+import { getResolver, getTextRecord } from '@ensdomains/ensjs/public'
 import { getOwner } from '@ensdomains/ensjs/public/v2'
-import { type Address, labelhash, parseAbi } from 'viem'
+import { setRecords } from '@ensdomains/ensjs/wallet/v2'
+import {
+  type Address,
+  createWalletClient,
+  http,
+  labelhash,
+  parseAbi,
+} from 'viem'
 import { makeV2FourLD } from '../../../fixtures/makeV2FourLD.js'
 import {
   connectWithHeadlessWallet,
@@ -197,6 +204,29 @@ test('stranger cannot edit native 4LD records', {
   tag: ['@scenario:Q55'],
 }, async ({ portalPage: page, wallets }) => {
   const tree = await makeV2FourLD(wallets.account('owner'))
+  // Chain first: the stranger's record write reverts on the leaf's resolver.
+  const resolverAddress = await getResolver(publicClient, { name: tree.name })
+  expect(resolverAddress).toBeTruthy()
+  await expect(
+    setRecords(
+      createWalletClient({
+        account: wallets.account('stranger'),
+        chain: publicClient.chain,
+        transport: http(process.env.ANVIL_RPC_URL ?? 'http://127.0.0.1:8545'),
+      }),
+      {
+        name: tree.name,
+        resolverAddress: resolverAddress as Address,
+        texts: [{ key: 'description', value: 'stranger' }],
+      },
+    ),
+    'a stranger cannot write the 4LD records',
+  ).rejects.toThrow()
+  // Positive control: the owner is offered the editor on the same page.
+  await page.goto(`${origin}/${tree.name}/edit-records`)
+  await expect(page.getByRole('button', { name: 'Add record' })).toBeVisible({
+    timeout: 30_000,
+  })
   await wallets.switchTo('stranger')
   await page.goto(`${origin}/${tree.name}/edit-records`)
   await expect(
@@ -216,8 +246,15 @@ test('native 4LD owner can open name role management', {
     ]),
   ).toBe(true)
   await page.goto(`${origin}/${tree.name}/roles`)
+  const heading = page.getByRole('heading', { name: / Roles$/ })
+  const refusal = page.getByText('Only 2LD and 3LD .eth names are supported', {
+    exact: true,
+  })
+  // Settle on the page or the defect before marking the failure expected, so
+  // an unrelated failure (owner read, crash) is not counted as E2E-042.
+  await expect(heading.or(refusal)).toBeVisible({ timeout: 30_000 })
   test.fail(true, 'E2E-042: name roles route rejects native V2 4LDs')
-  await expect(page.getByRole('heading', { name: / Roles$/ })).toBeVisible()
+  await expect(heading).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Add user', exact: true }),
   ).toBeEnabled()
