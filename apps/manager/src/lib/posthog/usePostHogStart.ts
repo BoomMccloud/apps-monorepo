@@ -1,6 +1,6 @@
 import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import { useEffect } from 'react'
-import { subscribeFailedRunReports } from './failedRunReports'
+import { subscribeFailedRunTelemetry } from './failedRunTelemetry'
 import type { FeatureSwitches } from './feature-flags'
 import { startPostHog } from './start'
 import { bootSupportChat } from './supportChat'
@@ -20,6 +20,6 @@ export const usePostHogStart = (
     const consent = startPostHog(switches)
     onStarted(consent)
     bootSupportChat(consent)
-    return subscribeFailedRunReports()
+    return subscribeFailedRunTelemetry()
   }, [isHydrated, switches, onStarted])
 }

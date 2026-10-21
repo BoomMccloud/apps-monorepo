@@ -4,9 +4,10 @@ import { track } from './events'
 /**
  * Report every failed transaction run: to the console on a development
  * build, and to PostHog as `tm:failed_run`, which the SDK sends only after
- * Accept. Returns the unsubscribe.
+ * Accept. On a development build it also logs every run event to the
+ * console. Returns the function that removes both subscriptions.
  */
-export const subscribeFailedRunReports = (): (() => void) => {
+export const subscribeFailedRunTelemetry = (): (() => void) => {
   const unsubscribeFailed = transactionManager.onFailedRunTelemetry(
     (payload) => {
       if (import.meta.env.DEV) {
