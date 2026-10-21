@@ -13,8 +13,8 @@ import {
   eventsNamed,
   expectBannerWording,
   expectBrowserSilent,
+  expectCardAtBottom,
   expectCardInBottomCorner,
-  expectCardUnderHeader,
   expectEqualButtons,
   expectEventsSent,
   expectNoPostHogStorage,
@@ -184,14 +184,13 @@ test.describe('Explorer analytics choice', () => {
     await openFresh(page)
     await expect(banner).toBeVisible()
     await expectEqualButtons(page)
-    await expectCardUnderHeader(page, banner, page.locator('header').first())
+    await expectCardAtBottom(page, banner)
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'explorer-banner-360')
 
     await openFresh(page, RESOLVER_PAGE)
     await expect(banner).toBeVisible()
-    const mobileHeader = page.locator('header:visible').first()
-    await expectCardUnderHeader(page, banner, mobileHeader)
+    await expectCardAtBottom(page, banner)
     await expectNoSidewaysScroll(page)
 
     await page.emulateMedia({ colorScheme: 'dark' })

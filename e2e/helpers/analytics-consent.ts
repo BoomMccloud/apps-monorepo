@@ -203,23 +203,21 @@ export const expectNoSidewaysScroll = async (page: Page): Promise<void> => {
   expect(scrollWidth).toBeLessThanOrEqual(innerWidth)
 }
 
-/** On a phone the card sits at the top, under the header and inside the screen. */
-export const expectCardUnderHeader = async (
+/** On a phone the card sits at the bottom of the screen, inside it. */
+export const expectCardAtBottom = async (
   page: Page,
   card: Locator,
-  header: Locator,
 ): Promise<void> => {
   const viewport = page.viewportSize()
-  const [cardBox, headerBox] = await Promise.all([
-    card.boundingBox(),
-    header.boundingBox(),
-  ])
+  const cardBox = await card.boundingBox()
   expect(cardBox).not.toBeNull()
-  expect(headerBox).not.toBeNull()
   expect(viewport).not.toBeNull()
-  if (!cardBox || !headerBox || !viewport) return
-  expect(cardBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
-  expect(cardBox.y).toBeLessThan(viewport.height / 2)
+  if (!cardBox || !viewport) return
+  expect(viewport.height - (cardBox.y + cardBox.height)).toBeLessThanOrEqual(
+    CORNER_GAP_PX,
+  )
+  expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(viewport.height)
+  expect(cardBox.y).toBeGreaterThanOrEqual(0)
   expect(cardBox.x).toBeGreaterThanOrEqual(0)
   expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(viewport.width)
 }

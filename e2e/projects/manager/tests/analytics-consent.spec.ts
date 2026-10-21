@@ -9,8 +9,8 @@ import {
   eventsNamed,
   expectBannerWording,
   expectBrowserSilent,
+  expectCardAtBottom,
   expectCardInBottomCorner,
-  expectCardUnderHeader,
   expectEqualButtons,
   expectEventsSent,
   expectNoPostHogStorage,
@@ -172,7 +172,7 @@ test.describe('Manager analytics choice', () => {
     await waitForAnalyticsReady(page)
     await expect(banner).toBeVisible()
     await expectEqualButtons(page)
-    await expectCardUnderHeader(page, banner, page.locator('nav').first())
+    await expectCardAtBottom(page, banner)
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'manager-banner-360')
 
