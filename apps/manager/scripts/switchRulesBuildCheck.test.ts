@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { switchRules } from './switchRules.mock'
+import { switchRules } from '@/lib/posthog/switchRules.mock'
 import { checkSwitchRulesForBuild } from './switchRulesBuildCheck'
 
 const SECRET_KEY = 'phs_secret_value'

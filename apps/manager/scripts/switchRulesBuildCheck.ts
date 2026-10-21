@@ -3,8 +3,8 @@ import {
   type FetchSwitchRulesOptions,
   fetchSwitchRules,
   type SwitchRulesSource,
-} from './fetchSwitchRules'
-import { switchRulesWriter } from './switchRulesCache'
+} from '../src/lib/posthog/fetchSwitchRules'
+import { switchRulesWriter } from '../src/lib/posthog/switchRulesCache'
 
 const SECRET_KEY_NAME = 'POSTHOG_PROJECT_SECRET_API_KEY'
 
@@ -102,6 +102,10 @@ const checkLiveRules = async (
  * build. A Storybook build deploys no Worker, so it skips the check whatever
  * else the env holds; Storybook sets STORYBOOK=true before it loads the Vite
  * config.
+ *
+ * Build only: imported by vite.config.ts and scripts/checkSwitchRules.ts,
+ * never by the Worker or the browser bundle. Keep every import here, and in
+ * what it reaches, a relative path.
  */
 export const checkSwitchRulesForBuild = async (
   env: Readonly<Record<string, string | undefined>>,
