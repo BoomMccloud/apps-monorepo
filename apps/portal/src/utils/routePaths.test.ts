@@ -276,7 +276,7 @@ describe('routing', () => {
       expect(RESERVED_ROUTE_SEGMENTS).toContain('privacy')
     })
 
-    it('never reads the privacy notice as an ENS name', () => {
+    it('never reads the Privacy settings page as an ENS name', () => {
       expect(extractNameFromPath('/privacy')).toBeNull()
     })
   })

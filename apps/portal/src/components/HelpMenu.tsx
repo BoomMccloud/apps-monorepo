@@ -1,3 +1,5 @@
+import { PRIVACY_POLICY_URL } from '@ens-apps/utils/analyticsConsentWording'
+import { Link } from '@tanstack/react-router'
 import { ExternalLink } from 'react-external-link'
 
 const MENU_ITEM_CLASS =
@@ -12,12 +14,13 @@ export const HelpMenu = () => {
       >
         Terms of Use
       </ExternalLink>
-      <ExternalLink
-        className={MENU_ITEM_CLASS}
-        href="https://ens.domains/legal/privacy-policy"
-      >
+      <ExternalLink className={MENU_ITEM_CLASS} href={PRIVACY_POLICY_URL}>
         Privacy Policy
       </ExternalLink>
+      {/* The Explorer's own page, where the analytics choice is changed. */}
+      <Link className={MENU_ITEM_CLASS} to="/privacy">
+        Privacy settings
+      </Link>
       <ExternalLink
         className={MENU_ITEM_CLASS}
         href="https://ens.domains/legal/trademark-guidelines"

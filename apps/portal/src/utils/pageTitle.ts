@@ -68,7 +68,7 @@ const registerTitle = (
 }
 
 const PAGE_TITLES: Readonly<Record<string, string>> = {
-  '/privacy': 'Privacy notice',
+  '/privacy': 'Privacy settings',
 }
 
 const appPageTitle = (pathname: string): string | null => {

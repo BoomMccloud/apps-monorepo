@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { PrivacyNoticePage } from '@/features/analytics/pages/PrivacyNoticePage'
+import { PrivacySettingsPage } from '@/features/analytics/pages/PrivacySettingsPage'
 
 export const Route = createFileRoute('/privacy')({
-  component: PrivacyNoticePage,
+  component: PrivacySettingsPage,
   staticData: { hideSidebar: true },
 })
