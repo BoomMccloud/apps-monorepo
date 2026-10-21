@@ -17,7 +17,7 @@ import { checkSwitchRulesForBuild } from './src/lib/posthog/switchRulesBuildChec
  * A build must not deploy a Manager whose switches the live rules cannot
  * decide, so it checks them in the env of its own mode. Without the secret
  * key it skips the check and says so, unless a Cloudflare Workers build, which
- * deploys, is missing it.
+ * deploys, is missing it. A Storybook build deploys no Worker and skips it.
  */
 const assertSwitchRulesDecideEverySwitch = async (
   env: Readonly<Record<string, string | undefined>>,

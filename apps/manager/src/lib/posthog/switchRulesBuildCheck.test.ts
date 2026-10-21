@@ -95,6 +95,45 @@ describe('checkSwitchRulesForBuild', () => {
     })
   })
 
+  describe('in a Storybook build', () => {
+    // Storybook sets STORYBOOK=true before it loads the Vite config.
+    it.each([
+      ['holding the key', BUILD_ENV],
+      [
+        'on a Cloudflare Workers build without the key',
+        { ...BUILD_ENV, POSTHOG_PROJECT_SECRET_API_KEY: '', WORKERS_CI: '1' },
+      ],
+    ])('is skipped, with the reason, %s, since Storybook deploys no Worker', async (_name, env) => {
+      const fetchRules = vi.fn(answering(downloadOf()))
+
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...env, STORYBOOK: 'true' },
+          { isSkippedWithoutKey: false, fetchRules },
+        ),
+      ).resolves.toEqual({
+        status: 'skipped',
+        message:
+          'switch rules check skipped: a Storybook build deploys no Worker',
+      })
+      expect(fetchRules).not.toHaveBeenCalled()
+    })
+
+    it('leaves the check to every other build, even where the env names Storybook otherwise', async () => {
+      await expect(
+        checkSwitchRulesForBuild(
+          {
+            ...BUILD_ENV,
+            POSTHOG_PROJECT_SECRET_API_KEY: '',
+            WORKERS_CI: '1',
+            STORYBOOK: 'false',
+          },
+          { isSkippedWithoutKey: true },
+        ),
+      ).resolves.toMatchObject({ status: 'failed' })
+    })
+  })
+
   it('fails when the env names no PostHog project or host to fetch from', async () => {
     const fetchRules = vi.fn(answering(downloadOf()))
 

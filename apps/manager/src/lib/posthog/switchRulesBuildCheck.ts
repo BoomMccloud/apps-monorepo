@@ -99,13 +99,17 @@ const checkLiveRules = async (
  * A download that fails fails the check too, so a build that holds the key is
  * as available as PostHog is: a build that deploys must not ship rules it
  * could not check. A build without the key skips the check, except a Workers
- * build.
+ * build. A Storybook build deploys no Worker, so it skips the check whatever
+ * else the env holds; Storybook sets STORYBOOK=true before it loads the Vite
+ * config.
  */
 export const checkSwitchRulesForBuild = async (
   env: Readonly<Record<string, string | undefined>>,
   options: FetchSwitchRulesOptions & { readonly isSkippedWithoutKey: boolean },
 ): Promise<SwitchRulesBuildCheck> =>
-  match(sourceOf(env, options))
-    .with({ host: P.string }, (source) => checkLiveRules(source, options))
-    .with({ status: P.string }, async (settled) => settled)
-    .exhaustive()
+  env.STORYBOOK === 'true'
+    ? skipped('switch rules check skipped: a Storybook build deploys no Worker')
+    : match(sourceOf(env, options))
+        .with({ host: P.string }, (source) => checkLiveRules(source, options))
+        .with({ status: P.string }, async (settled) => settled)
+        .exhaustive()
