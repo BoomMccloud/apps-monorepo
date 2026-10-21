@@ -1,6 +1,8 @@
-import { ANALYTICS_BANNER } from '@ens-apps/utils/analyticsConsentWording'
+import {
+  ANALYTICS_BANNER,
+  PRIVACY_POLICY_URL,
+} from '@ens-apps/utils/analyticsConsentWording'
 import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
-import { Link } from '@tanstack/react-router'
 import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { floatingWrapperGlassClassName } from '@/features/navigation/Header/shared/FloatingWrapper'
@@ -57,13 +59,14 @@ export const AnalyticsBanner = () => {
           {ANALYTICS_BANNER.decline}
         </Button>
       </div>
-      <Link
+      <a
         className="self-start text-ens-blue text-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        hash="analytics"
-        to="/legal/privacy-policy"
+        href={PRIVACY_POLICY_URL}
+        rel="noopener noreferrer"
+        target="_blank"
       >
-        {ANALYTICS_BANNER.noticeLink}
-      </Link>
+        {ANALYTICS_BANNER.policyLink}
+      </a>
     </section>
   )
 }

@@ -1,10 +1,7 @@
+import { PRIVACY_POLICY_URL } from '@ens-apps/utils/analyticsConsentWording'
 import { ExternalLink } from 'react-external-link'
 import { HomeHeader } from '@/features/dashboard/components'
 import { AnalyticsNotice } from '../components/AnalyticsNotice'
-
-/** The ENS privacy policy the notice keeps one click away. */
-export const FULL_PRIVACY_POLICY_URL =
-  'https://app.ens.domains/legal/privacy-policy'
 
 /** The Explorer's privacy notice: its analytics, and the visitor's choice. */
 export const PrivacyNoticePage = () => (
@@ -16,7 +13,7 @@ export const PrivacyNoticePage = () => (
       <p className="text-foreground text-p">
         <ExternalLink
           className="underline underline-offset-4"
-          href={FULL_PRIVACY_POLICY_URL}
+          href={PRIVACY_POLICY_URL}
         >
           Read the full privacy policy
         </ExternalLink>

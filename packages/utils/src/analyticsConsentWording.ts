@@ -8,6 +8,12 @@
 
 import type { AnalyticsConsent } from './analyticsConsent'
 
+/**
+ * The ENS privacy policy, which the banner of each app and its Privacy
+ * settings page link to. It lives on ens.domains, not in an app.
+ */
+export const PRIVACY_POLICY_URL = 'https://ens.domains/legal/privacy-policy'
+
 export const ANALYTICS_BANNER = {
   heading: 'Help us improve ENS',
   intro:
@@ -15,13 +21,13 @@ export const ANALYTICS_BANNER = {
   collected:
     'If you accept, PostHog processes for ENS: your wallet address when you connect one, the pages you visit (page addresses can contain names and wallet addresses), what you do in the apps, error reports, and your IP address, time zone and browser details.',
   shared:
-    'Your choice applies to all ENS apps that share it, and you can change it in the privacy notice at any time.',
+    'Your choice applies to all ENS apps that share it, and you can change it in Privacy settings at any time.',
   accept: 'Accept Analytics',
   decline: 'Decline',
-  noticeLink: 'Privacy notice',
+  policyLink: 'Privacy policy',
 } as const
 
-/** The notice's own heading, which names its section on the page. */
+/** The notice's own heading, which names its region on the page. */
 export const ANALYTICS_NOTICE_HEADING = 'Analytics'
 
 export const ANALYTICS_SWITCH_LABEL = 'Allow analytics'

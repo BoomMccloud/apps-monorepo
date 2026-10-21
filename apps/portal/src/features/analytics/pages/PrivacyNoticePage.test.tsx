@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import type { AnchorHTMLAttributes } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { FULL_PRIVACY_POLICY_URL, PrivacyNoticePage } from './PrivacyNoticePage'
+import { PrivacyNoticePage } from './PrivacyNoticePage'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -28,6 +28,6 @@ describe('PrivacyNoticePage', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Read the full privacy policy' }),
-    ).toHaveAttribute('href', FULL_PRIVACY_POLICY_URL)
+    ).toHaveAttribute('href', 'https://ens.domains/legal/privacy-policy')
   })
 })

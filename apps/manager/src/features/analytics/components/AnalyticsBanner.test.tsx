@@ -5,26 +5,8 @@ import {
 } from '@ens-apps/utils/analyticsConsentContext'
 import { BOTTOM_BAR_CLEARANCE_PROPERTY } from '@ens-apps/utils/bottomBarClearance'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { AnchorHTMLAttributes } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { AnalyticsBanner } from './AnalyticsBanner'
-
-vi.mock('@tanstack/react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
-  Link: ({
-    children,
-    to,
-    hash,
-    ...props
-  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
-    readonly to: string
-    readonly hash?: string
-  }) => (
-    <a href={hash ? `${to}#${hash}` : to} {...props}>
-      {children}
-    </a>
-  ),
-}))
 
 const renderBanner = (consent: AnalyticsConsentState) => {
   const accept = vi.fn()
@@ -41,7 +23,7 @@ const banner = () =>
   screen.queryByRole('region', { name: 'Help us improve ENS' })
 
 describe('AnalyticsBanner', () => {
-  it('asks a visitor who has not chosen, with equal buttons and a link to the notice', () => {
+  it('asks a visitor who has not chosen, with equal buttons and a link to the privacy policy', () => {
     renderBanner('pending')
 
     expect(banner()).toBeInTheDocument()
@@ -54,9 +36,26 @@ describe('AnalyticsBanner', () => {
     const accept = screen.getByRole('button', { name: 'Accept Analytics' })
     const decline = screen.getByRole('button', { name: 'Decline' })
     expect(accept.className).toBe(decline.className)
-    expect(
-      screen.getByRole('link', { name: 'Privacy notice' }),
-    ).toHaveAttribute('href', '/legal/privacy-policy#analytics')
+  })
+
+  it('links the ENS privacy policy, which opens in a new tab', () => {
+    renderBanner('pending')
+
+    const policy = screen.getByRole('link', { name: 'Privacy policy' })
+    expect(policy).toHaveAttribute(
+      'href',
+      'https://ens.domains/legal/privacy-policy',
+    )
+    expect(policy).toHaveAttribute('target', '_blank')
+    expect(policy).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('says where the choice can be changed', () => {
+    renderBanner('pending')
+
+    expect(banner()).toHaveTextContent(
+      'you can change it in Privacy settings at any time',
+    )
   })
 
   it('sits above a bar fixed to the bottom of the page, by the space the bars publish', () => {

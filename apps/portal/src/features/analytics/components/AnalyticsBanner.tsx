@@ -1,7 +1,10 @@
-import { ANALYTICS_BANNER } from '@ens-apps/utils/analyticsConsentWording'
+import {
+  ANALYTICS_BANNER,
+  PRIVACY_POLICY_URL,
+} from '@ens-apps/utils/analyticsConsentWording'
 import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
-import { Link } from '@tanstack/react-router'
 import { type CSSProperties, useId } from 'react'
+import { ExternalLink } from 'react-external-link'
 import { Button } from '@/components/ui/button'
 import { useTopUnderAppHeader } from '@/features/analytics/hooks/useTopUnderAppHeader'
 import { cn } from '@/lib/utils'
@@ -61,12 +64,12 @@ export const AnalyticsBanner = () => {
           {ANALYTICS_BANNER.decline}
         </Button>
       </div>
-      <Link
+      <ExternalLink
         className="self-start rounded-xs text-base underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        to="/privacy"
+        href={PRIVACY_POLICY_URL}
       >
-        {ANALYTICS_BANNER.noticeLink}
-      </Link>
+        {ANALYTICS_BANNER.policyLink}
+      </ExternalLink>
     </section>
   )
 }
