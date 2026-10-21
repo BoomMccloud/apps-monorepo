@@ -35,8 +35,8 @@ export const SidebarEntityTab = ({
       >
         <Icon className={cn('size-4 shrink-0', className)} />
         <span className="flex min-w-0 flex-col gap-1 group-data-[collapsible=icon]:hidden">
-          <span className={cn('text-xs leading-4', className)}>{eyebrow}</span>
-          <span className="break-all font-mono text-sm leading-5 tracking-[0.1px] text-neutral-8">
+          <span className={cn('text-small', className)}>{eyebrow}</span>
+          <span className="break-all text-entity-base text-neutral-8">
             {address}
           </span>
         </span>

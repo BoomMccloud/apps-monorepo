@@ -9,8 +9,6 @@ import {
   ContractCounterCard,
   ContractCounterCardContent,
   ContractCounterCards,
-  ContractDetailList,
-  ContractDetailRow,
   ContractDocsValue,
   ContractTypeValue,
 } from '@/components/ContractOverview'
@@ -23,6 +21,7 @@ import {
   countRecentEvents,
   formatRecentEventCount,
 } from '@/features/history/countRecentEvents'
+import { InfoRow } from '@/features/profile/components/InfoRow'
 import { getRegistryHistoryQueryOptions } from '@/features/registry/components/v2/RegistryHistory'
 import { describeRegistryContract } from '@/features/registry/describeRegistryContract'
 import { getNameRegistriesQueryOptions } from '@/features/registry/hooks/useNameRegistryDiscovery'
@@ -91,19 +90,19 @@ function RouteComponent() {
     <div className="flex flex-col gap-8">
       <PageHeading className="font-serif">Registry contract</PageHeading>
 
-      <ContractDetailList>
-        <ContractDetailRow label="Type">
+      <div className="flex flex-col">
+        <InfoRow label="Type">
           <ContractTypeValue isVerified>
             {isRootPending ? <span className="text-neutral-4">…</span> : type}
           </ContractTypeValue>
-        </ContractDetailRow>
-        <ContractDetailRow label="Docs">
+        </InfoRow>
+        <InfoRow label="Docs">
           <ContractDocsValue href={docsHref} />
-        </ContractDetailRow>
-        <ContractDetailRow label="Address">
+        </InfoRow>
+        <InfoRow label="Address">
           <ContractAddressValue address={address} />
-        </ContractDetailRow>
-        <ContractDetailRow label="Factory">
+        </InfoRow>
+        <InfoRow label="Factory">
           <EntityBadge
             variant="contract"
             label="registry factory"
@@ -112,17 +111,20 @@ function RouteComponent() {
           >
             {truncateAddress(FACTORY_ADDRESS, 6, 4)}
           </EntityBadge>
-        </ContractDetailRow>
-        <ContractDetailRow label="Deployed">
+        </InfoRow>
+        <InfoRow label="Deployed">
           <DeployedBadge
             transactionHash={registry.createdTransactionHash}
             deployedDate={deployedDate}
           />
-        </ContractDetailRow>
-        <ContractDetailRow label="Used by">
+        </InfoRow>
+        <InfoRow
+          label="Used by"
+          className="sm:h-auto sm:min-h-10 sm:items-start sm:[&>div:first-child]:h-10"
+        >
           <UsedByValue registry={registry} />
-        </ContractDetailRow>
-      </ContractDetailList>
+        </InfoRow>
+      </div>
 
       <ContractCounterCards>
         <ContractCounterCard
@@ -167,14 +169,14 @@ const UsedByValue = ({ registry }: { readonly registry: RegistryInfo }) => {
     return <span className="text-muted-foreground">—</span>
   if (registry.referencedByHasMore) {
     return (
-      <span className="font-semi-mono text-sm text-neutral-7">
+      <span className="font-semi-mono text-base text-neutral-7">
         {names.length}+ names
       </span>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-wrap gap-2 sm:py-2">
       {names.map((name) => (
         <EntityBadge key={name} variant="name" name={name} showAvatar compact>
           {name}

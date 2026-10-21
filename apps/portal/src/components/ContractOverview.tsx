@@ -7,36 +7,7 @@ import { EthCoinIcon } from '@/assets/icons'
 import { formatDocsHref } from '@/lib/constants/contractDocs'
 import { cn } from '@/lib/utils'
 
-// Figma "overview content": a 120px label column, 16px gaps, 16px vertical padding.
-export const ContractDetailList = ({
-  children,
-}: {
-  readonly children: ReactNode
-}) => (
-  <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-4 py-4">
-    {children}
-  </dl>
-)
-
-export const ContractDetailRow = ({
-  label,
-  children,
-}: {
-  readonly label: ReactNode
-  readonly children: ReactNode
-}) => (
-  <>
-    <dt className="min-h-5 self-start p-0.5 text-base text-neutral-7">
-      {label}
-    </dt>
-    <dd className="flex min-h-5 min-w-0 flex-wrap items-center gap-1">
-      {children}
-    </dd>
-  </>
-)
-
-const semiMonoValueClassName =
-  'font-semi-mono text-sm tracking-[0.1px] text-neutral-7'
+const semiMonoValueClassName = 'font-semi-mono text-base text-neutral-7'
 
 /** The Type row: a verified mark in front of the contract's kind. */
 export const ContractTypeValue = ({
@@ -74,12 +45,7 @@ export const ContractAddressValue = ({
 }: {
   readonly address: Address
 }) => (
-  <span
-    className={cn(
-      'inline-flex items-center gap-1 break-all',
-      semiMonoValueClassName,
-    )}
-  >
+  <span className="inline-flex items-center gap-1 break-all text-entity-base text-neutral-7">
     <EthCoinIcon className="size-4 shrink-0" />
     {address}
   </span>

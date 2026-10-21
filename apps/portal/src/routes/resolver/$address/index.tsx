@@ -10,8 +10,6 @@ import {
   ContractCounterCard,
   ContractCounterCardContent,
   ContractCounterCards,
-  ContractDetailList,
-  ContractDetailRow,
   ContractDocsValue,
   ContractTypeValue,
 } from '@/components/ContractOverview'
@@ -24,6 +22,7 @@ import {
   countRecentEvents,
   formatRecentEventCount,
 } from '@/features/history/countRecentEvents'
+import { InfoRow } from '@/features/profile/components/InfoRow'
 import { useIsPermissionedResolver } from '@/features/resolver/hooks/useIsPermissionedResolver'
 import {
   getResolverOverviewQueryOptions,
@@ -95,8 +94,8 @@ function RouteComponent() {
     <div className="flex flex-col gap-8">
       <PageHeading className="font-serif">Resolver contract</PageHeading>
 
-      <ContractDetailList>
-        <ContractDetailRow label="Type">
+      <div className="flex flex-col">
+        <InfoRow label="Type">
           <ContractTypeValue
             isVerified={!!isPermissionedResolver || isPublicResolver}
           >
@@ -111,15 +110,15 @@ function RouteComponent() {
               )
               .otherwise(() => 'Custom resolver')}
           </ContractTypeValue>
-        </ContractDetailRow>
-        <ContractDetailRow label="Docs">
+        </InfoRow>
+        <InfoRow label="Docs">
           <ContractDocsValue href={CONTRACT_DOCS.resolver} />
-        </ContractDetailRow>
-        <ContractDetailRow label="Address">
+        </InfoRow>
+        <InfoRow label="Address">
           <ContractAddressValue address={address} />
-        </ContractDetailRow>
+        </InfoRow>
         {isPermissionedResolver ? (
-          <ContractDetailRow label="Factory">
+          <InfoRow label="Factory">
             <EntityBadge
               variant="contract"
               label="resolver factory"
@@ -128,12 +127,15 @@ function RouteComponent() {
             >
               {truncateAddress(FACTORY_ADDRESS, 6, 4)}
             </EntityBadge>
-          </ContractDetailRow>
+          </InfoRow>
         ) : null}
-        <ContractDetailRow label="Interfaces">
+        <InfoRow
+          label="Interfaces"
+          className="sm:h-auto sm:min-h-10 sm:items-start sm:[&>div:first-child]:h-10"
+        >
           <InterfaceBadges resolverAddress={address} />
-        </ContractDetailRow>
-      </ContractDetailList>
+        </InfoRow>
+      </div>
 
       {resolver?.mirrorRegistry && (
         <p className="text-p text-muted-foreground">
@@ -207,7 +209,7 @@ const InterfaceBadges = ({
     .filter((name): name is string => !!name)
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2 sm:py-2">
       {names.map((name) => (
         <EntityBadge key={name} variant="default" className="font-normal">
           {name}
