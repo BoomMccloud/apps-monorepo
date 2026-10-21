@@ -37,6 +37,9 @@ export type FetchSwitchRulesOptions = {
 const FETCH_TIMEOUT_MS = 5_000
 
 /**
+ * Asks PostHog for its rules; the build check and the scheduled job run it,
+ * never a request. `getFeatureSwitches` is the request side.
+ *
  * Has PostHog's SDK fetch the project's switch rules once and hand them to
  * `provider`, as PostHog's Cloudflare KV example does in its scheduled job:
  * a client with local evaluation on and a provider that fetches, which is

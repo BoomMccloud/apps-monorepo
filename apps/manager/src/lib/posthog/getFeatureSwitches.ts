@@ -43,6 +43,9 @@ const validateFeatureSwitchesInput = (input: unknown): FeatureSwitchesInput => {
 }
 
 /**
+ * Decides the switches for a request from the rules stored in KV, and never
+ * calls PostHog. `fetchSwitchRules` is the side that does.
+ *
  * Every feature switch, decided on the server for one visitor, with the
  * wallet it decided for (null for none), so the page knows whose answers they
  * are. POST, so a wallet passed in rides in the body and never in a logged
