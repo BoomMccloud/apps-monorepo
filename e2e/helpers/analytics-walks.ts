@@ -15,12 +15,13 @@ import {
   exceptionMessagesOf,
   expectBrowserSilent,
   expectNoPostHogStorage,
+  expectPolicyLink,
   expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
-  noticeLink,
   pageDistinctId,
+  policyLink,
   requestText,
   storedConsent,
   throwPageErrors,
@@ -49,23 +50,34 @@ const expectNoticeSays = async (notice: Locator): Promise<void> => {
   }
 }
 
-/** The banner's link opens the notice, which shows that nothing is chosen yet. */
-export const expectNoticeOpenedFromBanner = async ({
+/**
+ * The app's menu opens the notice, which shows that nothing is chosen yet and
+ * keeps the ENS privacy policy one click away. The banner's own link goes to
+ * that policy on ens.domains, so it is checked and not followed.
+ */
+export const expectNoticeOpenedFromMenu = async ({
   page,
   context,
   open,
   origin,
+  startPath,
+  openPrivacySettings,
   noticePath,
 }: {
   readonly page: Page
   readonly context: BrowserContext
   readonly open: OpenPage
   readonly origin: string
+  /** A page that has the app's menu. */
+  readonly startPath: string
+  /** Open the app's menu and follow its Privacy settings entry. */
+  readonly openPrivacySettings: (page: Page) => Promise<void>
   readonly noticePath: string
 }): Promise<void> => {
   await forgetConsent(context)
-  await open(page, '/')
-  await noticeLink(page).click()
+  await open(page, startPath)
+  await expectPolicyLink(policyLink(page))
+  await openPrivacySettings(page)
   await expect(page).toHaveURL(`${origin}${noticePath}`)
 
   const notice = analyticsNotice(page)
@@ -74,6 +86,10 @@ export const expectNoticeOpenedFromBanner = async ({
   await expect(analyticsSwitch(page)).toBeVisible()
   await expect(analyticsSwitch(page)).not.toBeChecked()
   await expect(notice).toContainText(/not chosen/i)
+  // The full policy stays one click away.
+  await expectPolicyLink(
+    page.getByRole('link', { name: /full privacy policy/i }),
+  )
 }
 
 /**

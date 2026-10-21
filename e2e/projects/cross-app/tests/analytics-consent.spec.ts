@@ -49,7 +49,7 @@ const UNRELATED = (() => {
   return parsed.origin
 })()
 
-const MANAGER_NOTICE = '/legal/privacy-policy#analytics'
+const MANAGER_NOTICE = '/privacy'
 const EXPLORER_NOTICE = '/privacy'
 
 const baseLaunchOptions = baseConfig.use?.launchOptions ?? {}
@@ -82,10 +82,7 @@ const open = async (page: Page, url: string): Promise<void> => {
   await waitForAnalyticsReady(page)
 }
 
-/**
- * Load a page afresh. A tab already on that page, or on another fragment of
- * it, is only moved to the fragment by `goto`, so it is loaded again.
- */
+/** Load a page afresh: a tab already on that page is loaded again. */
 const load = async (page: Page, url: string): Promise<void> => {
   const isOnPage = page.url().split('#')[0] === url.split('#')[0]
   await page.goto(url)

@@ -1,3 +1,4 @@
+import { PRIVACY_POLICY_URL } from '@ens-apps/utils/analyticsConsentWording'
 import { isRecord } from '@ens-apps/utils/isRecord'
 import {
   type BrowserContext,
@@ -47,9 +48,21 @@ export const acceptButton = (page: Page): Locator =>
 export const declineButton = (page: Page): Locator =>
   consentBanner(page).getByRole('button', { name: 'Decline' })
 
-/** The banner's link to the privacy notice. */
-export const noticeLink = (page: Page): Locator =>
-  consentBanner(page).getByRole('link', { name: 'Privacy notice' })
+/** The banner's link to the ENS privacy policy. */
+export const policyLink = (page: Page): Locator =>
+  consentBanner(page).getByRole('link', { name: 'Privacy policy' })
+
+/**
+ * A link to the ENS privacy policy. The policy lives on ens.domains, so the
+ * link opens in a new tab, and no test follows it.
+ */
+export const expectPolicyLink = async (link: Locator): Promise<void> => {
+  await expect(link).toBeVisible()
+  await expect(link).toHaveAttribute('href', PRIVACY_POLICY_URL)
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', /\bnoopener\b/)
+  await expect(link).toHaveAttribute('rel', /\bnoreferrer\b/)
+}
 
 export const analyticsNotice = (page: Page): Locator =>
   page.getByRole('region', { name: 'Analytics', exact: true })
@@ -130,9 +143,10 @@ export const expectBannerWording = async (banner: Locator): Promise<void> => {
     Math.min(...COLLECTED.map((part) => text.search(part))),
   ).toBeGreaterThan(sentenceAt)
   expect(buttonsAt, 'the buttons come last').toBeGreaterThan(collectedAt)
-  await expect(
-    banner.getByRole('link', { name: 'Privacy notice' }),
-  ).toBeVisible()
+  expect(text, 'where the choice is changed').toMatch(
+    /change it in Privacy settings at any time/,
+  )
+  await expectPolicyLink(banner.getByRole('link', { name: 'Privacy policy' }))
 }
 
 const STYLE_PROPERTIES = [

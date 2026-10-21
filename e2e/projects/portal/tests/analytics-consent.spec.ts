@@ -22,12 +22,13 @@ import {
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
   expectNothingSent,
+  expectPolicyLink,
   expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
   keepScreenshot,
-  noticeLink,
+  policyLink,
   presentAsVisitorBrowser,
   storedConsent,
   throwPageErrors,
@@ -37,7 +38,7 @@ import {
   DESKTOP,
   expectChoiceKept,
   expectErrorReportsCutDown,
-  expectNoticeOpenedFromBanner,
+  expectNoticeOpenedFromMenu,
   expectNoticeSwitchStopsAndResumes,
   PHONE,
   SEARCHED_NAME,
@@ -58,7 +59,6 @@ import {
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
 const ORIGIN = new URL(PORTAL_APP_URL).origin
-const FULL_POLICY = 'https://app.ens.domains/legal/privacy-policy'
 // Any resolver address: the page's sidebar holds the Help and Settings menus.
 const RESOLVER_PAGE = '/resolver/0x8FADE66B79cC9f707aB26799354482EB93a5B7dD'
 
@@ -89,6 +89,15 @@ const openFresh = async (page: Page, path = '/'): Promise<void> => {
 
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^Connect( wallet)?$/ }).first()
+
+/**
+ * Open the Help menu, which a page with the sidebar has, and follow its
+ * Privacy settings entry.
+ */
+const openPrivacySettings = async (page: Page): Promise<void> => {
+  await page.getByRole('button', { name: 'Help', exact: true }).click()
+  await page.getByRole('link', { name: 'Privacy settings' }).click()
+}
 
 const walletMenu = (page: Page) =>
   page.getByRole('button', { name: /^Wallet menu for / }).first()
@@ -133,7 +142,7 @@ const searchName = async (page: Page, name: string): Promise<void> => {
 }
 
 test.describe('Explorer analytics choice', () => {
-  test('C1: a visitor who has not chosen sees the banner, with equal buttons and a link to the notice', async ({
+  test('C1: a visitor who has not chosen sees the banner, with equal buttons and a link to the privacy policy', async ({
     page,
     context,
   }, testInfo) => {
@@ -204,9 +213,14 @@ test.describe('Explorer analytics choice', () => {
     await keepScreenshot(page, testInfo, 'explorer-banner-360-dark')
     await page.emulateMedia({ colorScheme: 'light' })
 
-    // The link opens the notice inside the Explorer, and the banner stays
+    // The banner's link goes to the ENS privacy policy, which opens in a new
+    // tab and is not followed. The notice is on the Privacy settings page,
+    // which the Help menu opens inside the Explorer, and the banner stays
     // until the visitor chooses.
-    await noticeLink(page).click()
+    await expectPolicyLink(policyLink(page))
+    await page.setViewportSize(DESKTOP)
+    await openFresh(page, RESOLVER_PAGE)
+    await openPrivacySettings(page)
     await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
     await expect(analyticsNotice(page)).toBeVisible()
     await expect(banner).toBeVisible()
@@ -401,21 +415,18 @@ test.describe('Explorer analytics choice', () => {
     })
   })
 
-  test('C5: the notice, opened from the banner, says what is collected and why, who processes it, and how to ask for deletion', async ({
+  test('C5: the notice, opened from the Help menu, says what is collected and why, who processes it, and how to ask for deletion', async ({
     page,
     context,
   }) => {
-    await expectNoticeOpenedFromBanner({
+    await expectNoticeOpenedFromMenu({
       page,
       context,
       open: openFresh,
       origin: ORIGIN,
+      startPath: RESOLVER_PAGE,
+      openPrivacySettings,
       noticePath: NOTICE_PATH,
     })
-
-    // The full policy stays one click away.
-    await expect(
-      page.getByRole('link', { name: /full privacy policy/i }),
-    ).toHaveAttribute('href', FULL_POLICY)
   })
 })

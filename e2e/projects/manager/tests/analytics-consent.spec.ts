@@ -18,13 +18,14 @@ import {
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
   expectNothingSent,
+  expectPolicyLink,
   expectRecordingsSent,
   FLUSH_TIMEOUT,
   forgetConsent,
   identifiesWallet,
   keepScreenshot,
-  noticeLink,
   pageSwitch,
+  policyLink,
   presentAsVisitorBrowser,
   refreshManagerSwitchRules,
   requestText,
@@ -36,7 +37,7 @@ import {
   DESKTOP,
   expectChoiceKept,
   expectErrorReportsCutDown,
-  expectNoticeOpenedFromBanner,
+  expectNoticeOpenedFromMenu,
   expectNoticeSwitchStopsAndResumes,
   PHONE,
   SEARCHED_NAME,
@@ -66,7 +67,7 @@ import { findSearchInput } from '../../../helpers/search-input.js'
 const MANAGER_APP_URL = process.env.MANAGER_APP_URL ?? 'http://localhost:3000'
 const ORIGIN = new URL(MANAGER_APP_URL).origin
 
-const NOTICE_PATH = '/legal/privacy-policy#analytics'
+const NOTICE_PATH = '/privacy'
 
 let standIn: PostHogStandIn
 
@@ -94,6 +95,15 @@ const headerControls = (page: Page) =>
 
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^connect( login)?$/i })
+
+/**
+ * Open the navigation, a popover on a desktop and a drawer on a phone, and
+ * follow its Privacy settings entry.
+ */
+const openPrivacySettings = async (page: Page): Promise<void> => {
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await page.getByRole('link', { name: 'Privacy settings' }).click()
+}
 
 const openFresh = async (page: Page, path = '/'): Promise<void> => {
   await page.goto(`${MANAGER_APP_URL}${path}`)
@@ -146,7 +156,7 @@ const expectServerOnlyDownloadedRules = (): void => {
 }
 
 test.describe('Manager analytics choice', () => {
-  test('C1: a visitor who has not chosen sees the banner, with equal buttons and a link to the notice', async ({
+  test('C1: a visitor who has not chosen sees the banner, with equal buttons and a link to the privacy policy', async ({
     page,
     context,
   }, testInfo) => {
@@ -173,9 +183,12 @@ test.describe('Manager analytics choice', () => {
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'manager-banner-360')
 
-    // The link opens the notice inside the Manager, and the banner stays
+    // The banner's link goes to the ENS privacy policy, which opens in a new
+    // tab and is not followed. The notice is on the Privacy settings page,
+    // which the navigation opens inside the Manager, and the banner stays
     // until the visitor chooses.
-    await noticeLink(page).click()
+    await expectPolicyLink(policyLink(page))
+    await openPrivacySettings(page)
     await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
     await expect(analyticsNotice(page)).toBeVisible()
     await expect(banner).toBeVisible()
@@ -215,11 +228,7 @@ test.describe('Manager analytics choice', () => {
     await forgetConsent(context)
 
     const walk = async () => {
-      for (const path of [
-        '/',
-        '/legal/privacy-policy',
-        '/legal/terms-of-use',
-      ]) {
+      for (const path of ['/', NOTICE_PATH, '/dashboard']) {
         await openFresh(page, path)
       }
       await openFresh(page)
@@ -383,7 +392,7 @@ test.describe('Manager analytics choice', () => {
     expect(await pageSwitch(page, 'migration')).toBe(false)
     expect(await storedConsent(context)).toBe('1')
     await expectEventsSent(standIn, ['wallet:disconnect'])
-    await openFresh(page, '/legal/terms-of-use')
+    await openFresh(page, NOTICE_PATH)
     await expect
       .poll(
         () =>
@@ -433,8 +442,8 @@ test.describe('Manager analytics choice', () => {
       open: openFresh,
       origin: ORIGIN,
       noticePath: NOTICE_PATH,
-      afterDeclinePath: '/legal/terms-of-use?after-decline',
-      resumedPath: '/legal/terms-of-use',
+      afterDeclinePath: `${NOTICE_PATH}?after-decline`,
+      resumedPath: NOTICE_PATH,
       connect: () => connectWallet(page, wallet),
     })
   })
@@ -451,15 +460,17 @@ test.describe('Manager analytics choice', () => {
     })
   })
 
-  test('C5: the notice, opened from the banner, says what is collected and why, who processes it, and how to ask for deletion', async ({
+  test('C5: the notice, opened from the navigation, says what is collected and why, who processes it, and how to ask for deletion', async ({
     page,
     context,
   }) => {
-    await expectNoticeOpenedFromBanner({
+    await expectNoticeOpenedFromMenu({
       page,
       context,
       open: openFresh,
       origin: ORIGIN,
+      startPath: '/',
+      openPrivacySettings,
       noticePath: NOTICE_PATH,
     })
   })
