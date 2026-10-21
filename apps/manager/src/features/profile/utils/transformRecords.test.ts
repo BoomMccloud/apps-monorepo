@@ -518,7 +518,7 @@ describe('profile transformRecords utils', () => {
       ])
     })
 
-    it('should normalize social profile URLs before saving records', () => {
+    it('preserves resolver-valued social records while preparing a save', () => {
       const records = {
         ...newEmptyProfileRecords(),
         social: [
@@ -531,9 +531,9 @@ describe('profile transformRecords utils', () => {
       const normalized = normalizeProfileRecords(records)
 
       expect(normalized.social).toEqual([
-        { key: 'com.linkedin', value: 'ebeau' },
-        { key: 'com.twitter', value: 'ensdomains' },
-        { key: 'org.telegram', value: 'ensdomains' },
+        { key: 'com.linkedin', value: 'https://www.linkedin.com/in/ebeau/' },
+        { key: 'com.twitter', value: '@ensdomains' },
+        { key: 'org.telegram', value: 'https://t.me/ensdomains' },
       ])
     })
   })
