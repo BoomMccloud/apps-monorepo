@@ -92,6 +92,22 @@ vi.mock('@/features/registry/hooks/useNameRegistryDiscovery', () => ({
   }),
 }))
 
+/** The subregistry's answer to `supportsInterface(IRegistry)`; `null` fails the read. */
+let subregistryIsRegistry: boolean | null = true
+const supportsInterfacesParams = vi.fn()
+vi.mock('@/hooks/useSupportsInterfaces', () => ({
+  getSupportsInterfacesQueryOptions: (params: Record<string, unknown>) => {
+    supportsInterfacesParams(params)
+    return {
+      queryKey: ['supportsInterfaces', String(params.address)],
+      queryFn: () =>
+        subregistryIsRegistry === null
+          ? Promise.reject(new Error('rpc down'))
+          : [subregistryIsRegistry],
+    }
+  },
+}))
+
 /**
  * Stands in for the registry's own answer: roles granted registry-wide live on
  * the ROOT resource, which `hasRoles` reads only when no `label` is passed.
@@ -211,6 +227,49 @@ beforeEach(() => {
   allowedResources = null
   protocolVersion = 'ENSv2'
   v1State = null
+  subregistryIsRegistry = true
+  supportsInterfacesParams.mockReset()
+})
+
+// WEB-1885: bigname keeps serving a name's subnames after its subregistry is
+// pointed at an address with no registry behind it, and every row then fails
+// to open.
+describe('subnames route with a subregistry that is not a registry', () => {
+  beforeEach(() => {
+    subnames = [
+      { name: `cold.${NAME}`, labelhash: labelhash('cold'), owner: CONNECTED },
+    ]
+  })
+
+  it('asks the subregistry whether it is an IRegistry', async () => {
+    renderRoute()
+
+    await waitFor(() =>
+      expect(supportsInterfacesParams).toHaveBeenCalledWith({
+        address: SUBREGISTRY,
+        interfaces: ['0x51f67f40'],
+      }),
+    )
+  })
+
+  it('says the subregistry is invalid instead of listing its subnames', async () => {
+    subregistryIsRegistry = false
+    renderRoute()
+
+    expect(await screen.findByText('Invalid subregistry')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByText(`cold.${NAME}`)).not.toBeInTheDocument()
+  })
+
+  it('says it could not check, rather than listing the subnames anyway', async () => {
+    subregistryIsRegistry = null
+    renderRoute()
+
+    expect(
+      await screen.findByText('Failed to check subregistry'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
 })
 
 describe('V1 subname creation', () => {

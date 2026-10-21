@@ -34,14 +34,17 @@ import {
   useSubnameDeleteQueue,
 } from '@/features/registry/hooks/useSubnameDeleteQueue'
 import { prepareDeleteSubnameTransaction } from '@/features/registry/utils/delete-subname.helpers'
+import { REGISTRY_INTERFACE_ID } from '@/features/roles/utils/roleContractKind'
 import { TransactionModal } from '@/features/transaction-manager/components/TransactionModal'
 import type { IntentContext } from '@/features/transaction-manager/types'
+import { getSupportsInterfacesQueryOptions } from '@/hooks/useSupportsInterfaces'
 import {
   resourceIdForName,
   resourceIdFromChainValue,
 } from '@/lib/resource/resourceId'
 import { isRegistrable } from '@/utils/ens/tldHelpers'
 import { extractErrorMessage } from '@/utils/errors/extractErrorMessage'
+import { truncateAddress } from '@/utils/formatting/truncateAddress'
 
 export const Route = createFileRoute('/$name/subnames')({
   component: RouteComponent,
@@ -85,6 +88,40 @@ const NoSubregistryMessage = ({
   />
 )
 
+interface InvalidSubregistryMessageProps extends NoSubregistryMessageProps {
+  readonly subregistry: Address
+}
+
+const InvalidSubregistryMessage = ({
+  name,
+  canDeploy,
+  subregistry,
+}: InvalidSubregistryMessageProps) => (
+  <MessageCard
+    variant="warning"
+    icon={<AlertCircle size={24} strokeWidth={1.5} />}
+    title="Invalid subregistry"
+    description={
+      <p>
+        This name's subregistry ({truncateAddress(subregistry)}) isn't an ENS
+        registry, so it has no subnames to show.
+        <br />
+        {canDeploy
+          ? 'Deploy or set a valid one to manage subnames.'
+          : 'You do not have permission to change it.'}
+      </p>
+    }
+    actionButton={
+      canDeploy
+        ? {
+            label: 'Change subregistry',
+            href: `/${encodeURIComponent(name)}/registry`,
+          }
+        : undefined
+    }
+  />
+)
+
 interface V2SubnamesContentProps {
   readonly name: string
 }
@@ -106,6 +143,20 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
   const hasSubregistry =
     subregistryAddress && subregistryAddress !== zeroAddress
 
+  // bigname serves subnames whatever the subregistry is now (WEB-1885).
+  const {
+    data: hasRegistry = false,
+    isLoading: isRegistryLoading,
+    error: registryCheckError,
+  } = useQuery({
+    ...getSupportsInterfacesQueryOptions({
+      address: subregistryAddress as Address,
+      interfaces: [REGISTRY_INTERFACE_ID],
+    }),
+    select: ([supportsRegistry]) => supportsRegistry === true,
+    enabled: Boolean(hasSubregistry),
+  })
+
   // ROLE_REGISTRAR on the subregistry's ROOT resource, which is what `register`
   // checks and where a registry-wide grant lands. Omitting `label` is what
   // selects that: a label of any kind — `''` included — asks about
@@ -117,7 +168,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
       roles: ['ROLE_REGISTRAR'],
       account: connectedAccount as Address,
     }),
-    enabled: Boolean(hasSubregistry) && Boolean(connectedAccount),
+    enabled: hasRegistry && Boolean(connectedAccount),
   })
 
   // Check if connected account can deploy a subregistry (ROLE_SET_SUBREGISTRY on parent registry)
@@ -145,7 +196,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
       Boolean(parentRegistryAddress) &&
       Boolean(connectedAccount) &&
       Boolean(nameResourceId) &&
-      !hasSubregistry,
+      !hasRegistry,
   })
 
   const {
@@ -158,7 +209,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
     fetchNextPage,
   } = useInfiniteQuery({
     ...getSubnamePagesQueryOptions({ name, protocolVersion: 'ENSv2' }),
-    enabled: Boolean(hasSubregistry),
+    enabled: hasRegistry,
   })
   const subnames = useMemo(
     () => subnamePages?.pages.flatMap((page) => page.subnames),
@@ -255,7 +306,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
         roles: ['ROLE_UNREGISTER'],
         account: connectedAccount as Address,
       }),
-      enabled: Boolean(hasSubregistry) && Boolean(connectedAccount),
+      enabled: hasRegistry && Boolean(connectedAccount),
     })
 
   const unregisterResources = useMemo(
@@ -274,7 +325,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
       resources: unregisterResources,
     }),
     enabled:
-      Boolean(hasSubregistry) &&
+      hasRegistry &&
       Boolean(connectedAccount) &&
       !isRootUnregisterPending &&
       hasRootUnregisterRole === false &&
@@ -309,7 +360,7 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
   const handleClearSelected = (selected: SubnameRow[]) =>
     queueForDeletion(selected)
 
-  if (registriesLoading) {
+  if (registriesLoading || isRegistryLoading) {
     return <LoadingMessage title="Checking registry..." />
   }
 
@@ -327,6 +378,25 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
       <NoSubregistryMessage
         name={name}
         canDeploy={Boolean(hasSetSubregistryRole)}
+      />
+    )
+  }
+
+  if (registryCheckError) {
+    return (
+      <ErrorMessage
+        title="Failed to check subregistry"
+        description={extractErrorMessage(registryCheckError, '')}
+      />
+    )
+  }
+
+  if (!hasRegistry) {
+    return (
+      <InvalidSubregistryMessage
+        name={name}
+        canDeploy={Boolean(hasSetSubregistryRole)}
+        subregistry={subregistryAddress}
       />
     )
   }
