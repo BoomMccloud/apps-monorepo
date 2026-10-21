@@ -21,6 +21,9 @@ const writeFeatureSwitches = (switches: FeatureSwitches): boolean => {
   return true
 }
 
+/** What the SDK holds from this hook: none of the switches before a first write and after a reset. */
+type Written = { readonly switches?: FeatureSwitches }
+
 export type FeatureSwitchSyncInput = {
   /** The wallet connected now, or null for none. */
   readonly wallet: Address | null
@@ -57,18 +60,18 @@ export const useFeatureSwitchSync = ({
         wallet === pageStart.wallet ? pageStart.switches : undefined,
     }),
   )
-  // What the SDK holds from this hook: nothing before its first write and
-  // after a reset.
-  const [written, setWritten] = useState<FeatureSwitches>()
+  // A reset sets a new record, so that the effect sees it whether or not
+  // anything had been written before.
+  const [written, setWritten] = useState<Written>({})
 
   useEffect(() => {
     if (!isConnectionSettled) return
     // greptile: query-data-unwrapped: loading, an error and no data all mean
     // the same here, every switch off, so the three states are not told apart.
     const answers = data ?? ALL_SWITCHES_OFF
-    if (answers === written) return
-    if (writeFeatureSwitches(answers)) setWritten(answers)
+    if (answers === written.switches) return
+    if (writeFeatureSwitches(answers)) setWritten({ switches: answers })
   }, [data, isConnectionSettled, written])
 
-  return useCallback(() => setWritten(undefined), [])
+  return useCallback(() => setWritten({}), [])
 }

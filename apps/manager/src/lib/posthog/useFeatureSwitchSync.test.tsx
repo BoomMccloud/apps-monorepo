@@ -14,8 +14,16 @@ import {
   useFeatureSwitchSync,
 } from './useFeatureSwitchSync'
 
+// Whether the SDK has started: it takes no switches before it has.
+const sdk = vi.hoisted(() => ({ isLoaded: vi.fn(() => true) }))
+
 vi.mock('posthog-js/dist/module.full.no-external', () => ({
-  default: { __loaded: true, updateFlags: vi.fn() },
+  default: {
+    get __loaded() {
+      return sdk.isLoaded()
+    },
+    updateFlags: vi.fn(),
+  },
 }))
 vi.mock('./getFeatureSwitches', () => ({ getFeatureSwitches: vi.fn() }))
 
@@ -77,6 +85,7 @@ const renderSync = (input: FeatureSwitchSyncInput) => {
 describe('useFeatureSwitchSync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sdk.isLoaded.mockReturnValue(true)
   })
 
   it('writes the answers the page started with for the wallet it started with, and asks the server for nothing', () => {
@@ -213,6 +222,20 @@ describe('useFeatureSwitchSync', () => {
 
     expect(posthog.updateFlags).toHaveBeenLastCalledWith(
       ...written(ALL_SWITCHES_OFF),
+    )
+  })
+
+  it('writes nothing before the SDK has started, and the answers at a reset after it has', () => {
+    sdk.isLoaded.mockReturnValue(false)
+    const { result } = renderSync(BASE)
+    expect(posthog.updateFlags).not.toHaveBeenCalled()
+
+    sdk.isLoaded.mockReturnValue(true)
+    act(() => result.current())
+
+    expect(posthog.updateFlags).toHaveBeenCalledOnce()
+    expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+      ...written(WALLET_SWITCHES),
     )
   })
 
