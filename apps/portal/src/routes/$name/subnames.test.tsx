@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { type Address, keccak256, labelhash, toHex } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,10 +85,14 @@ vi.mock('@/features/profile/hooks/useSubnames', () => ({
   }),
 }))
 
+let registriesFail = false
 vi.mock('@/features/registry/hooks/useNameRegistryDiscovery', () => ({
   getNameRegistriesQueryOptions: () => ({
     queryKey: ['nameRegistries', NAME],
-    queryFn: () => [SUBREGISTRY, PARENT_REGISTRY, PARENT_REGISTRY],
+    queryFn: () =>
+      registriesFail
+        ? Promise.reject(new Error('rpc down'))
+        : [SUBREGISTRY, PARENT_REGISTRY, PARENT_REGISTRY],
   }),
 }))
 
@@ -209,10 +213,10 @@ const SubnamesRoute = (
   Route as unknown as { component: () => React.ReactElement }
 ).component
 
-const renderRoute = () => {
+const renderRoute = (queryClient = createTestQueryClient()) => {
   const Component = SubnamesRoute
   return render(
-    <QueryClientProvider client={createTestQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <Component />
     </QueryClientProvider>,
   )
@@ -229,6 +233,7 @@ beforeEach(() => {
   v1State = null
   subregistryIsRegistry = true
   supportsInterfacesParams.mockReset()
+  registriesFail = false
 })
 
 // WEB-1885: bigname keeps serving a name's subnames after its subregistry is
@@ -269,6 +274,35 @@ describe('subnames route with a subregistry that is not a registry', () => {
       await screen.findByText('Failed to check subregistry'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  // The listing owns the delete queue, so a failed refresh above it must not
+  // unmount it mid bulk-delete.
+  it.each([
+    [
+      'registry discovery',
+      () => {
+        registriesFail = true
+      },
+      ['nameRegistries', NAME],
+    ],
+    [
+      'the subregistry check',
+      () => {
+        subregistryIsRegistry = null
+      },
+      ['supportsInterfaces', SUBREGISTRY],
+    ],
+  ])('keeps the subnames on screen when a refresh of %s fails', async (_, fail, queryKey) => {
+    const queryClient = createTestQueryClient()
+    renderRoute(queryClient)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+
+    fail()
+    await act(() => queryClient.refetchQueries({ queryKey }))
+
+    expect(queryClient.getQueryState(queryKey)?.status).toBe('error')
+    expect(screen.getByRole('table')).toBeInTheDocument()
   })
 })
 

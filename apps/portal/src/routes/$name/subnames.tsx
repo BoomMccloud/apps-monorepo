@@ -437,7 +437,7 @@ const SubregistryCheck = ({
     return <LoadingMessage title="Checking subregistry..." />
   }
 
-  if (error) {
+  if (error && isRegistry === undefined) {
     return (
       <ErrorMessage
         title="Failed to check subregistry"
@@ -476,7 +476,9 @@ const V2SubnamesContent = ({ name }: V2SubnamesContentProps) => {
     return <LoadingMessage title="Checking registry..." />
   }
 
-  if (registriesError) {
+  // A failed refresh keeps the last answer, so the listing (and any delete in
+  // flight) stays mounted.
+  if (registriesError && !registriesData) {
     return (
       <ErrorMessage
         title="Failed to load registry"
