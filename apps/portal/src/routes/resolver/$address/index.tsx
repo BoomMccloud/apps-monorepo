@@ -2,6 +2,7 @@ import { getChainContractAddress } from '@ensdomains/ensjs/chain'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { GridIcon, UserRoundCog } from 'lucide-react'
+import { match } from 'ts-pattern'
 import { type Address, isAddressEqual } from 'viem'
 import { HistoryIcon } from '@/assets/icons'
 import {
@@ -26,8 +27,7 @@ import {
 import { useIsPermissionedResolver } from '@/features/resolver/hooks/useIsPermissionedResolver'
 import {
   getResolverOverviewQueryOptions,
-  RESOLVER_EVENTS_PAGE_SIZE,
-  type ResolverEvent,
+  type ResolverOverview,
   resolverCollectionCount,
 } from '@/features/resolver/hooks/useResolverOverview'
 import { useSupportsInterfaces } from '@/hooks/useSupportsInterfaces'
@@ -100,11 +100,16 @@ function RouteComponent() {
           <ContractTypeValue
             isVerified={!!isPermissionedResolver || isPublicResolver}
           >
-            {isPermissionedResolver
-              ? 'Verified ENS V2 owned resolver'
-              : isPublicResolver
-                ? 'Official ENS public resolver'
-                : 'Custom resolver'}
+            {match({ isPermissionedResolver, isPublicResolver })
+              .with(
+                { isPermissionedResolver: true },
+                () => 'Verified ENS V2 owned resolver',
+              )
+              .with(
+                { isPublicResolver: true },
+                () => 'Official ENS public resolver',
+              )
+              .otherwise(() => 'Custom resolver')}
           </ContractTypeValue>
         </ContractDetailRow>
         <ContractDetailRow label="Docs">
@@ -163,9 +168,7 @@ function RouteComponent() {
           <ContractCounterCardContent
             icon={HistoryIcon}
             label="Events in last 30 days"
-            value={formatRecentEventCount(
-              recentEventsOf(resolver?.events ?? null),
-            )}
+            value={formatRecentEventCount(recentEventsOf(resolver))}
           />
         </ContractCounterCard>
       </ContractCounterCards>
@@ -173,14 +176,14 @@ function RouteComponent() {
   )
 }
 
-const recentEventsOf = (events: readonly ResolverEvent[] | null) =>
-  events
+const recentEventsOf = (resolver: ResolverOverview | null | undefined) =>
+  resolver?.events
     ? countRecentEvents({
-        timestamps: events.flatMap((event) =>
+        timestamps: resolver.events.flatMap((event) =>
           event.timestamp === null ? [] : [event.timestamp],
         ),
         nowSeconds: Math.floor(Date.now() / 1000),
-        hasMore: events.length >= RESOLVER_EVENTS_PAGE_SIZE,
+        hasMore: resolver.eventsHasMore,
       })
     : null
 

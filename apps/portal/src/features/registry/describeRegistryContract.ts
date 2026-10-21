@@ -1,4 +1,5 @@
 import { getChainContractAddress } from '@ensdomains/ensjs/chain'
+import { match } from 'ts-pattern'
 import { type Address, isAddressEqual } from 'viem'
 import { CONTRACT_DOCS } from '@/lib/constants/contractDocs'
 import { ensChain } from '@/lib/wagmi'
@@ -14,18 +15,24 @@ export type RegistryContractDescription = {
   readonly docsHref: string
 }
 
-/** The Type row: bigname gives the root no name, the .eth registry is the deployment's `ensRegistry`, the rest come from the factory. */
+/** The Type row: the .eth registry and the root are known by address, the rest come from the factory. */
 export const describeRegistryContract = ({
   address,
-  name,
+  rootAddress,
 }: {
   readonly address: Address
-  readonly name: string
+  readonly rootAddress: Address | null
 }): RegistryContractDescription => ({
-  type: isAddressEqual(address, ETH_REGISTRY)
-    ? 'Official ENS V2 .eth registry'
-    : name === ''
-      ? 'Official ENS V2 root registry'
-      : 'Verified ENS V2 permissioned registry',
+  type: match(address)
+    .when(
+      (candidate) => isAddressEqual(candidate, ETH_REGISTRY),
+      () => 'Official ENS V2 .eth registry',
+    )
+    .when(
+      (candidate) =>
+        rootAddress !== null && isAddressEqual(candidate, rootAddress),
+      () => 'Official ENS V2 root registry',
+    )
+    .otherwise(() => 'Verified ENS V2 permissioned registry'),
   docsHref: CONTRACT_DOCS.registry,
 })

@@ -25,10 +25,12 @@ import {
 } from '@/features/history/countRecentEvents'
 import { getRegistryHistoryQueryOptions } from '@/features/registry/components/v2/RegistryHistory'
 import { describeRegistryContract } from '@/features/registry/describeRegistryContract'
+import { getNameRegistriesQueryOptions } from '@/features/registry/hooks/useNameRegistryDiscovery'
 import {
   getRegistryInfoQueryOptions,
   type RegistryInfo,
 } from '@/features/registry/hooks/useRegistry'
+import { getRegistryRootRoleHoldersQueryOptions } from '@/features/roles/hooks/useRegistryRootRoleHolders'
 import { ensChain } from '@/lib/wagmi'
 import { useBlockExplorerTxUrl } from '@/utils/blockExplorer/useBlockExplorerUrl'
 import { formatTimestampDate } from '@/utils/formatting/formatTimestamp'
@@ -53,6 +55,9 @@ function RouteComponent() {
     isLoading,
     error,
   } = useQuery(getRegistryInfoQueryOptions({ address }))
+  const { data: ethRegistries, isPending: isRootPending } = useQuery(
+    getNameRegistriesQueryOptions({ name: 'eth' }),
+  )
   if (isLoading) return <LoadingSpinner title="Loading registry" />
   if (error)
     return (
@@ -76,7 +81,7 @@ function RouteComponent() {
 
   const { type, docsHref } = describeRegistryContract({
     address,
-    name: registry.name,
+    rootAddress: ethRegistries?.at(-1) ?? null,
   })
   const deployedDate = registry.createdAt
     ? formatTimestampDate(registry.createdAt)
@@ -88,7 +93,9 @@ function RouteComponent() {
 
       <ContractDetailList>
         <ContractDetailRow label="Type">
-          <ContractTypeValue isVerified>{type}</ContractTypeValue>
+          <ContractTypeValue isVerified>
+            {isRootPending ? <span className="text-neutral-4">…</span> : type}
+          </ContractTypeValue>
         </ContractDetailRow>
         <ContractDetailRow label="Docs">
           <ContractDocsValue href={docsHref} />
@@ -132,7 +139,7 @@ function RouteComponent() {
           <ContractCounterCardContent
             icon={ShieldIcon}
             label="Role holders"
-            value={registry.roleCount ?? '—'}
+            value={<RoleHolderCount address={address} />}
           />
         </ContractCounterCard>
         <ContractCounterCard
@@ -175,6 +182,22 @@ const UsedByValue = ({ registry }: { readonly registry: RegistryInfo }) => {
       ))}
     </div>
   )
+}
+
+/** Distinct accounts on the root resource, the rows the Roles page lists. */
+const RoleHolderCount = ({ address }: { readonly address: Address }) => {
+  const {
+    data: holders,
+    isLoading,
+    error,
+  } = useQuery(
+    getRegistryRootRoleHoldersQueryOptions({ registryAddress: address }),
+  )
+
+  if (isLoading) return <span className="text-neutral-4">…</span>
+  if (error || !holders) return <>—</>
+
+  return <>{holders.length}</>
 }
 
 const RecentEventCount = ({ address }: { readonly address: Address }) => {
