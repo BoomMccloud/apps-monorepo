@@ -1877,6 +1877,10 @@ msgstr "Primärt namn angivet"
 msgid "Privacy Policy"
 msgstr ""
 
+#: src/features/navigation/Header/navigation/NavigationContent.tsx
+msgid "Privacy settings"
+msgstr ""
+
 #: src/features/profile/components/dialogs/edit-profile/EditProfileFloatingBar.tsx
 #: src/features/profile/components/view/ProfileActions.tsx
 msgid "Profile actions"

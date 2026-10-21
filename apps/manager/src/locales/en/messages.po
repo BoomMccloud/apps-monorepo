@@ -1872,6 +1872,10 @@ msgstr "Primary name set successfully"
 msgid "Privacy Policy"
 msgstr "Privacy Policy"
 
+#: src/features/navigation/Header/navigation/NavigationContent.tsx
+msgid "Privacy settings"
+msgstr "Privacy settings"
+
 #: src/features/profile/components/dialogs/edit-profile/EditProfileFloatingBar.tsx
 #: src/features/profile/components/view/ProfileActions.tsx
 msgid "Profile actions"

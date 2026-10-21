@@ -1,3 +1,4 @@
+import { PRIVACY_POLICY_URL } from '@ens-apps/utils/analyticsConsentWording'
 import type { MessageDescriptor } from '@lingui/core'
 import { msg } from '@lingui/core/macro'
 import { useLingui } from '@lingui/react'
@@ -85,8 +86,12 @@ const navigationSections: readonly NavigationSection[] = [
     links: [
       {
         label: msg`Privacy Policy`,
-        href: 'https://ens.domains/legal/privacy-policy',
+        href: PRIVACY_POLICY_URL,
         target: '_blank',
+      },
+      {
+        label: msg`Privacy settings`,
+        linkOptions: linkOptions({ to: '/privacy' }),
       },
       {
         label: msg`Terms of Use`,

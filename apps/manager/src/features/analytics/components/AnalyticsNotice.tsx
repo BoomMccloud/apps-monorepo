@@ -47,18 +47,14 @@ const NoticeSectionView = ({
   </>
 )
 
-/** The privacy policy's analytics section: what is collected, and the visitor's choice. */
+/** The analytics notice: what is collected, and the visitor's choice. */
 export const AnalyticsNotice = () => {
   const { consent, accept, decline } = useAnalyticsConsent()
   const headingId = useId()
   const switchId = useId()
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="mb-8 scroll-mt-24"
-      id="analytics"
-    >
+    <section aria-labelledby={headingId} className="mb-8">
       <h2 className="font-semibold text-ens-blue-dark text-xl" id={headingId}>
         {ANALYTICS_NOTICE_HEADING}
       </h2>

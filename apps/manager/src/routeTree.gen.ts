@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpgradePermissionsRouteImport } from './routes/upgrade-permissions'
 import { Route as UpgradeRouteImport } from './routes/upgrade'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as MigrationPermissionsRouteImport } from './routes/migration-permissions'
 import { Route as MigrationRouteImport } from './routes/migration'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -43,6 +44,11 @@ const UpgradePermissionsRoute = UpgradePermissionsRouteImport.update({
 const UpgradeRoute = UpgradeRouteImport.update({
   id: '/upgrade',
   path: '/upgrade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MigrationPermissionsRoute = MigrationPermissionsRouteImport.update({
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/migration': typeof MigrationRoute
   '/migration-permissions': typeof MigrationPermissionsRoute
+  '/privacy': typeof PrivacyRoute
   '/upgrade': typeof UpgradeRoute
   '/upgrade-permissions': typeof UpgradePermissionsRoute
   '/notifications': typeof NotificationsAuthenticatedRouteRouteWithChildren
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/migration': typeof MigrationRoute
   '/migration-permissions': typeof MigrationPermissionsRoute
+  '/privacy': typeof PrivacyRoute
   '/upgrade': typeof UpgradeRoute
   '/upgrade-permissions': typeof UpgradePermissionsRoute
   '/legal/privacy-policy': typeof LegalPrivacyPolicyRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/migration': typeof MigrationRoute
   '/migration-permissions': typeof MigrationPermissionsRoute
+  '/privacy': typeof PrivacyRoute
   '/upgrade': typeof UpgradeRoute
   '/upgrade-permissions': typeof UpgradePermissionsRoute
   '/notifications/_authenticated': typeof NotificationsAuthenticatedRouteRouteWithChildren
@@ -254,6 +263,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/migration'
     | '/migration-permissions'
+    | '/privacy'
     | '/upgrade'
     | '/upgrade-permissions'
     | '/notifications'
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/migration'
     | '/migration-permissions'
+    | '/privacy'
     | '/upgrade'
     | '/upgrade-permissions'
     | '/legal/privacy-policy'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/migration'
     | '/migration-permissions'
+    | '/privacy'
     | '/upgrade'
     | '/upgrade-permissions'
     | '/notifications/_authenticated'
@@ -333,6 +345,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   MigrationRoute: typeof MigrationRoute
   MigrationPermissionsRoute: typeof MigrationPermissionsRoute
+  PrivacyRoute: typeof PrivacyRoute
   UpgradeRoute: typeof UpgradeRoute
   UpgradePermissionsRoute: typeof UpgradePermissionsRoute
   NotificationsAuthenticatedRouteRoute: typeof NotificationsAuthenticatedRouteRouteWithChildren
@@ -364,6 +377,13 @@ declare module '@tanstack/react-router' {
       path: '/upgrade'
       fullPath: '/upgrade'
       preLoaderRoute: typeof UpgradeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/migration-permissions': {
@@ -578,6 +598,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   MigrationRoute: MigrationRoute,
   MigrationPermissionsRoute: MigrationPermissionsRoute,
+  PrivacyRoute: PrivacyRoute,
   UpgradeRoute: UpgradeRoute,
   UpgradePermissionsRoute: UpgradePermissionsRoute,
   NotificationsAuthenticatedRouteRoute:

@@ -18,6 +18,8 @@ describe('getDefaultGlobalBackButtonConfig', () => {
       '/notifications/',
       '/notifications/settings',
       '/notifications/settings/',
+      '/privacy',
+      '/privacy/',
     ]
 
     for (const route of visibleRoutes) {
