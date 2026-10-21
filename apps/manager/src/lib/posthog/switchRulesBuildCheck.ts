@@ -78,7 +78,7 @@ const checkLiveRules = async (
         `switch rules ok: ${rules.flags.length} rules decide every switch`,
       ),
     )
-    .with({ status: 'refused' }, ({ problems }) => failed(problems.join('\n')))
+    .with({ status: 'refused' }, ({ issues }) => failed(issues.join('\n')))
     .with({ status: 'unwritten' }, () =>
       failed('the switch rules could not be written'),
     )

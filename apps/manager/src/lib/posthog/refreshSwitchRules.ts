@@ -69,10 +69,10 @@ export const refreshSwitchRules = ResultFn(async function* (
   )
   return match(writer.outcome())
     .with({ status: 'accepted' }, () => ok('stored' as const))
-    .with({ status: 'refused' }, ({ problems }) =>
+    .with({ status: 'refused' }, ({ issues }) =>
       err(
         refreshFailed(
-          `the new rules fail the rules check, so the last good rules stay: ${problems.join('; ')}`,
+          `the new rules fail the rules check, so the last good rules stay: ${issues.join('; ')}`,
         ),
       ),
     )

@@ -7,7 +7,7 @@ import {
   type FeatureSwitches,
 } from './feature-flags'
 import { evaluateStoredSwitches, switchVisitor } from './switchRules'
-import { type ReaderProblem, switchRulesReader } from './switchRulesCache'
+import { type ReaderFailure, switchRulesReader } from './switchRulesCache'
 
 /** The Worker bindings the switches need. */
 export type SwitchRulesEnv = {
@@ -40,28 +40,28 @@ class StoredSwitchRulesUnrecognized extends TaggedError(
   'StoredSwitchRulesUnrecognized',
 )<{ readonly message: string; readonly cause: unknown }> {}
 
-// One log line per problem and Worker instance. Remembering what was logged
+// One log line per error and Worker instance. Remembering what was logged
 // is this module's own state, read by nothing else (no-mutation).
-const reportedProblems = new Set<string>()
+const reportedErrors = new Set<string>()
 
 const reportOnce = (
-  problem:
+  error:
     | FeatureSwitchesUndecided
     | StoredSwitchRulesUnreadable
     | StoredSwitchRulesUnrecognized,
 ): void => {
-  const key = `${problem._tag}: ${problem.message}`
-  if (reportedProblems.has(key)) return
+  const key = `${error._tag}: ${error.message}`
+  if (reportedErrors.has(key)) return
   // greptile: no-mutation: the Set is this module's own record of what was logged, read by nothing else.
-  reportedProblems.add(key)
-  console.error(problem)
+  reportedErrors.add(key)
+  console.error(error)
 }
 
 const switchesUndecided = (message: string) =>
   new FeatureSwitchesUndecided({ message, cause: undefined })
 
-const reportReaderProblem = (problem: ReaderProblem): void =>
-  match(problem)
+const reportReaderFailure = (failure: ReaderFailure): void =>
+  match(failure)
     .with({ status: 'unreadable' }, ({ cause }) =>
       reportOnce(
         new StoredSwitchRulesUnreadable({
@@ -95,7 +95,7 @@ const decide = async (
   // later ones) or on a dev server, which runs no cron, every switch is off
   // and the reason is logged.
   const { answers, hasRules } = await evaluateStoredSwitches(
-    switchRulesReader(space, reportReaderProblem),
+    switchRulesReader(space, reportReaderFailure),
     switchVisitor(wallet),
   )
   const undecidedNames = FEATURE_SWITCH_NAMES.filter(

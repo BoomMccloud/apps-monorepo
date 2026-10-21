@@ -21,7 +21,7 @@ const isSwitchRules = (value: unknown): value is SwitchRules =>
   isRecord(value.cohorts)
 
 /** What the Reader tells its caller when it hands the SDK no rules but KV holds something. */
-export type ReaderProblem =
+export type ReaderFailure =
   | { readonly status: 'unreadable'; readonly cause: unknown }
   | { readonly status: 'unrecognized'; readonly found: string }
 
@@ -37,13 +37,13 @@ const describeValue = (value: unknown): string =>
 
 const readStored = (
   value: unknown,
-  onProblem: (problem: ReaderProblem) => void,
+  onFailure: (failure: ReaderFailure) => void,
 ): SwitchRules | undefined =>
   match(value)
     .with(P.nullish, () => undefined)
     .when(isSwitchRules, (rules) => rules)
     .otherwise((found) => {
-      onProblem({ status: 'unrecognized', found: describeValue(found) })
+      onFailure({ status: 'unrecognized', found: describeValue(found) })
       return undefined
     })
 
@@ -51,17 +51,17 @@ const readStored = (
  * The Reader, for a request: it reads KV and never fetches or writes. Nothing
  * stored reads as no rules, without a word. A value KV cannot give back, or
  * one of another shape (the removed store's, say), reads as no rules too, and
- * is reported to `onProblem` first, so it is not mistaken for nothing stored.
+ * is reported to `onFailure` first, so it is not mistaken for nothing stored.
  */
 export const switchRulesReader = (
   space: KVNamespace,
-  onProblem: (problem: ReaderProblem) => void,
+  onFailure: (failure: ReaderFailure) => void,
 ): FlagDefinitionCacheProvider => ({
   getFlagDefinitions: () =>
     space.get(SWITCH_RULES_KEY, 'json').then(
-      (value: unknown) => readStored(value, onProblem),
+      (value: unknown) => readStored(value, onFailure),
       (cause: unknown) => {
-        onProblem({ status: 'unreadable', cause })
+        onFailure({ status: 'unreadable', cause })
         return undefined
       },
     ),
@@ -74,15 +74,15 @@ export const switchRulesReader = (
 /** What the Writer did with the rules the SDK handed it. */
 type WriterOutcome =
   | { readonly status: 'accepted'; readonly rules: SwitchRules }
-  | { readonly status: 'refused'; readonly problems: readonly string[] }
+  | { readonly status: 'refused'; readonly issues: readonly string[] }
   | { readonly status: 'unwritten'; readonly cause: unknown }
 
 const acceptChecked = async (
   rules: SwitchRules,
   write: (rules: SwitchRules) => Promise<void>,
 ): Promise<WriterOutcome> => {
-  const problems = await checkSwitchRules(rules)
-  if (problems.length > 0) return { status: 'refused', problems }
+  const issues = await checkSwitchRules(rules)
+  if (issues.length > 0) return { status: 'refused', issues }
   return write(rules).then(
     (): WriterOutcome => ({ status: 'accepted', rules }),
     (cause: unknown): WriterOutcome => ({ status: 'unwritten', cause }),

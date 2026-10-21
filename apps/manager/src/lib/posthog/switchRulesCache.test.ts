@@ -23,7 +23,7 @@ describe('the Reader, which a request reads the rules with', () => {
   })
 
   it('reads nothing stored, or a stored null, as no rules, without a word', async () => {
-    const onProblem = vi.fn()
+    const onFailure = vi.fn()
     const stores: readonly Readonly<Record<string, string>>[] = [
       {},
       { [SWITCH_RULES_KEY]: 'null' },
@@ -32,10 +32,10 @@ describe('the Reader, which a request reads the rules with', () => {
     for (const initial of stores) {
       const { space } = memoryKv(initial)
       await expect(
-        switchRulesReader(space, onProblem).getFlagDefinitions(),
+        switchRulesReader(space, onFailure).getFlagDefinitions(),
       ).resolves.toBeUndefined()
     }
-    expect(onProblem).not.toHaveBeenCalled()
+    expect(onFailure).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -54,12 +54,12 @@ describe('the Reader, which a request reads the rules with', () => {
     ['a number', '7', 'a number'],
   ])('says that a value of another shape is stored, %s, and reads it as no rules', async (_what, stored, found) => {
     const { space } = memoryKv({ [SWITCH_RULES_KEY]: stored })
-    const onProblem = vi.fn()
+    const onFailure = vi.fn()
 
     await expect(
-      switchRulesReader(space, onProblem).getFlagDefinitions(),
+      switchRulesReader(space, onFailure).getFlagDefinitions(),
     ).resolves.toBeUndefined()
-    expect(onProblem).toHaveBeenCalledExactlyOnceWith({
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith({
       status: 'unrecognized',
       found,
     })
@@ -73,12 +73,12 @@ describe('the Reader, which a request reads the rules with', () => {
         throw failure
       },
     } as unknown as KVNamespace
-    const onProblem = vi.fn()
+    const onFailure = vi.fn()
 
     await expect(
-      switchRulesReader(unavailable, onProblem).getFlagDefinitions(),
+      switchRulesReader(unavailable, onFailure).getFlagDefinitions(),
     ).resolves.toBeUndefined()
-    expect(onProblem).toHaveBeenCalledExactlyOnceWith({
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith({
       status: 'unreadable',
       cause: failure,
     })
@@ -86,12 +86,12 @@ describe('the Reader, which a request reads the rules with', () => {
 
   it('reads a stored value that is not JSON as KV failing, since KV parses it', async () => {
     const { space } = memoryKv({ [SWITCH_RULES_KEY]: 'not json' })
-    const onProblem = vi.fn()
+    const onFailure = vi.fn()
 
     await expect(
-      switchRulesReader(space, onProblem).getFlagDefinitions(),
+      switchRulesReader(space, onFailure).getFlagDefinitions(),
     ).resolves.toBeUndefined()
-    expect(onProblem).toHaveBeenCalledExactlyOnceWith(
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ status: 'unreadable' }),
     )
   })
@@ -139,7 +139,7 @@ describe('the Writer, which the scheduled job has the SDK hand its fetch to', ()
     expect(contents().size).toBe(0)
     expect(writer.outcome()).toMatchObject({
       status: 'refused',
-      problems: expect.arrayContaining(['migration: missing from the rules']),
+      issues: expect.arrayContaining(['migration: missing from the rules']),
     })
   })
 

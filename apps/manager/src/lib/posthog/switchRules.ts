@@ -124,7 +124,7 @@ const DECIDED_OPERATORS: ReadonlySet<string> = new Set([
 ])
 
 /** What in one property of a switch's rule the server could not decide. */
-const propertyProblems = (
+const propertyIssues = (
   rules: SwitchRules,
   name: FeatureSwitchName,
   property: Property,
@@ -166,7 +166,7 @@ const propertyProblems = (
 ]
 
 /** What in a switch's own rule PostHog alone could decide. */
-const ruleProblems = (
+const ruleIssues = (
   rules: SwitchRules,
   name: FeatureSwitchName,
 ): readonly string[] => {
@@ -192,7 +192,7 @@ const ruleProblems = (
         ? [`${name}: aims at a group, and the server is given no groups`]
         : []),
       ...reachableProperties(rules, rule).flatMap((property) =>
-        propertyProblems(rules, name, property),
+        propertyIssues(rules, name, property),
       ),
     ]),
   ]
@@ -307,7 +307,7 @@ export const checkSwitchRules = async (
   rules: SwitchRules,
 ): Promise<readonly string[]> => {
   const structural = FEATURE_SWITCH_NAMES.flatMap((name) =>
-    ruleProblems(rules, name),
+    ruleIssues(rules, name),
   )
   const visitors = [
     { label: 'a wallet', visitor: switchVisitor(SAMPLE_WALLET) },

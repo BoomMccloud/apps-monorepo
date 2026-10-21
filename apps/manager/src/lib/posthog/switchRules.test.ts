@@ -171,16 +171,14 @@ describe('checkSwitchRules', () => {
   })
 
   it('names a switch missing from the rules', async () => {
-    const problems = await checkSwitchRules(
-      switchRules({ migration: undefined }),
-    )
-    expect(problems).toContain('migration: missing from the rules')
-    expect(problems).toContain('migration: no yes or no for a wallet')
-    expect(problems).toContain('migration: no yes or no for no wallet')
+    const issues = await checkSwitchRules(switchRules({ migration: undefined }))
+    expect(issues).toContain('migration: missing from the rules')
+    expect(issues).toContain('migration: no yes or no for a wallet')
+    expect(issues).toContain('migration: no yes or no for no wallet')
   })
 
   it('names every rule only PostHog could decide', async () => {
-    const problems = await checkSwitchRules(
+    const issues = await checkSwitchRules(
       switchRules({
         migration: flagRule('migration', [forWallets([TEST_WALLET])], {
           ensure_experience_continuity: true,
@@ -208,7 +206,7 @@ describe('checkSwitchRules', () => {
         ]),
       }),
     )
-    expect(problems).toEqual(
+    expect(issues).toEqual(
       expect.arrayContaining([
         'migration: persists across sign-in (experience continuity)',
         'i18n: uses cohort 42, which the rules do not hold',
@@ -376,7 +374,7 @@ describe('checkSwitchRules', () => {
     ['a group type the rules do not hold', {}],
     ['a group type the rules hold', { '0': 'organization' }],
   ])('names a switch aimed at %s, since the server is given no groups', async (_label, groupTypeMapping) => {
-    const problems = await checkSwitchRules({
+    const issues = await checkSwitchRules({
       ...switchRules({
         i18n: flagRule('i18n', [forEveryone()], {
           filters: {
@@ -387,7 +385,7 @@ describe('checkSwitchRules', () => {
       }),
       groupTypeMapping,
     })
-    expect(problems).toContain(
+    expect(issues).toContain(
       'i18n: aims at a group, and the server is given no groups',
     )
   })
@@ -499,7 +497,7 @@ describe('checkSwitchRules', () => {
   })
 
   it('refuses a rule whose conditions or properties are not objects, instead of reading them', async () => {
-    const problems = await checkSwitchRules(
+    const issues = await checkSwitchRules(
       switchRules({
         i18n: flagRule('i18n', [null as never]),
         migration: flagRule('migration', [
@@ -507,7 +505,7 @@ describe('checkSwitchRules', () => {
         ]),
       }),
     )
-    expect(problems).toEqual(
+    expect(issues).toEqual(
       expect.arrayContaining([
         'i18n: holds a condition or a property that is not an object',
         'migration: holds a condition or a property that is not an object',
@@ -516,11 +514,11 @@ describe('checkSwitchRules', () => {
   })
 
   it('rejects empty rules', async () => {
-    const problems = await checkSwitchRules({
+    const issues = await checkSwitchRules({
       flags: [],
       groupTypeMapping: {},
       cohorts: {},
     })
-    expect(problems.length).toBeGreaterThan(0)
+    expect(issues.length).toBeGreaterThan(0)
   })
 })

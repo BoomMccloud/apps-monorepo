@@ -133,7 +133,7 @@ describe('decideFeatureSwitches', () => {
     await expect(decide(env, null)).resolves.toEqual(ALL_SWITCHES_OFF)
 
     expect(network).not.toHaveBeenCalled()
-    const logged = errors.mock.calls.map(([problem]) => problem)
+    const logged = errors.mock.calls.map(([error]) => error)
     expect(logged).toContainEqual(
       expect.objectContaining({
         _tag: 'StoredSwitchRulesUnreadable',
@@ -142,9 +142,7 @@ describe('decideFeatureSwitches', () => {
       }),
     )
     expect(
-      logged.filter(
-        (problem) => problem._tag === 'StoredSwitchRulesUnreadable',
-      ),
+      logged.filter((error) => error._tag === 'StoredSwitchRulesUnreadable'),
     ).toHaveLength(1)
   })
 
@@ -163,7 +161,7 @@ describe('decideFeatureSwitches', () => {
     await expect(decide(env, null)).resolves.toEqual(ALL_SWITCHES_OFF)
 
     expect(network).not.toHaveBeenCalled()
-    const logged = errors.mock.calls.map(([problem]) => problem)
+    const logged = errors.mock.calls.map(([error]) => error)
     expect(logged).toContainEqual(
       expect.objectContaining({
         _tag: 'StoredSwitchRulesUnrecognized',
@@ -172,9 +170,7 @@ describe('decideFeatureSwitches', () => {
       }),
     )
     expect(
-      logged.filter(
-        (problem) => problem._tag === 'StoredSwitchRulesUnrecognized',
-      ),
+      logged.filter((error) => error._tag === 'StoredSwitchRulesUnrecognized'),
     ).toHaveLength(1)
   })
 
