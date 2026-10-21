@@ -23,7 +23,6 @@ export const AnalyticsBanner = () => {
   return (
     <section
       aria-labelledby={headingId}
-      // biome-ignore lint/plugin: Greptile's cn-class-helper asks for cn here, not tw, until the agent-lint pull request lands (Leon, 2026-10-18).
       className={cn(
         'fixed inset-x-2.5 top-18 z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
         // greptile: no-arbitrary-tailwind: the space a bar fixed to the bottom
