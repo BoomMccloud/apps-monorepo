@@ -96,18 +96,18 @@ vi.mock('@/features/registry/hooks/useNameRegistryDiscovery', () => ({
   }),
 }))
 
-/** The subregistry's answer to `supportsInterface(IRegistry)`; `null` fails the read. */
+/** Whether the subregistry reports `IRegistry`; `null` fails the read. */
 let subregistryIsRegistry: boolean | null = true
-const supportsInterfacesParams = vi.fn()
-vi.mock('@/hooks/useSupportsInterfaces', () => ({
-  getSupportsInterfacesQueryOptions: (params: Record<string, unknown>) => {
-    supportsInterfacesParams(params)
+const isRegistryParams = vi.fn()
+vi.mock('@/features/registry/hooks/useIsRegistry', () => ({
+  getIsRegistryQueryOptions: (params: Record<string, unknown>) => {
+    isRegistryParams(params)
     return {
-      queryKey: ['supportsInterfaces', String(params.address)],
+      queryKey: ['isRegistry', String(params.address)],
       queryFn: () =>
         subregistryIsRegistry === null
           ? Promise.reject(new Error('rpc down'))
-          : [subregistryIsRegistry],
+          : subregistryIsRegistry,
     }
   },
 }))
@@ -232,7 +232,7 @@ beforeEach(() => {
   protocolVersion = 'ENSv2'
   v1State = null
   subregistryIsRegistry = true
-  supportsInterfacesParams.mockReset()
+  isRegistryParams.mockReset()
   registriesFail = false
 })
 
@@ -250,10 +250,7 @@ describe('subnames route with a subregistry that is not a registry', () => {
     renderRoute()
 
     await waitFor(() =>
-      expect(supportsInterfacesParams).toHaveBeenCalledWith({
-        address: SUBREGISTRY,
-        interfaces: ['0x51f67f40'],
-      }),
+      expect(isRegistryParams).toHaveBeenCalledWith({ address: SUBREGISTRY }),
     )
   })
 
@@ -291,7 +288,7 @@ describe('subnames route with a subregistry that is not a registry', () => {
       () => {
         subregistryIsRegistry = null
       },
-      ['supportsInterfaces', SUBREGISTRY],
+      ['isRegistry', SUBREGISTRY],
     ],
   ])('keeps the subnames on screen when a refresh of %s fails', async (_, fail, queryKey) => {
     const queryClient = createTestQueryClient()

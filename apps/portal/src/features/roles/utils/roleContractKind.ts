@@ -23,12 +23,6 @@ export type RoleContractKind =
 export const PERMISSIONED_REGISTRY_INTERFACE_ID: Hex = '0xc18bd555'
 
 /**
- * ERC-165 id of `IRegistry` (`getSubregistry`, `getResolver`, `getParent`): what
- * any registry the name tree can walk through reports, permissioned or not.
- */
-export const REGISTRY_INTERFACE_ID: Hex = '0x51f67f40'
-
-/**
  * Both checks must agree. An address that claims both models, or neither, gets
  * no role editor.
  */

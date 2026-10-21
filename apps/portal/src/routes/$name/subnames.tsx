@@ -23,6 +23,7 @@ import { getSubnamePagesQueryOptions } from '@/features/profile/hooks/useSubname
 import { V1SubnamesContent } from '@/features/registry/components/V1SubnamesContent'
 import { useDeleteSubname } from '@/features/registry/hooks/useDeleteSubname'
 import { getHasRolesQueryOptions } from '@/features/registry/hooks/useHasRoles'
+import { getIsRegistryQueryOptions } from '@/features/registry/hooks/useIsRegistry'
 import { getNameRegistriesQueryOptions } from '@/features/registry/hooks/useNameRegistryDiscovery'
 import { getNameResourceIdQueryOptions } from '@/features/registry/hooks/useNameResourceId'
 import {
@@ -34,10 +35,8 @@ import {
   useSubnameDeleteQueue,
 } from '@/features/registry/hooks/useSubnameDeleteQueue'
 import { prepareDeleteSubnameTransaction } from '@/features/registry/utils/delete-subname.helpers'
-import { REGISTRY_INTERFACE_ID } from '@/features/roles/utils/roleContractKind'
 import { TransactionModal } from '@/features/transaction-manager/components/TransactionModal'
 import type { IntentContext } from '@/features/transaction-manager/types'
-import { getSupportsInterfacesQueryOptions } from '@/hooks/useSupportsInterfaces'
 import {
   resourceIdForName,
   resourceIdFromChainValue,
@@ -425,13 +424,7 @@ const SubregistryCheck = ({
     data: isRegistry,
     isLoading,
     error,
-  } = useQuery({
-    ...getSupportsInterfacesQueryOptions({
-      address: subregistryAddress,
-      interfaces: [REGISTRY_INTERFACE_ID],
-    }),
-    select: ([supportsRegistry]) => supportsRegistry === true,
-  })
+  } = useQuery(getIsRegistryQueryOptions({ address: subregistryAddress }))
 
   if (isLoading) {
     return <LoadingMessage title="Checking subregistry..." />
@@ -441,7 +434,7 @@ const SubregistryCheck = ({
     return (
       <ErrorMessage
         title="Failed to check subregistry"
-        description={extractErrorMessage(error, '')}
+        description={error.message}
       />
     )
   }
