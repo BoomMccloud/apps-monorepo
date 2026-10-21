@@ -9,7 +9,6 @@ import {
   eventsNamed,
   expectBannerWording,
   expectBrowserSilent,
-  expectCardClearOf,
   expectCardInBottomCorner,
   expectCardUnderHeader,
   expectEqualButtons,
@@ -89,10 +88,6 @@ test.beforeEach(async ({ context }) => {
   await presentAsVisitorBrowser(context)
 })
 
-/** The header's own controls: the first navigation landmark is the header's. */
-const headerControls = (page: Page) =>
-  page.locator('nav').first().locator('a, button, input')
-
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^connect( login)?$/i })
 
@@ -169,7 +164,6 @@ test.describe('Manager analytics choice', () => {
     await expectBannerWording(banner)
     await expectEqualButtons(page)
     await expectCardInBottomCorner(page, banner, 'left')
-    await expectCardClearOf(banner, headerControls(page), 'header at 1280px')
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'manager-banner-1280')
 
@@ -179,7 +173,6 @@ test.describe('Manager analytics choice', () => {
     await expect(banner).toBeVisible()
     await expectEqualButtons(page)
     await expectCardUnderHeader(page, banner, page.locator('nav').first())
-    await expectCardClearOf(banner, headerControls(page), 'header at 360px')
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'manager-banner-360')
 

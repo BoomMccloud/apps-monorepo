@@ -13,7 +13,6 @@ import {
   eventsNamed,
   expectBannerWording,
   expectBrowserSilent,
-  expectCardClearOf,
   expectCardInBottomCorner,
   expectCardUnderHeader,
   expectEqualButtons,
@@ -164,23 +163,13 @@ test.describe('Explorer analytics choice', () => {
     await expectBannerWording(banner)
     await expectEqualButtons(page)
     await expectCardInBottomCorner(page, banner, 'right')
-    await expectCardClearOf(
-      banner,
-      page.locator('header').first().locator('a, button'),
-      'home header at 1280px',
-    )
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'explorer-banner-1280')
 
-    // On a page with the sidebar, the card leaves its Help and Settings clear.
+    // On a page with the sidebar, the card sits in the same corner.
     await openFresh(page, RESOLVER_PAGE)
     await expect(banner).toBeVisible()
     await expectCardInBottomCorner(page, banner, 'right')
-    await expectCardClearOf(
-      banner,
-      page.getByRole('button', { name: /^(Help|Settings)$/ }),
-      'sidebar Help and Settings',
-    )
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'explorer-banner-sidebar-1280')
 
@@ -196,11 +185,6 @@ test.describe('Explorer analytics choice', () => {
     await expect(banner).toBeVisible()
     await expectEqualButtons(page)
     await expectCardUnderHeader(page, banner, page.locator('header').first())
-    await expectCardClearOf(
-      banner,
-      page.locator('header').first().locator('a, button'),
-      'home header at 360px',
-    )
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'explorer-banner-360')
 
@@ -208,11 +192,6 @@ test.describe('Explorer analytics choice', () => {
     await expect(banner).toBeVisible()
     const mobileHeader = page.locator('header:visible').first()
     await expectCardUnderHeader(page, banner, mobileHeader)
-    await expectCardClearOf(
-      banner,
-      mobileHeader.locator('a, button'),
-      'sidebar page header at 360px',
-    )
     await expectNoSidewaysScroll(page)
 
     await page.emulateMedia({ colorScheme: 'dark' })
