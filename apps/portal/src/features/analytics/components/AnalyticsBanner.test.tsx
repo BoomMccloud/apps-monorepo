@@ -2,7 +2,6 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
-import { BOTTOM_BAR_CLEARANCE_PROPERTY } from '@ens-apps/utils/bottomBarClearance'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -60,16 +59,6 @@ describe('AnalyticsBanner', () => {
 
     expect(banner()).toHaveTextContent(
       'you can change it in Privacy settings at any time',
-    )
-  })
-
-  it('sits above a bar fixed to the bottom of the page, by the space the bars publish', () => {
-    renderBanner('pending')
-
-    // greptile: no-arbitrary-tailwind: this is the class the component
-    // justifies, written out so that the test can look for it.
-    expect(banner()?.className).toContain(
-      `bottom-[calc(1.5rem+var(${BOTTOM_BAR_CLEARANCE_PROPERTY},0px))]`,
     )
   })
 
