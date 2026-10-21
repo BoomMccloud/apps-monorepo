@@ -106,6 +106,20 @@ const renderStep = ({
         onManagerRestorationChange={onManagerRestorationChange}
         onNamesChange={onNamesChange}
         onNext={onNext}
+        subnameImpact={{
+          status: 'ready',
+          impact: {
+            parents: [],
+            affectedCount: 0,
+            fingerprint: 'clear',
+            checkedAt: 0,
+          },
+          acknowledged: false,
+          canStart: true,
+          checkBeforeStart: async () => true,
+          retry: () => undefined,
+          acknowledge: () => undefined,
+        }}
       />
     </SmartAccountContextProvider>,
   )

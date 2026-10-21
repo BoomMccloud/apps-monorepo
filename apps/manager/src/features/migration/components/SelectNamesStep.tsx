@@ -6,6 +6,7 @@ import { useEligibleV1Names } from '@/features/migration/hooks/useEligibleV1Name
 import type { MigrationGasEstimateState } from '@/features/migration/hooks/useMigrationGasEstimate'
 import type { MigrationGasFundingStatus } from '@/features/migration/hooks/useMigrationGasFunding'
 import { useNameSelection } from '@/features/migration/hooks/useNameSelection'
+import type { SubnameMigrationImpactState } from '@/features/migration/hooks/useSubnameMigrationImpact'
 import { cn } from '@/lib/utils'
 import type { GraceRenewalGasEstimateState } from '../hooks/useGraceRenewalGasEstimate'
 import type { GraceRenewalQuoteState } from '../hooks/useGraceRenewalQuote'
@@ -29,6 +30,7 @@ type SelectNamesStepProps = {
   readonly onNext: () => boolean | Promise<boolean>
   readonly renewal?: GraceRenewalQuoteState
   readonly renewalGasEstimate?: GraceRenewalGasEstimateState
+  readonly subnameImpact: SubnameMigrationImpactState
 }
 
 const SelectionTitle = ({
@@ -61,6 +63,7 @@ export const SelectNamesStep = ({
   onNext,
   renewal = { status: 'idle' },
   renewalGasEstimate = { status: 'idle' },
+  subnameImpact,
 }: SelectNamesStepProps) => {
   const {
     eligible,
@@ -124,6 +127,7 @@ export const SelectNamesStep = ({
     isPending ||
     isRecoveryStale ||
     isStarting ||
+    !subnameImpact.canStart ||
     isWaitingForGasEstimate ||
     isWaitingForGasFunding
   const showBulkSelection = shouldShowBulkSelection(visibleCount)
@@ -222,6 +226,7 @@ export const SelectNamesStep = ({
               setSearch={setSearch}
               showBulkSelection={showBulkSelection}
               showNameSearch={showNameSearch}
+              subnameImpact={subnameImpact}
               toggleAll={toggleAll}
               toggleManagerRestoration={toggleManagerRestoration}
               toggleName={toggleName}

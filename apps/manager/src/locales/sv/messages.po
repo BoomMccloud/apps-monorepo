@@ -53,6 +53,10 @@ msgstr ""
 msgid "{0}% discount"
 msgstr ""
 
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "{affectedCount, plural, one {# affected subname} other {# affected subnames}}"
+msgstr ""
+
 #: src/features/register-v2/workflow/pricing/components/TokenListItem.tsx
 #: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
 msgid "{amount} needed to register name"
@@ -498,6 +502,10 @@ msgstr ""
 msgid "Carving your name into the blockchain"
 msgstr ""
 
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "Check again"
+msgstr ""
+
 #: src/features/migration/components/success/CommemorativeNftProfileSection.tsx
 msgid "Check mint status"
 msgstr ""
@@ -534,6 +542,10 @@ msgstr ""
 
 #: src/features/migration/components/MigrationSuccessDialog.tsx
 msgid "Checking status…"
+msgstr ""
+
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "Checking the impact on existing subnames..."
 msgstr ""
 
 #: src/features/renew/workflow/renewing/RenewingStep.tsx
@@ -1261,6 +1273,10 @@ msgstr ""
 
 #: src/features/renew/components/ThirdPartyRenewalDialog.tsx
 msgid "I Understand"
+msgstr ""
+
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "I understand that these subnames will stop resolving and want to continue."
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
@@ -2631,6 +2647,10 @@ msgstr ""
 msgid "Submitting token approval"
 msgstr ""
 
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "Subnames will stop resolving"
+msgstr ""
+
 #: src/features/bulk-renew/components/NamesBreakdown.tsx
 msgid "Subtotal:"
 msgstr ""
@@ -2716,6 +2736,10 @@ msgstr ""
 msgid "The fee hits $0 on"
 msgstr ""
 
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "The impact is unknown. Try again or contact support before upgrading."
+msgstr ""
+
 #: src/features/migration/commemorative-nft/claimMessages.ts
 msgid "The mint request was cancelled."
 msgstr ""
@@ -2767,6 +2791,10 @@ msgstr ""
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 #: src/features/profile/components/dialogs/edit-profile/useEditProfileDialogSave.ts
 msgid "The replacement resolver could not be verified. Please try again."
+msgstr ""
+
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "The selected names have subnames that will no longer resolve after upgrading to ENSv2 and will need to be recreated. Please contact support if you have any questions."
 msgstr ""
 
 #: src/features/migration/service/migrationPreparationError.ts
@@ -3187,6 +3215,10 @@ msgstr ""
 
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 msgid "Wallet isn’t ready yet. Try again in a moment."
+msgstr ""
+
+#: src/features/migration/components/SubnameMigrationWarning.tsx
+msgid "We couldn't check your subnames"
 msgstr ""
 
 #: src/features/migration/components/MigrationApprovalSettings.tsx

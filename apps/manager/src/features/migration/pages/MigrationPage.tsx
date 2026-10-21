@@ -1,3 +1,4 @@
+import { classifyNames } from '@ens-apps/migration'
 import type { Signer } from '@ens-apps/transaction-manager'
 import { assessGasAffordability } from '@ens-apps/utils/gasAffordability'
 import { Plural, Trans } from '@lingui/react/macro'
@@ -17,6 +18,7 @@ import { GrainOverlay } from '@/features/migration/components/GrainOverlay'
 import { MigrationPrimaryButton } from '@/features/migration/components/MigrationPrimaryButton'
 import { MigrationSuccessDialog } from '@/features/migration/components/MigrationSuccessDialog'
 import { SelectNamesStep } from '@/features/migration/components/SelectNamesStep'
+import { SubnameMigrationWarning } from '@/features/migration/components/SubnameMigrationWarning'
 import { CommemorativeNftClaimDialog } from '@/features/migration/components/success/CommemorativeNftClaimDialog'
 import { useEligibleV1Names } from '@/features/migration/hooks/useEligibleV1Names'
 import { useGraceRenewalGasEstimate } from '@/features/migration/hooks/useGraceRenewalGasEstimate'
@@ -26,6 +28,7 @@ import {
 } from '@/features/migration/hooks/useGraceRenewalQuote'
 import { useMigrationGasEstimate } from '@/features/migration/hooks/useMigrationGasEstimate'
 import { useMigrationGasFunding } from '@/features/migration/hooks/useMigrationGasFunding'
+import { useSubnameMigrationImpact } from '@/features/migration/hooks/useSubnameMigrationImpact'
 import { useSyncRenewedV1Names } from '@/features/migration/hooks/useSyncRenewedV1Names'
 import { useV1Names } from '@/features/migration/hooks/useV1Names'
 import {
@@ -196,6 +199,22 @@ const formatMigrationError = (error: MigrationError): ReactNode => {
   }
 }
 
+const shouldCheckRetryImpact = (
+  step: string,
+  hasRetryContext: boolean,
+  errorType?: MigrationError['type'],
+) => step === 'failure' && hasRetryContext && errorType !== 'cleanup-failed'
+
+const getImpactRenewalNames = (
+  isRetry: boolean,
+  hasRenewed: boolean,
+  pendingNames: readonly string[] | undefined,
+  graceNames: readonly string[],
+) => {
+  if (!isRetry) return graceNames
+  return hasRenewed ? [] : (pendingNames ?? [])
+}
+
 export const MigrationPage = () => {
   const navigate = useNavigate()
   const canGoBack = useCanGoBack()
@@ -205,6 +224,11 @@ export const MigrationPage = () => {
     (snapshot) => snapshot.context.renewalDiscardConfirmation,
   )
   const migrationPlan = useSelector(uiActor, (state) => state.context.plan)
+  const retryRenewal = useSelector(uiActor, (state) => state.context.renewal)
+  const renewedDomains = useSelector(
+    uiActor,
+    (state) => state.context.renewedDomains,
+  )
   const step = useMigrationStep(uiActor)
   const selectedNames = useMigrationSelectedNames(uiActor)
   const managerRestorationNames = useMigrationManagerRestorationNames(uiActor)
@@ -286,6 +310,69 @@ export const MigrationPage = () => {
   // resolve until any drip is confirmed on-chain, so we gate the upgrade
   // button on `gasFundingStatus` to stop owners starting before the ETH lands.
   const gasFundingStatus = useMigrationGasFunding(ownerAddress)
+
+  const needsRetryImpact = shouldCheckRetryImpact(
+    step,
+    [migrationPlan, retryRenewal, renewedDomains].some(Boolean),
+    lastError?.type,
+  )
+  const retryDomains = useMemo(() => {
+    const refreshed = new Map(
+      (renewedDomains ?? []).map((domain) => [domain.id, domain]),
+    )
+    return (retryRenewal?.domains ?? []).map(
+      (domain) => refreshed.get(domain.id) ?? domain,
+    )
+  }, [retryRenewal, renewedDomains])
+  const impactNames = useMemo(() => {
+    const names = needsRetryImpact
+      ? (migrationPlan?.classified ??
+        (ownerAddress
+          ? classifyNames(
+              retryDomains,
+              ownerAddress as Address,
+              migrationExecutionClient.chain.id,
+            ).classified
+          : []))
+      : gasEstimate.status === 'ready'
+        ? gasEstimate.plan.classified
+        : graceDomains.length > 0 && ownerAddress
+          ? classifyNames(
+              v1Names,
+              ownerAddress as Address,
+              migrationExecutionClient.chain.id,
+            ).classified
+          : []
+    const completed = new Set(completedOperations.map(({ name }) => name))
+    return names.filter(({ domain }) => !completed.has(domain.name))
+  }, [
+    needsRetryImpact,
+    migrationPlan,
+    retryDomains,
+    gasEstimate,
+    graceDomains.length,
+    ownerAddress,
+    v1Names,
+    completedOperations,
+  ])
+  const subnameImpact = useSubnameMigrationImpact({
+    selectedNames,
+    classified: impactNames,
+    renewingNames: getImpactRenewalNames(
+      needsRetryImpact,
+      !!renewedDomains,
+      retryRenewal?.quote.items.map(({ domain }) => domain.name),
+      graceDomains.map(({ name }) => name),
+    ),
+    ownerAddress,
+    managerRestorationNames,
+    enabled: step === 'select' || needsRetryImpact,
+    prepared:
+      needsRetryImpact ||
+      (graceDomains.length > 0
+        ? renewalGasEstimate.status === 'ready'
+        : gasEstimate.status === 'ready'),
+  })
 
   useSyncRenewedV1Names()
 
@@ -404,6 +491,11 @@ export const MigrationPage = () => {
     uiActor,
   ])
 
+  const handleVerifiedBeginUpgrade = useCallback(async () => {
+    if (!(await subnameImpact.checkBeforeStart())) return false
+    return handleBeginUpgrade()
+  }, [subnameImpact.checkBeforeStart, handleBeginUpgrade])
+
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-clip">
       <GrainOverlay className="opacity-70" />
@@ -430,9 +522,10 @@ export const MigrationPage = () => {
             gasFundingStatus={gasFundingStatus}
             onManagerRestorationChange={handleManagerRestorationChange}
             onNamesChange={handleNamesChange}
-            onNext={handleBeginUpgrade}
+            onNext={handleVerifiedBeginUpgrade}
             renewal={renewal}
             renewalGasEstimate={renewalGasEstimate}
+            subnameImpact={subnameImpact}
           />
         ))
         .with('migrate', () => <GameStep />)
@@ -463,6 +556,12 @@ export const MigrationPage = () => {
               </div>
             </motion.div>
 
+            {needsRetryImpact && (
+              <div className="max-h-64 w-full max-w-lg overflow-y-auto">
+                <SubnameMigrationWarning state={subnameImpact} />
+              </div>
+            )}
+
             <motion.div
               animate={{ opacity: 1, y: 0 }}
               className="flex max-w-full flex-wrap justify-center gap-3"
@@ -477,7 +576,15 @@ export const MigrationPage = () => {
                 <Trans>Back</Trans>
               </button>
               <MigrationPrimaryButton
-                onClick={() => uiActor.send({ type: 'retry' })}
+                disabled={needsRetryImpact && !subnameImpact.canStart}
+                onClick={async () => {
+                  if (
+                    needsRetryImpact &&
+                    !(await subnameImpact.checkBeforeStart())
+                  )
+                    return
+                  uiActor.send({ type: 'retry' })
+                }}
                 type="button"
               >
                 {lastError?.type === 'cleanup-failed' ? (

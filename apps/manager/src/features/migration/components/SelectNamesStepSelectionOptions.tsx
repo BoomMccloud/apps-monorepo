@@ -1,8 +1,10 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { Check, Info, Search } from 'lucide-react'
 import type { useNameSelection } from '@/features/migration/hooks/useNameSelection'
+import type { SubnameMigrationImpactState } from '@/features/migration/hooks/useSubnameMigrationImpact'
 import { cn } from '@/lib/utils'
 import { SelectNamesStepNameList } from './SelectNamesStepNameList'
+import { SubnameMigrationWarning } from './SubnameMigrationWarning'
 
 type NameSelectionState = ReturnType<typeof useNameSelection>
 
@@ -55,6 +57,7 @@ type SelectNamesStepSelectionOptionsProps = Pick<
   readonly isPending: boolean
   readonly showBulkSelection: boolean
   readonly showNameSearch: boolean
+  readonly subnameImpact: SubnameMigrationImpactState
 }
 
 export const SelectNamesStepSelectionOptions = ({
@@ -78,6 +81,7 @@ export const SelectNamesStepSelectionOptions = ({
   toggleName,
   totalSelected,
   visibleCount,
+  subnameImpact,
 }: SelectNamesStepSelectionOptionsProps) => {
   const { t } = useLingui()
 
@@ -168,6 +172,7 @@ export const SelectNamesStepSelectionOptions = ({
           )}
         >
           <div className="flex flex-col gap-4 pt-4">
+            <SubnameMigrationWarning state={subnameImpact} />
             <SelectNamesStepNameList
               filteredGracePeriodNames={filteredGracePeriodNames}
               filteredGroups={filteredGroups}
