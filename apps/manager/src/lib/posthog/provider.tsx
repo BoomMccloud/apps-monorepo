@@ -11,7 +11,7 @@ import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
 import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
 import posthog, { reactClient } from './client'
@@ -40,10 +40,21 @@ export const PHProvider = ({
   const { address, chainId, connector } = useConnection()
   const isConnectionSettled = useIsConnectionSettled()
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
-  // Each reset empties the SDK's switches; the sync hook writes them again.
-  const [resetCount, setResetCount] = useState(0)
-  // Memoized: useWalletAnalytics keeps its disconnect handler stable on it.
-  const recordReset = useCallback(() => setResetCount((count) => count + 1), [])
+
+  usePostHogStart(isHydrated, pageStart.switches, setConsent)
+  useWalletIdentity(
+    posthog,
+    consent,
+    address ? { address, chainId, connectorName: connector?.name } : null,
+    relinkSupportChat,
+  )
+  // Each reset empties the SDK's switches; the sync hook writes them again
+  // once it is told of the reset.
+  const recordReset = useFeatureSwitchSync({
+    wallet: address ?? null,
+    isConnectionSettled,
+    pageStart,
+  })
 
   // What the page does about a choice, whether the visitor pressed it here or
   // it was made in another tab or app.
@@ -60,26 +71,12 @@ export const PHProvider = ({
       .exhaustive()
   }
 
-  usePostHogStart(isHydrated, pageStart.switches, setConsent)
   useFollowedChoice(
     posthog,
     consent !== 'unknown',
     import.meta.env.DEV,
     applyChoice,
   )
-  useWalletIdentity(
-    posthog,
-    consent,
-    address ? { address, chainId, connectorName: connector?.name } : null,
-    relinkSupportChat,
-  )
-  useFeatureSwitchSync({
-    wallet: address ?? null,
-    isConnectionSettled,
-    pageStart,
-    resetCount,
-  })
-
   useWalletAnalytics(recordReset)
 
   const accept = () => {
