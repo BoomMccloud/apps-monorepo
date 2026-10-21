@@ -15,8 +15,8 @@ catalog:
   vitest: ^4.1.11
   "@vitest/coverage-v8": ^4.1.11
   happy-dom: ^20.13.2
-  "@cloudflare/vite-plugin": ^1.63.2
-  wrangler: ^4.150.0
+  "@cloudflare/vite-plugin": ^1.64.0
+  wrangler: ^4.151.3
   # Pinned exactly: the apps call the SDK's `_onRemoteConfig`, which has no public
   # replacement once `advanced_disable_flags` is set (packages/utils/src/analyticsConsent.ts).
   # The real-SDK test that Accept hands the SDK the project's settings fails if a
