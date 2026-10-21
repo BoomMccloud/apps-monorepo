@@ -289,7 +289,7 @@ export const invariants: Invariant[] = [
         'INV5',
         '4ld-transfer-actions',
         'Former V1 4LD holder write surfaces',
-        'transfer, records, resolver, fuses, subname creation and roles refuse with a reason; chain state and records remain unchanged',
+        'transfer, records, resolver, fuses and subname creation refuse the former holder with a reason (roles is a depth gate, E2E-042, not a holder gate); chain state and records remain unchanged',
       ),
       site(
         'INV5',

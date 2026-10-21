@@ -576,7 +576,7 @@ resolution (E2E-031), Q8 is stranded (E2E-041), and SUB-F3 remains a product rul
 | Q1 | Orphan: the user holds only a registry 4LD under someone else's 3LD | Not offered, or ineligible `missing-parent`; nothing written |
 | Q2 | Registry 4LD → unlocked wrapped 3LD → unwrapped 2LD, all the user's | One UserRegistry per level; `getParent` links; 4LD registered to the source owner; records resolve |
 | Q3 | Emancipated 4LD under a locked 3LD the user doesn't own | `detached-child` route: migrates alone, or the UI says why not |
-| Q4 | Locked 2LD → locked 3LD → unlocked (non-PCC) wrapped 4LD | Not copied. **Does it still resolve after the parents migrate?** (E2E-031-like risk) |
+| Q4 | Locked 2LD → locked 3LD → unlocked (non-PCC) wrapped 4LD | Not copied; before the upgrade it is shown as not upgradable, warning that it will stop resolving (E2E-031). Measured: after the ancestors migrate, UR resolution is lost while V1 storage and holder remain |
 | Q5 | Locked chain with CANNOT_TRANSFER on the 4LD | 4LD ineligible; 2LD and 3LD still migrate |
 | Q6 | Selection tree | 4LD row at depth 2; can't be toggled alone; toggling the 2LD selects all three |
 | Q7 | After migration (GS14 chain) | Records resolve through UR; editable in the manager profile and the explorer editor; explorer registry tree shows 5 rows |
@@ -592,7 +592,7 @@ resolution (E2E-031), Q8 is stranded (E2E-041), and SUB-F3 remains a product rul
 | Q17 | Set a V1 4LD (addr(60) = owner) as primary in the explorer | `readPrimaryName(owner)` = the 4LD; the manager shows it |
 | Q18 | The manager's primary picker | Excludes V1 names: pin, and add a product-gap row next to E2E-035 |
 | Q19 | Migrate the primary 4LD | Primary still resolves both ways |
-| Q20 | 2LD in grace | Wrapped 4LD expiry clamped; grace blocks parent reassignment while the holder retains transfer authority (VT44) |
+| Q20 | 2LD in grace | Wrapped 4LD expiry clamped; the NameWrapper still allows the parent's reassign and the holder's transfer (simulated on chain), so the explorer should offer the parent that reassign (E2E-043; the holder's transfer is offered, VT44) |
 | Q21 | Renew the 2LD in grace, then upgrade | The 4LD is copied with its chain |
 | Q22 | 2LD past grace | The 4LD isn't listed and doesn't resolve |
 | Q23 | 3LD wrapper expired, 2LD active | The explorer reads only the 2LD's expiry: check its claim against chain |

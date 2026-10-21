@@ -2839,7 +2839,7 @@ const fourLdQ: Scenario[] = [
     '4LD names',
     'manager',
     'Locked 2LD \u2192 locked 3LD \u2192 unlocked (non-PCC) wrapped 4LD',
-    'Not copied. Does it still resolve after the parents migrate? (E2E-031-like risk)',
+    'Not copied; before the upgrade it is shown as not upgradable with a warning that it will stop resolving (E2E-031). Measured: after the ancestors migrate, UR resolution is lost while V1 storage and holder remain',
     { tier: 'R0' },
   ),
   s(
@@ -2999,7 +2999,7 @@ const fourLdQ: Scenario[] = [
     '4LD names',
     'cross-app',
     '2LD in grace',
-    'Wrapped 4LD expiry clamped; the explorer shows ancestor-expired and refuses transfer',
+    'Wrapped 4LD expiry clamped; the parent reassign and holder transfer the NameWrapper still allows are simulated on chain, and the explorer offers the parent that reassign (E2E-043)',
     { tier: 'R3' },
   ),
   s(
