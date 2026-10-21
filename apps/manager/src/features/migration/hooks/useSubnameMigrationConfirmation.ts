@@ -16,7 +16,7 @@ export const useSubnameMigrationConfirmation = ({
   const [action, setAction] = useState<Action | null>(null)
   const [isChecking, setIsChecking] = useState(false)
   const requestRevision = useRef(0)
-  const busy = useRef(false)
+  const isBusy = useRef(false)
   const invokingElement = useRef<HTMLElement | null>(null)
   const reviewKey = impact.canReview ? impact.selectionKey : null
   const selection = useRef(reviewKey)
@@ -46,19 +46,19 @@ export const useSubnameMigrationConfirmation = ({
     requestRevision.current === revision && selection.current === selectionKey
 
   const request = async (requestedAction: Action): Promise<boolean> => {
-    if (busy.current || !impact.canReview) return false
+    if (isBusy.current || !impact.canReview) return false
     invokingElement.current = focusedElement()
     const revision = ++requestRevision.current
     const selectionKey = impact.selectionKey
     if (impact.status === 'ready' && impact.impact?.affectedCount === 0) {
-      busy.current = true
+      isBusy.current = true
       setIsChecking(true)
       try {
-        const safe = await impact.checkBeforeStart()
+        const isSafe = await impact.checkBeforeStart()
         if (!isCurrentRequest(revision, selectionKey)) return false
-        if (safe) return await onConfirm(requestedAction)
+        if (isSafe) return await onConfirm(requestedAction)
       } finally {
-        busy.current = false
+        isBusy.current = false
         setIsChecking(false)
       }
     }
@@ -69,24 +69,24 @@ export const useSubnameMigrationConfirmation = ({
   }
 
   const confirm = async () => {
-    if (busy.current || action === null || impact.status !== 'ready') return
+    if (isBusy.current || action === null || impact.status !== 'ready') return
     const revision = requestRevision.current
-    busy.current = true
+    isBusy.current = true
     setIsChecking(true)
     try {
-      const safe = await impact.checkBeforeStart(impact.impact?.fingerprint)
-      if (!safe || requestRevision.current !== revision) return
+      const isSafe = await impact.checkBeforeStart(impact.impact?.fingerprint)
+      if (!isSafe || requestRevision.current !== revision) return
       // Continue is the acknowledgement, bound to the identities just shown.
       // If the final read changes them, keep the dialog open for review again.
       if (await onConfirm(action)) setAction(null)
     } finally {
-      busy.current = false
+      isBusy.current = false
       setIsChecking(false)
     }
   }
 
   return {
-    open: action !== null,
+    isOpen: action !== null,
     isChecking,
     request,
     confirm,

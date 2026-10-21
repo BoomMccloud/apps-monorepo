@@ -1,10 +1,12 @@
 import {
   type ClassifiedName,
-  readSubnameMigrationImpact,
+  getSubnameMigrationImpact,
 } from '@ens-apps/migration'
+import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
 import { useQuery } from '@tanstack/react-query'
 import { useRef } from 'react'
+import { match } from 'ts-pattern'
 import type { PublicClient } from 'viem'
 import { bigname } from '@/lib/bigname'
 import { publicClient } from '@/lib/wagmi'
@@ -15,11 +17,46 @@ type Parameters = {
   readonly renewingNames: readonly string[]
   readonly ownerAddress?: string | null
   readonly managerRestorationNames?: readonly string[]
-  readonly enabled: boolean
-  readonly prepared: boolean
+  readonly isEnabled: boolean
+  readonly isPrepared: boolean
 }
 
 const FRESH_FOR_MS = 60_000
+
+export const getSubnameMigrationImpactQueryOptions = ({
+  selectionKey,
+  migratingNames,
+  copiedNames,
+  renewingNames,
+  isEnabled,
+  isPrepared,
+  hasSelectedNames,
+}: {
+  readonly selectionKey: string
+  readonly migratingNames: readonly string[]
+  readonly copiedNames: readonly string[]
+  readonly renewingNames: readonly string[]
+  readonly isEnabled: boolean
+  readonly isPrepared: boolean
+  readonly hasSelectedNames: boolean
+}) =>
+  resultQueryOptions({
+    queryKey: qk('migration', 'subname_impact', { selectionKey }),
+    queryFn: ({ signal }) =>
+      getSubnameMigrationImpact({
+        indexer: bigname,
+        publicClient: publicClient as PublicClient,
+        migratingNames,
+        copiedNames,
+        renewingNames,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+      }),
+    enabled: isEnabled && isPrepared && hasSelectedNames,
+    staleTime: FRESH_FOR_MS,
+    refetchInterval: isEnabled ? FRESH_FOR_MS : false,
+    refetchOnWindowFocus: 'always',
+    retry: false,
+  })
 
 export const useSubnameMigrationImpact = ({
   selectedNames,
@@ -27,8 +64,8 @@ export const useSubnameMigrationImpact = ({
   renewingNames,
   ownerAddress,
   managerRestorationNames = [],
-  enabled,
-  prepared,
+  isEnabled,
+  isPrepared,
 }: Parameters) => {
   const selected = new Set(selectedNames.map((name) => name.toLowerCase()))
   const migratingNames = [
@@ -59,44 +96,39 @@ export const useSubnameMigrationImpact = ({
     managers: [...managerRestorationNames].sort(),
     chainId: publicClient.chain.id,
   })
-  const ready = enabled && prepared
-  const currentSelection = useRef({ key: selectionKey, revision: 0, ready })
+  const isReady = isEnabled && isPrepared
+  const currentSelection = useRef({ key: selectionKey, revision: 0, isReady })
   if (
     currentSelection.current.key !== selectionKey ||
-    currentSelection.current.ready !== ready
+    currentSelection.current.isReady !== isReady
   ) {
     currentSelection.current = {
       key: selectionKey,
       revision: currentSelection.current.revision + 1,
-      ready,
+      isReady,
     }
   }
-  const query = useQuery({
-    queryKey: qk('migration', 'subname_impact', { selectionKey }),
-    queryFn: ({ signal }) =>
-      readSubnameMigrationImpact({
-        indexer: bigname,
-        publicClient: publicClient as PublicClient,
-        migratingNames,
-        copiedNames,
-        renewingNames,
-        signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
-      }),
-    enabled: enabled && prepared && selected.size > 0,
-    staleTime: FRESH_FOR_MS,
-    refetchInterval: enabled ? FRESH_FOR_MS : false,
-    refetchOnWindowFocus: 'always',
-    retry: false,
+  const query = useQuery(
+    getSubnameMigrationImpactQueryOptions({
+      selectionKey,
+      migratingNames,
+      copiedNames,
+      renewingNames,
+      isEnabled,
+      isPrepared,
+      hasSelectedNames: selected.size > 0,
+    }),
+  )
+  const status = match({
+    hasSelectedNames: selected.size > 0,
+    isLoading: !isPrepared || query.isPending || query.isFetching,
+    isError: query.isError,
   })
-  const status =
-    selected.size === 0
-      ? 'idle'
-      : !prepared || query.isPending || query.isFetching
-        ? 'loading'
-        : query.isError
-          ? 'error'
-          : 'ready'
-  const canReview = ready && selected.size > 0
+    .with({ hasSelectedNames: false }, () => 'idle' as const)
+    .with({ isLoading: true }, () => 'loading' as const)
+    .with({ isError: true }, () => 'error' as const)
+    .otherwise(() => 'ready' as const)
+  const canReview = isReady && selected.size > 0
 
   const checkBeforeStart = async (
     confirmedFingerprint?: string,
@@ -112,7 +144,7 @@ export const useSubnameMigrationImpact = ({
       result.data !== undefined &&
       currentSelection.current.key === selectionKey &&
       currentSelection.current.revision === revision &&
-      currentSelection.current.ready &&
+      currentSelection.current.isReady &&
       result.data.fingerprint === current?.fingerprint &&
       (result.data.affectedCount === 0 ||
         result.data.fingerprint === confirmedFingerprint)

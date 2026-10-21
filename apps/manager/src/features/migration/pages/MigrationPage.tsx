@@ -312,7 +312,7 @@ export const MigrationPage = () => {
   // button on `gasFundingStatus` to stop owners starting before the ETH lands.
   const gasFundingStatus = useMigrationGasFunding(ownerAddress)
 
-  const needsRetryImpact = shouldCheckRetryImpact(
+  const shouldCheckImpactBeforeRetry = shouldCheckRetryImpact(
     step,
     [migrationPlan, retryRenewal, renewedDomains].some(Boolean),
     lastError?.type,
@@ -326,28 +326,42 @@ export const MigrationPage = () => {
     )
   }, [retryRenewal, renewedDomains])
   const impactNames = useMemo(() => {
-    const names = needsRetryImpact
-      ? (migrationPlan?.classified ??
-        (ownerAddress
-          ? classifyNames(
-              retryDomains,
-              ownerAddress as Address,
-              migrationExecutionClient.chain.id,
-            ).classified
-          : []))
-      : gasEstimate.status === 'ready'
-        ? gasEstimate.plan.classified
-        : graceDomains.length > 0 && ownerAddress
+    const names = match({
+      shouldCheckImpactBeforeRetry,
+      migrationPlan,
+      gasEstimate,
+      hasGraceDomains: graceDomains.length > 0,
+    })
+      .with(
+        { shouldCheckImpactBeforeRetry: true },
+        ({ migrationPlan }) =>
+          migrationPlan?.classified ??
+          (ownerAddress
+            ? classifyNames(
+                retryDomains,
+                ownerAddress as Address,
+                migrationExecutionClient.chain.id,
+              ).classified
+            : []),
+      )
+      .with(
+        { gasEstimate: { status: 'ready' } },
+        ({ gasEstimate }) => gasEstimate.plan.classified,
+      )
+      .with({ hasGraceDomains: true }, () =>
+        ownerAddress
           ? classifyNames(
               v1Names,
               ownerAddress as Address,
               migrationExecutionClient.chain.id,
             ).classified
-          : []
+          : [],
+      )
+      .otherwise(() => [])
     const completed = new Set(completedOperations.map(({ name }) => name))
     return names.filter(({ domain }) => !completed.has(domain.name))
   }, [
-    needsRetryImpact,
+    shouldCheckImpactBeforeRetry,
     migrationPlan,
     retryDomains,
     gasEstimate,
@@ -360,19 +374,16 @@ export const MigrationPage = () => {
     selectedNames,
     classified: impactNames,
     renewingNames: getImpactRenewalNames(
-      needsRetryImpact,
+      shouldCheckImpactBeforeRetry,
       !!renewedDomains,
       retryRenewal?.quote.items.map(({ domain }) => domain.name),
       graceDomains.map(({ name }) => name),
     ),
     ownerAddress,
     managerRestorationNames,
-    enabled: step === 'select' || needsRetryImpact,
-    prepared:
-      needsRetryImpact ||
-      (graceDomains.length > 0
-        ? renewalGasEstimate.status === 'ready'
-        : gasEstimate.status === 'ready'),
+    isEnabled: step === 'select' || shouldCheckImpactBeforeRetry,
+    isPrepared:
+      shouldCheckImpactBeforeRetry || networkEstimate.status === 'ready',
   })
 
   useSyncRenewedV1Names()
@@ -578,7 +589,8 @@ export const MigrationPage = () => {
                 className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
                 onClick={() => {
                   if (confirmation.isChecking) return
-                  if (needsRetryImpact) void confirmation.request('retry')
+                  if (shouldCheckImpactBeforeRetry)
+                    void confirmation.request('retry')
                   else uiActor.send({ type: 'retry' })
                 }}
                 type="button"
@@ -604,10 +616,10 @@ export const MigrationPage = () => {
 
       <SubnameMigrationDialog
         isChecking={confirmation.isChecking}
+        isOpen={confirmation.isOpen}
         onCancel={confirmation.cancel}
         onContinue={() => void confirmation.confirm()}
         onRestoreFocus={confirmation.restoreFocus}
-        open={confirmation.open}
         selectedNameCount={selectedNames.length}
         state={subnameImpact}
       />

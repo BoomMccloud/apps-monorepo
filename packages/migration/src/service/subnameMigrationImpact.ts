@@ -7,7 +7,10 @@ import {
   type Subname,
   toUnixSeconds,
 } from '@ens-apps/indexer/bigname'
+import { ResultFn, TaggedError } from '@ens-apps/utils/neverthrow'
 import { registryOwnerSnippet } from '@ensdomains/ensjs-abi/registry'
+import { fromPromise, ok } from 'neverthrow'
+import { match } from 'ts-pattern'
 import {
   getChainContractAddress,
   isAddress,
@@ -41,22 +44,30 @@ type Parameters = {
 }
 
 type Facts = {
-  readonly live: boolean
-  readonly independent: boolean
+  readonly isLive: boolean
+  readonly isIndependent: boolean
 }
 
 type Branch = {
   readonly name: string
   readonly affectedParent: string | null
-  readonly preserved: boolean
+  readonly isPreserved: boolean
 }
 
-const MAX_INDEX_AGE_SECONDS = 300
+export class SubnameMigrationImpactError extends TaggedError(
+  'SubnameMigrationImpactError',
+)<{
+  readonly cause?: unknown
+}> {}
+
+const MAX_INDEX_AGE_SECONDS = 300n
 const MAX_SCANNED_NAMES = 100_000
 const READ_CONCURRENCY = 4
 
 const fail: (message: string) => never = (message) => {
-  throw new Error(`Could not determine subname migration impact: ${message}`)
+  throw new SubnameMigrationImpactError({
+    message: `Could not determine subname migration impact: ${message}`,
+  })
 }
 
 const isDotEthRoot = (name: string) =>
@@ -76,18 +87,18 @@ const topLevelNames = (names: ReadonlySet<string>) =>
 
 const knownFacts = (
   row: NameRecord | Subname,
-  nowSeconds: number,
+  nowSeconds: bigint,
 ): Facts | undefined => {
-  if (row.authority === 'ens_v2') return { live: true, independent: true }
+  if (row.authority === 'ens_v2') return { isLive: true, isIndependent: true }
   if (row.status === 'released' || row.status === 'expired') {
-    return { live: false, independent: false }
+    return { isLive: false, isIndependent: false }
   }
   if (!row.owner || !isAddress(row.owner) || row.owner === zeroAddress) {
     return undefined
   }
   const wrapper = row.ens_v1
   if (wrapper?.wrapper_state === 'unwrapped') {
-    return { live: true, independent: isDotEthRoot(row.name) }
+    return { isLive: true, isIndependent: isDotEthRoot(row.name) }
   }
   if (
     !wrapper ||
@@ -99,12 +110,12 @@ const knownFacts = (
     return undefined
   }
   const fuses = BigInt(wrapper.wrapper_fuses.fuses)
-  const emancipated = hasFuse(fuses, FUSES.PARENT_CANNOT_CONTROL)
+  const isEmancipated = hasFuse(fuses, FUSES.PARENT_CANNOT_CONTROL)
   const expiry = toUnixSeconds(wrapper.wrapper_expires_at)
-  if (emancipated && expiry == null) return undefined
+  if (isEmancipated && expiry == null) return undefined
   return {
-    live: !emancipated || (expiry != null && expiry > nowSeconds),
-    independent: isDotEthRoot(row.name) || emancipated,
+    isLive: !isEmancipated || (expiry != null && BigInt(expiry) > nowSeconds),
+    isIndependent: isDotEthRoot(row.name) || isEmancipated,
   }
 }
 
@@ -131,7 +142,7 @@ export const readSubnameMigrationImpact = async ({
   const selectedAncestors = new Set([...migrating].flatMap(ancestorsOf))
   signal?.throwIfAborted()
   const block = await publicClient.getBlock()
-  const nowSeconds = Number(block.timestamp)
+  const nowSeconds = block.timestamp
   const chain = requireEnsChain(publicClient, 'subname migration impact')
   const wrapperAddress = getChainContractAddress({
     chain,
@@ -151,7 +162,8 @@ export const readSubnameMigrationImpact = async ({
       meta.completeness === 'unsupported' ||
       !position ||
       timestamp == null ||
-      Math.abs(nowSeconds - timestamp) > MAX_INDEX_AGE_SECONDS
+      nowSeconds - BigInt(timestamp) > MAX_INDEX_AGE_SECONDS ||
+      BigInt(timestamp) - nowSeconds > MAX_INDEX_AGE_SECONDS
     ) {
       fail('the indexer data is incomplete or stale')
     }
@@ -174,7 +186,7 @@ export const readSubnameMigrationImpact = async ({
     // Bigname can list ownerless nodes that still have serving resources.
     if (owner === zeroAddress) fail(`ownership is unknown for ${row.name}`)
     if (owner.toLowerCase() !== wrapperAddress.toLowerCase()) {
-      return { live: true, independent: isDotEthRoot(row.name) }
+      return { isLive: true, isIndependent: isDotEthRoot(row.name) }
     }
     const [holder, fuses, expiry] = await publicClient.readContract({
       address: wrapperAddress,
@@ -183,12 +195,12 @@ export const readSubnameMigrationImpact = async ({
       args: [BigInt(row.namehash)],
       blockNumber: block.number,
     })
-    const emancipated = hasFuse(BigInt(fuses), FUSES.PARENT_CANNOT_CONTROL)
+    const isEmancipated = hasFuse(BigInt(fuses), FUSES.PARENT_CANNOT_CONTROL)
     if (holder === zeroAddress)
       fail(`the wrapper holder is unknown for ${row.name}`)
     return {
-      live: !emancipated || expiry > block.timestamp,
-      independent: isDotEthRoot(row.name) || emancipated,
+      isLive: !isEmancipated || expiry > block.timestamp,
+      isIndependent: isDotEthRoot(row.name) || isEmancipated,
     }
   }
 
@@ -212,13 +224,13 @@ export const readSubnameMigrationImpact = async ({
       return { branches: [], remainingRoots: topLevelNames(remaining) }
     }
     if (
-      !(await factsOf(row)).live &&
+      !(await factsOf(row)).isLive &&
       !(isDotEthRoot(name) && renewing.has(name))
     ) {
       fail(`${name} is no longer active`)
     }
     return {
-      branches: [{ name, affectedParent: name, preserved: true }],
+      branches: [{ name, affectedParent: name, isPreserved: true }],
       remainingRoots: [],
     }
   }
@@ -262,20 +274,19 @@ export const readSubnameMigrationImpact = async ({
     const isMigrating = migrating.has(name)
     return {
       name,
-      affectedParent: isMigrating
-        ? name
-        : facts.independent
-          ? null
-          : branch.affectedParent,
-      preserved:
+      affectedParent: match({ isMigrating, isIndependent: facts.isIndependent })
+        .with({ isMigrating: true }, () => name)
+        .with({ isIndependent: true }, () => null)
+        .otherwise(() => branch.affectedParent),
+      isPreserved:
         isMigrating ||
-        facts.independent ||
-        (branch.preserved && copied.has(name)),
+        facts.isIndependent ||
+        (branch.isPreserved && copied.has(name)),
     }
   }
 
   const recordAffected = (context: Branch, namehash: string) => {
-    if (context.preserved || context.affectedParent === null) return
+    if (context.isPreserved || context.affectedParent === null) return
     const hashes = affected.get(context.affectedParent) ?? new Set<string>()
     hashes.add(namehash)
     affected.set(context.affectedParent, hashes)
@@ -291,7 +302,7 @@ export const readSubnameMigrationImpact = async ({
     if (visited.has(row.namehash)) fail('a repeated subtree was returned')
     visited.add(row.namehash)
     if (visited.size > MAX_SCANNED_NAMES) fail('the subtree is too large')
-    if (!facts.live) return undefined
+    if (!facts.isLive) return undefined
     const context = childContext(name, facts, branch)
     recordAffected(context, row.namehash)
     if (context.affectedParent === null && !selectedAncestors.has(name))
@@ -362,3 +373,19 @@ export const readSubnameMigrationImpact = async ({
     checkedAt: Date.now(),
   }
 }
+
+export const getSubnameMigrationImpact = ResultFn(async function* (
+  params: Parameters,
+) {
+  const impact = yield* fromPromise(
+    readSubnameMigrationImpact(params),
+    (cause) =>
+      cause instanceof SubnameMigrationImpactError
+        ? cause
+        : new SubnameMigrationImpactError({
+            message: 'Could not determine subname migration impact',
+            cause,
+          }),
+  )
+  return ok(impact)
+})
