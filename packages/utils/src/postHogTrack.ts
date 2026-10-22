@@ -11,15 +11,15 @@ export interface CapturingClient {
 
 /** The events that every ENS app records the same way. */
 export type SharedPostHogEvents = {
-  'wallet:connect': {
-    wallet_address: string
-    chain_id: number
-    wallet_connector: string
+  readonly 'wallet:connect': {
+    readonly wallet_address: string
+    readonly chain_id: number
+    readonly wallet_connector: string
   }
 
-  'wallet:disconnect': undefined
+  readonly 'wallet:disconnect': undefined
 
-  'intercom:booted': undefined
+  readonly 'intercom:booted': undefined
 }
 
 /**
