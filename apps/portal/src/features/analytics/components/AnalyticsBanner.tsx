@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
  * The analytics banner: a card floating over the page until the visitor
  * chooses, in either ENS app. On a phone it sits at the bottom of the
  * screen, where a thumb reaches it; from the `sm` width, in the bottom-right
- * corner, away from the sidebar's Help and Settings menus on the left. It
- * stays under every dialog, the wallet modal included.
+ * corner, away from the sidebar's Settings menu on the left. It stays under
+ * every dialog, the wallet modal included.
  */
 export const AnalyticsBanner = () => {
   const banner = useAnalyticsBanner()
