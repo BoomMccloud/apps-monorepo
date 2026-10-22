@@ -203,6 +203,33 @@ describe('the analytics choice on the installed SDK', () => {
     ).toEqual([])
   })
 
+  it("reads the switches an app's server decided with no request, and takes new answers whole", async () => {
+    const switches = { i18n: true, migration: true, 'migration-nft': false }
+    const client = startClient(
+      analyticsStartupConfig({
+        apiHost: API_HOST,
+        bootstrapSwitches: switches,
+      }),
+    )
+    expect(startAnalyticsChoice(client, CHOICE)).toBe('pending')
+
+    expect(client.isFeatureEnabled('migration', { send_event: false })).toBe(
+      true,
+    )
+    expect(client.isFeatureEnabled('i18n', { send_event: false })).toBe(true)
+    expect(
+      client.isFeatureEnabled('migration-nft', { send_event: false }),
+    ).toBeFalsy()
+
+    client.updateFlags({ ...switches, migration: false }, undefined, {
+      merge: false,
+    })
+    expect(
+      client.isFeatureEnabled('migration', { send_event: false }),
+    ).toBeFalsy()
+    expect(network.fetch).not.toHaveBeenCalled()
+  })
+
   it('captures a page view for each move within the app after Accept', async () => {
     const client = startClient()
     await acceptAnalytics(client, CHOICE)
