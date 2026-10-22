@@ -332,24 +332,23 @@ describe('readSubnameMigrationImpact', () => {
     await expect(read()).rejects.toThrow('a repeated subtree was returned')
   })
 
-  it.each([
-    null,
-    undefined,
-    1,
-  ])('rejects an empty page with an unproven total of %s', async (total_count) => {
-    const { read, pages } = fixture()
-    const empty = page([])
-    pages.set('parent.eth', [
-      {
-        ...empty,
-        page:
-          total_count === undefined
-            ? undefined
-            : { ...empty.page, total_count },
-      },
-    ])
-    await expect(read()).rejects.toThrow('the subname list changed')
-  })
+  it.each([null, undefined, 1])(
+    'rejects an empty page with an unproven total of %s',
+    async (total_count) => {
+      const { read, pages } = fixture()
+      const empty = page([])
+      pages.set('parent.eth', [
+        {
+          ...empty,
+          page:
+            total_count === undefined
+              ? undefined
+              : { ...empty.page, total_count },
+        },
+      ])
+      await expect(read()).rejects.toThrow('the subname list changed')
+    },
+  )
 
   it('rejects totals that change between pages', async () => {
     const { read, pages } = fixture()
@@ -364,38 +363,37 @@ describe('readSubnameMigrationImpact', () => {
     await expect(read()).rejects.toThrow('the subname list changed')
   })
 
-  it.each([
-    'root',
-    'first page',
-    'later page',
-  ])('rejects stale metadata on the %s', async (location) => {
-    const { read, roots, pages } = fixture()
-    const staleMeta: Meta = {
-      ...freshMeta,
-      as_of: {
-        [chain.id]: {
-          ...freshMeta.as_of[chain.id],
-          timestamp: String(NOW - 301),
+  it.each(['root', 'first page', 'later page'])(
+    'rejects stale metadata on the %s',
+    async (location) => {
+      const { read, roots, pages } = fixture()
+      const staleMeta: Meta = {
+        ...freshMeta,
+        as_of: {
+          [chain.id]: {
+            ...freshMeta.as_of[chain.id],
+            timestamp: String(NOW - 301),
+          },
         },
-      },
-    }
-    if (location === 'root')
-      roots.set('parent.eth', envelope(root(), staleMeta))
-    else if (location === 'first page')
-      pages.set('parent.eth', [page([], {}, staleMeta)])
-    else
-      pages.set('parent.eth', [
-        page([subname('a.parent.eth')], {
-          total_count: 1,
-          has_more: true,
-          next_cursor: '1',
-        }),
-        page([], { total_count: 1, cursor: '1' }, staleMeta),
-      ])
-    await expect(read()).rejects.toThrow(
-      'the indexer data is incomplete or stale',
-    )
-  })
+      }
+      if (location === 'root')
+        roots.set('parent.eth', envelope(root(), staleMeta))
+      else if (location === 'first page')
+        pages.set('parent.eth', [page([], {}, staleMeta)])
+      else
+        pages.set('parent.eth', [
+          page([subname('a.parent.eth')], {
+            total_count: 1,
+            has_more: true,
+            next_cursor: '1',
+          }),
+          page([], { total_count: 1, cursor: '1' }, staleMeta),
+        ])
+      await expect(read()).rejects.toThrow(
+        'the indexer data is incomplete or stale',
+      )
+    },
+  )
 
   it.each<Meta>([
     { ...freshMeta, completeness: 'partial' },
