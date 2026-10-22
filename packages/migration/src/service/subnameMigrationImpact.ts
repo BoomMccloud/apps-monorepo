@@ -2,8 +2,10 @@ import { requireEnsChain } from '@ens-apps/config'
 import {
   type BignameClient,
   type Envelope,
+  isStale,
   type NameRecord,
   readAllEnvelopes,
+  retryStale,
   type Subname,
   toUnixSeconds,
 } from '@ens-apps/indexer/bigname'
@@ -210,7 +212,12 @@ export const readSubnameMigrationImpact = async ({
     readonly branches: readonly Branch[]
     readonly remainingRoots: readonly string[]
   }> => {
-    const result = await indexer.name(name, { include: ['counts'] }, { signal })
+    const result = await retryStale(
+      (requestSignal) =>
+        indexer.name(name, { include: ['counts'] }, { signal: requestSignal }),
+      isStale,
+      { signal },
+    )
     if (result.isErr()) throw result.error
     checkEnvelope(result.value)
     const row = result.value.data
