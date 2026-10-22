@@ -309,11 +309,8 @@ test.describe('Explorer analytics choice', () => {
     await searchName(page, SEARCHED_NAME)
     await page.reload()
     await waitForAnalyticsReady(page)
-    await expectEventsSent(standIn, [
-      '$autocapture',
-      '$pageleave',
-      '$web_vitals',
-    ])
+    // The page-leave is asserted where a page closes (expectNoSendAfterDecline, C4): a reload gives its beacon no sure time to leave.
+    await expectEventsSent(standIn, ['$autocapture', '$web_vitals'])
     expect(eventsNamed(standIn, '$pageview').length).toBeGreaterThan(1)
 
     await expect
