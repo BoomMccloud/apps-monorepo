@@ -5,6 +5,10 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import {
+  OTHER_WALLET,
+  TEST_WALLET as WALLET,
+} from '@/server/posthog/switchRules.mock'
+import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
   type FeatureSwitches,
@@ -29,8 +33,6 @@ vi.mock('@/server/posthog/getFeatureSwitches', () => ({
   getFeatureSwitches: vi.fn(),
 }))
 
-const WALLET = '0x1111111111111111111111111111111111111111'
-const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
 const WALLET_SWITCHES: FeatureSwitches = {
   i18n: true,
   migration: true,

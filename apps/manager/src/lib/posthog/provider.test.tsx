@@ -15,14 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
 import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import {
+  OTHER_WALLET,
+  TEST_WALLET as WALLET,
+} from '@/server/posthog/switchRules.mock'
+import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
   type FeatureSwitches,
 } from './feature-flags'
 import { PHProvider } from './provider'
 
-const WALLET = '0x1111111111111111111111111111111111111111'
-const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
 const SERVER_SWITCHES: FeatureSwitches = {
   i18n: true,
   migration: false,
