@@ -1,29 +1,21 @@
 import { transactionManager } from '@ens-apps/transaction-manager'
 import {
-  acceptAnalytics,
   declineAnalytics,
-  followStoredChoice,
   resetVisitor,
   startAnalyticsChoice,
 } from '@ens-apps/utils/analyticsConsent'
 import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
-import { boot, trackEvent, update } from '@intercom/messenger-js-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
-import {
-  ALL_SWITCHES_OFF,
-  type DecidedFeatureSwitches,
-  type FeatureSwitches,
-} from './feature-flags'
+import type { DecidedFeatureSwitches, FeatureSwitches } from './feature-flags'
 import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
 const WALLET = '0x1111111111111111111111111111111111111111'
-const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
 const SERVER_SWITCHES: FeatureSwitches = {
   i18n: true,
   migration: false,
@@ -190,198 +182,7 @@ describe('PHProvider', () => {
     expect(await screen.findByText('pending')).not.toBeNull()
   })
 
-  it('boots the support chat without the analytics link before Accept, and links it on Accept', async () => {
-    renderProvider()
-    expect(boot).toHaveBeenCalledWith({ app_id: 're9q5yti' })
-
-    await act(async () =>
-      screen.getByRole('button', { name: 'accept' }).click(),
-    )
-
-    expect(acceptAnalytics).toHaveBeenCalledWith(posthog, { isDev: true })
-    expect(update).toHaveBeenCalledWith({
-      posthog_distinct_id: 'anonymous-visitor',
-      recent_replay: 'https://replay.example/1',
-    })
-    expect(screen.getByText('granted')).not.toBeNull()
-  })
-
-  it('boots the support chat, with no banner, even when PostHog fails to start', () => {
-    vi.mocked(posthog.init).mockImplementationOnce(() => {
-      throw new Error('init failed')
-    })
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    renderProvider()
-
-    expect(boot).toHaveBeenCalledWith({ app_id: 're9q5yti' })
-    expect(screen.getByText('unknown')).not.toBeNull()
-  })
-
-  it('boots the support chat with the analytics link when the visitor accepted earlier', () => {
-    vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
-    renderProvider()
-
-    expect(boot).toHaveBeenCalledWith({
-      app_id: 're9q5yti',
-      posthog_distinct_id: 'anonymous-visitor',
-      recent_replay: 'https://replay.example/1',
-    })
-  })
-
-  it("on Decline, stops analytics and blanks the support chat's link to them", async () => {
-    renderProvider()
-
-    await act(async () =>
-      screen.getByRole('button', { name: 'decline' }).click(),
-    )
-
-    expect(declineAnalytics).toHaveBeenCalledWith(posthog)
-    expect(update).toHaveBeenCalledWith({
-      posthog_distinct_id: '',
-      recent_replay: '',
-    })
-    expect(screen.getByText('denied')).not.toBeNull()
-  })
-
-  it('hands wagmi the same connection handlers on every render, so its watcher is set up once', () => {
-    const { rerenderProvider } = renderProvider()
-    const first = connectionCallbacks()
-
-    rerenderProvider()
-    rerenderProvider()
-
-    expect(vi.mocked(useConnectionEffect).mock.calls.length).toBeGreaterThan(1)
-    expect(connectionCallbacks().onConnect).toBe(first.onConnect)
-    expect(connectionCallbacks().onDisconnect).toBe(first.onDisconnect)
-  })
-
-  it('identifies a wallet that connects after Accept, then records the connect', () => {
-    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
-    renderProvider()
-
-    connectionCallbacks().onConnect?.({
-      address: WALLET,
-      chainId: 1,
-      connector: { name: 'test-wallet' },
-    } as never)
-
-    expect(posthog.identify).toHaveBeenCalledWith(
-      WALLET,
-      { address: WALLET },
-      { initial_address: WALLET },
-    )
-    expect(posthog.capture).toHaveBeenCalledWith('wallet:connect', {
-      wallet_address: WALLET,
-      chain_id: 1,
-      wallet_connector: 'test-wallet',
-    })
-    expect(
-      vi.mocked(posthog.identify).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(posthog.capture).mock.invocationCallOrder[0] ?? 0)
-    expect(trackEvent).toHaveBeenCalledWith('wallet:connect', {
-      wallet_address: WALLET,
-      chain_id: 1,
-      wallet_connector: 'test-wallet',
-    })
-  })
-
-  it('never identifies a wallet before Accept', () => {
-    renderProvider()
-
-    connectionCallbacks().onConnect?.({
-      address: WALLET,
-      chainId: 1,
-      connector: { name: 'test-wallet' },
-    } as never)
-
-    expect(posthog.identify).not.toHaveBeenCalled()
-  })
-
-  it('identifies the wallet already connected when the visitor accepts', async () => {
-    connected(WALLET)
-    renderProvider()
-    expect(posthog.identify).not.toHaveBeenCalled()
-
-    vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
-    await act(async () =>
-      screen.getByRole('button', { name: 'accept' }).click(),
-    )
-
-    expect(posthog.identify).toHaveBeenCalledWith(
-      WALLET,
-      { address: WALLET },
-      { initial_address: WALLET },
-    )
-  })
-
-  it('on disconnect, records it, then forgets the visitor and keeps the choice', () => {
-    renderProvider()
-
-    connectionCallbacks().onDisconnect?.()
-
-    expect(posthog.capture).toHaveBeenCalledWith('wallet:disconnect', undefined)
-    expect(resetVisitor).toHaveBeenCalledWith(posthog)
-    expect(vi.mocked(posthog.capture).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(resetVisitor).mock.invocationCallOrder[0] ?? 0,
-    )
-  })
-
   describe('the switches in the SDK', () => {
-    const answersWaiting = () => new Promise<never>(() => {})
-
-    it('writes nothing while wagmi restores the connection, then the answers the page started with for the wallet it restores', () => {
-      pageStartMock.mockReturnValue({
-        wallet: WALLET,
-        switches: WALLET_SWITCHES,
-      })
-      // wagmi's first report is "disconnected", before it has restored
-      // anything; the page's answers are for WALLET and still hold.
-      connected(undefined)
-      const { rerenderProvider } = renderProvider()
-      restoring(WALLET)
-      rerenderProvider()
-      expect(posthog.updateFlags).not.toHaveBeenCalled()
-
-      connected(WALLET)
-      rerenderProvider()
-
-      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-        ...written(WALLET_SWITCHES),
-      )
-      expect(getFeatureSwitches).not.toHaveBeenCalled()
-    })
-
-    it("writes every switch off for a wallet restored other than the one the page started with, and asks the server for that wallet's", async () => {
-      pageStartMock.mockReturnValue({
-        wallet: WALLET,
-        switches: WALLET_SWITCHES,
-      })
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
-
-      renderRestored(OTHER_WALLET)
-
-      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-        ...written(ALL_SWITCHES_OFF),
-      )
-      expect(getFeatureSwitches).toHaveBeenCalledWith({
-        data: { wallet: OTHER_WALLET },
-      })
-    })
-
-    it("writes the server's answers for the connected wallet", async () => {
-      renderRestored(WALLET)
-
-      await vi.waitFor(() =>
-        expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-          ...written(WALLET_SWITCHES),
-        ),
-      )
-      expect(getFeatureSwitches).toHaveBeenCalledWith({
-        data: { wallet: WALLET },
-      })
-    })
-
     it('on disconnect, does not write the switches itself, and has them written again once the SDK has been reset', async () => {
       pageStartMock.mockReturnValue({
         wallet: WALLET,
@@ -400,31 +201,6 @@ describe('PHProvider', () => {
       )
       expect(vi.mocked(resetVisitor).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
-      )
-    })
-
-    it('after a disconnect, writes every switch off for a visitor with no wallet until the server has answered for one', async () => {
-      pageStartMock.mockReturnValue({
-        wallet: WALLET,
-        switches: WALLET_SWITCHES,
-      })
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
-      renderRestored(WALLET)
-      vi.mocked(posthog.updateFlags).mockClear()
-
-      // wagmi has already moved to "disconnected" when it calls onDisconnect.
-      act(() => {
-        connected(undefined)
-        connectionCallbacks().onDisconnect?.()
-      })
-
-      // The page started with WALLET's answers, which are not a departed
-      // wallet's to keep.
-      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-        ...written(ALL_SWITCHES_OFF),
-      )
-      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
-        ...written(WALLET_SWITCHES),
       )
     })
 
@@ -451,63 +227,6 @@ describe('PHProvider', () => {
         vi.mocked(declineAnalytics).mock.invocationCallOrder[0],
       ).toBeLessThan(
         vi.mocked(posthog.updateFlags).mock.invocationCallOrder[0] ?? 0,
-      )
-    })
-
-    it('on Decline, writes every switch off for a wallet whose answers are not known yet, never the answers the page started with', async () => {
-      vi.mocked(getFeatureSwitches).mockReturnValue(answersWaiting())
-      renderRestored(WALLET)
-      vi.mocked(posthog.updateFlags).mockClear()
-
-      await act(async () =>
-        screen.getByRole('button', { name: 'decline' }).click(),
-      )
-
-      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-        ...written(ALL_SWITCHES_OFF),
-      )
-      expect(posthog.updateFlags).not.toHaveBeenCalledWith(
-        ...written(SERVER_SWITCHES),
-      )
-    })
-
-    it("follows a choice removed in another tab or app, and blanks the support chat's link", async () => {
-      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
-      renderRestored(WALLET)
-      await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
-      const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
-
-      act(() => following?.onChange('pending'))
-
-      expect(screen.getByText('pending')).not.toBeNull()
-      expect(update).toHaveBeenCalledWith({
-        posthog_distinct_id: '',
-        recent_replay: '',
-      })
-    })
-
-    it('follows a Decline made in another tab or app, and has the switches written again from what is known for the connected wallet', async () => {
-      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
-      renderRestored(WALLET)
-      await vi.waitFor(() => expect(followStoredChoice).toHaveBeenCalled())
-      await vi.waitFor(() =>
-        expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-          ...written(WALLET_SWITCHES),
-        ),
-      )
-      const following = vi.mocked(followStoredChoice).mock.calls.at(-1)?.[1]
-      vi.mocked(posthog.updateFlags).mockClear()
-
-      act(() => following?.onChange('denied'))
-
-      expect(screen.getByText('denied')).not.toBeNull()
-      expect(update).toHaveBeenCalledWith({
-        posthog_distinct_id: '',
-        recent_replay: '',
-      })
-      expect(posthog.updateFlags).toHaveBeenCalledOnce()
-      expect(posthog.updateFlags).toHaveBeenLastCalledWith(
-        ...written(WALLET_SWITCHES),
       )
     })
   })

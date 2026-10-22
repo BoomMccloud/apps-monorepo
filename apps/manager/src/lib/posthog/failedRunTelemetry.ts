@@ -1,4 +1,5 @@
 import { transactionManager } from '@ens-apps/transaction-manager'
+import { useEffect } from 'react'
 import { track } from './events'
 
 /**
@@ -7,7 +8,7 @@ import { track } from './events'
  * Accept. On a development build it also logs every run event to the
  * console. Returns the function that removes both subscriptions.
  */
-export const subscribeFailedRunTelemetry = (): (() => void) => {
+const subscribeFailedRunTelemetry = (): (() => void) => {
   const unsubscribeFailed = transactionManager.onFailedRunTelemetry(
     (payload) => {
       if (import.meta.env.DEV) {
@@ -76,4 +77,12 @@ export const subscribeFailedRunTelemetry = (): (() => void) => {
     unsubscribeFailed()
     unsubscribeLive()
   }
+}
+
+/** Once the page has hydrated: report failed transaction runs until unmount. */
+export const useFailedRunTelemetry = (isHydrated: boolean): void => {
+  useEffect(() => {
+    if (!isHydrated) return
+    return subscribeFailedRunTelemetry()
+  }, [isHydrated])
 }
