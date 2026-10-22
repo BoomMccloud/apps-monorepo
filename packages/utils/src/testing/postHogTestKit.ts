@@ -194,6 +194,14 @@ export const keepHistoryMethods = (): void => {
   vi.spyOn(history, 'replaceState')
 }
 
+/** Give the page an address, as happy-dom lets a test do; its window type does not say so. */
+export const setPageUrl = (url: string): void => {
+  const { happyDOM } = window as unknown as {
+    readonly happyDOM: { readonly setURL: (url: string) => void }
+  }
+  happyDOM.setURL(url)
+}
+
 /** Set a cookie as another tab or app would have, or clear it with `max-age=0`. */
 export const writeCookie = (
   name: string,

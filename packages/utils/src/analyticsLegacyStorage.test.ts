@@ -4,6 +4,7 @@ import { forgetLegacyProjects } from './analyticsLegacyStorage'
 import {
   clearCookies,
   cookieValue,
+  setPageUrl,
   writeCookie,
 } from './testing/postHogTestKit'
 
@@ -35,13 +36,6 @@ const present = (projectKey: string) =>
       Boolean(cookieValue(name)),
   )
 
-const setUrl = (url: string): void => {
-  const { happyDOM } = window as unknown as {
-    readonly happyDOM: { readonly setURL: (url: string) => void }
-  }
-  happyDOM.setURL(url)
-}
-
 describe('forgetLegacyProjects', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -51,7 +45,7 @@ describe('forgetLegacyProjects', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    setUrl('http://localhost:3000/')
+    setPageUrl('http://localhost:3000/')
   })
 
   it('removes every entry of a project the app has left, from local storage, session storage and cookies', () => {
@@ -73,7 +67,7 @@ describe('forgetLegacyProjects', () => {
   })
 
   it('removes the cookies the SDK shares across subdomains', () => {
-    setUrl('https://explorer.ens.test/')
+    setPageUrl('https://explorer.ens.test/')
     seed(OLD, 'path=/; domain=ens.test')
     expect(present(OLD)).toEqual(entriesOf(OLD))
 

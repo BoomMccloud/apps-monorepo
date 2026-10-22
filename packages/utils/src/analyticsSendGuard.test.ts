@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AnalyticsConsent } from './analyticsConsent'
-import { installPostHogNetwork } from './testing/postHogTestKit'
+import { installPostHogNetwork, setPageUrl } from './testing/postHogTestKit'
 
 // The guard wraps the `fetch` and `sendBeacon` it finds when it loads, so the
 // network goes in first.
@@ -17,14 +17,6 @@ const clientWith = (consent: AnalyticsConsent, apiHost = HOST) => ({
   config: { api_host: apiHost },
   get_explicit_consent_status: () => consent,
 })
-
-// happy-dom's way to give the page an address; its window type does not say so.
-const setPageUrl = (url: string): void => {
-  const { happyDOM } = window as unknown as {
-    readonly happyDOM: { readonly setURL: (url: string) => void }
-  }
-  happyDOM.setURL(url)
-}
 
 describe('the send guard', () => {
   beforeEach(() => {
