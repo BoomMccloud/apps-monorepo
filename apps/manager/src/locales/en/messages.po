@@ -490,6 +490,10 @@ msgstr "Browser notifications enabled"
 msgid "Bug bounty"
 msgstr "Bug bounty"
 
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Calculating cost..."
+msgstr "Calculating cost..."
+
 #: src/features/dashboard/components/FaqSection.tsx
 msgid "Can I change my primary name later?"
 msgstr "Can I change my primary name later?"
@@ -1385,6 +1389,7 @@ msgid "Learn More<0> about NFT traits</0>"
 msgstr "Learn More<0> about NFT traits</0>"
 
 #: src/features/register-v2/workflow/pricing/components/AccountCreditRow.tsx
+#: src/features/register-v2/workflow/pricing/components/PaymentBreakdown.tsx
 msgid "Left from your last attempt"
 msgstr "Left from your last attempt"
 
@@ -1859,6 +1864,10 @@ msgstr "Preferences"
 #: src/features/notifications/settings/preferences.tsx
 msgid "Preferences updated"
 msgstr "Preferences updated"
+
+#: src/features/register-v2/workflow/pricing/components/PaymentCard.tsx
+msgid "Preparing checkout..."
+msgstr "Preparing checkout..."
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Preparing commitment"

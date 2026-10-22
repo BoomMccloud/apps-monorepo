@@ -563,6 +563,16 @@ describe('TokenPickerContentBase', () => {
     expect(screen.queryByText('Network fee')).not.toBeInTheDocument()
   })
 
+  it('holds the total, the breakdown and the button while the fee is being quoted', () => {
+    renderPicker({ isQuotingFunding: true, selectedToken: 'USDC' })
+
+    expect(screen.getByLabelText('Calculating price breakdown')).toBeVisible()
+
+    expect(screen.queryByText('$330.00')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Calculating total')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Register name' })).toBeDisabled()
+  })
+
   it('leaves the EOA route alone when there is no budget to quote', () => {
     renderPicker({ selectedToken: 'USDC' })
 
@@ -593,7 +603,10 @@ describe('TokenPickerContentBase', () => {
       selectedToken: 'USDC',
     })
 
-    expect(screen.getByRole('button', { name: 'Register name' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Register name' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByLabelText('Calculating total')).toBeVisible()
     expect(screen.getByText('Mainnet est. fee: $4.32')).toBeVisible()
   })
 

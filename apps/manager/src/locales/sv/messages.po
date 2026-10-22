@@ -495,6 +495,10 @@ msgstr ""
 msgid "Bug bounty"
 msgstr ""
 
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Calculating cost..."
+msgstr ""
+
 #: src/features/dashboard/components/FaqSection.tsx
 msgid "Can I change my primary name later?"
 msgstr "Kan jag byta mitt primära namn senare?"
@@ -1390,6 +1394,7 @@ msgid "Learn More<0> about NFT traits</0>"
 msgstr ""
 
 #: src/features/register-v2/workflow/pricing/components/AccountCreditRow.tsx
+#: src/features/register-v2/workflow/pricing/components/PaymentBreakdown.tsx
 msgid "Left from your last attempt"
 msgstr ""
 
@@ -1863,6 +1868,10 @@ msgstr ""
 
 #: src/features/notifications/settings/preferences.tsx
 msgid "Preferences updated"
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/PaymentCard.tsx
+msgid "Preparing checkout..."
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts

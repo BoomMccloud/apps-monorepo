@@ -526,11 +526,13 @@ export const TokenPickerContent = () => {
     isBusy,
     isAwaitingPaymentApproval,
     isPaymentApprovalRequired,
+    isQuoting: isBudgetQuoting(isBudgetRequired, budgetQuery),
   })
     .with({ isBusy: true, isAwaitingPaymentApproval: true }, () => (
       <Trans>Approve in wallet</Trans>
     ))
     .with({ isBusy: true }, () => <Trans>Preparing registration...</Trans>)
+    .with({ isQuoting: true }, () => <Trans>Calculating cost...</Trans>)
     .with({ isPaymentApprovalRequired: true }, () => (
       <Trans>Approve and register</Trans>
     ))
@@ -580,7 +582,7 @@ export const TokenPickerContent = () => {
       isInPriceCooldown={(pricingQuery.data?.premiumPriceNumber ?? 0) > 0}
       isLoadingBalances={isLoadingBalances}
       isQuoteStale={budgetQuery.isPlaceholderData}
-      isQuotingFunding={budgetQuery.isLoading}
+      isQuotingFunding={isBudgetRequired && budgetQuery.isFetching}
       label={label}
       methodErrorMessage={methodErrorMessage}
       nextMessage={nextMessage}
@@ -621,6 +623,24 @@ const PickerMessage = ({
   }
   return null
 }
+
+/** A quote is pending, or a stale one (the toggle re-keyed it) is being replaced. */
+const isRequotingFunding = (isQuotingFunding: boolean, isQuoteStale: boolean) =>
+  isQuotingFunding || isQuoteStale
+
+/** The button holds with a spinner while a click is in flight or the fee is being quoted. */
+const isCheckoutSettling = (isBusy: boolean, isRequoting: boolean) =>
+  isBusy || isRequoting
+
+/** Whether the dialog is waiting on the budget: the first quote, a refresh, or a re-key after the toggle. */
+const isBudgetQuoting = (
+  isBudgetRequired: boolean,
+  budgetQuery: {
+    readonly isFetching: boolean
+    readonly isPlaceholderData: boolean
+  },
+) =>
+  isBudgetRequired && (budgetQuery.isFetching || budgetQuery.isPlaceholderData)
 
 export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
   label,
@@ -779,6 +799,9 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
     // Refuse rather than proceed on a figure that cannot fund the batch.
     !hasBudgetQuoteFailed
 
+  const isRequoting = isRequotingFunding(isQuotingFunding, isQuoteStale)
+  const isSettling = isCheckoutSettling(isBusy, isRequoting)
+
   const actionClasses = match({ canNext, isBusy })
     .with(
       { isBusy: true },
@@ -862,7 +885,7 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
               {domainName}
             </span>
 
-            <PaymentBreakdown funding={funding} />
+            <PaymentBreakdown funding={funding} isQuoting={isQuotingFunding} />
           </div>
 
           <div className="flex w-full flex-col gap-4">
@@ -946,11 +969,12 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
         <PaymentTotalRow
           hasAccountCredit={hasAccountCredit}
           isEstimate={!!funding || hasBudgetQuoteFailed}
+          isLoading={isRequoting}
           total={headlineAmount}
         />
 
         <Button
-          aria-busy={isBusy}
+          aria-busy={isSettling}
           className={cn(
             'h-20 w-full rounded bg-ens-gray-two font-medium font-mono text-ens-gray-dark text-sm uppercase tracking-wider',
             'hover:bg-ens-gray-two',
@@ -960,7 +984,7 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
           disabled={isBusy || !canNext}
           onClick={onNext}
         >
-          {isBusy && (
+          {isSettling && (
             <LoaderCircle aria-hidden="true" className="animate-spin" />
           )}
           {nextMessage}
