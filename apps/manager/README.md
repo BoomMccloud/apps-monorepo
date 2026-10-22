@@ -70,17 +70,20 @@ off. KV persists across deploys, so a Worker has no rules only after its first
 deploy, until its job has run once (within a minute); a later deploy keeps the
 stored rules. Each run downloads the rules whole, which PostHog counts as [10
 flag requests](https://posthog.com/docs/feature-flags/local-evaluation), 14,400
-a day per Worker at one run a minute; the mainnet Worker runs the same cron. A preview version
-reads the namespace its Worker already has (`wrangler versions upload` inherits
-a binding the Worker holds), so it decides from the rules that Worker's job
-stored. A dev server and `vite preview` run no cron and keep a namespace of
-their own, so every switch is off there until `GET /cdn-cgi/handler/scheduled`
-has run the job once by hand. Cloudflare
-documents that route, as `/cdn-cgi/local/scheduled`, for local development,
-and nothing in the Worker's own code starts a run from a request. `vite build`
-checks the live rules against that key in the mode it builds, so a build that
-deploys holds the key too (`pnpm check:switch-rules --mode mainnet` runs the
-same check by hand).
+a day per Worker at one run a minute; the mainnet Worker runs the same cron. A
+preview, made by `npx wrangler preview` (Cloudflare Worker Previews), runs no
+cron and decides from whatever switch rules space it has: nothing in this
+repository binds one to a preview, and what Cloudflare binds has not been
+observed. With none bound, every switch is off and the Worker logs "no switch
+rules space is bound" once. A dev server and `vite preview` run no cron and
+keep a namespace of their own, so every switch is off there until
+`GET /cdn-cgi/handler/scheduled` has run the job once by hand. Cloudflare
+documents that route, as `/cdn-cgi/local/scheduled`, for local development, and
+nothing in the Worker's own code starts a run from a request. `vite build`
+checks the live rules against that key in the mode it builds, so the build of
+the production branch holds the key too; a Cloudflare build of any other branch
+skips the check and needs no key (`pnpm check:switch-rules --mode mainnet` runs
+the same check by hand).
 
 ## Notes
 

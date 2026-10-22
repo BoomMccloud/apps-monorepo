@@ -95,6 +95,82 @@ describe('checkSwitchRulesForBuild', () => {
     })
   })
 
+  describe('in a Cloudflare Workers build', () => {
+    const withoutKey = { ...BUILD_ENV, POSTHOG_PROJECT_SECRET_API_KEY: '' }
+    const KEY_MISSING = {
+      status: 'failed',
+      message:
+        'POSTHOG_PROJECT_SECRET_API_KEY is not set, so the deployed Manager would have every switch off.',
+    }
+
+    // Cloudflare sets WORKERS_CI_BRANCH to the branch of the push; a build of
+    // any branch but the production one makes a preview, which runs no cron.
+    it.each([
+      ['without the key', withoutKey],
+      ['holding the key', BUILD_ENV],
+    ])('of a branch other than main is skipped, with the branch named, %s', async (_name, env) => {
+      const fetchRules = vi.fn(answering(downloadOf()))
+
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...env, WORKERS_CI: '1', WORKERS_CI_BRANCH: 'feature/preview' },
+          { isSkippedWithoutKey: false, fetchRules },
+        ),
+      ).resolves.toEqual({
+        status: 'skipped',
+        message:
+          'switch rules check skipped: a preview build of branch feature/preview; the production build runs it',
+      })
+      expect(fetchRules).not.toHaveBeenCalled()
+    })
+
+    it('of main without the key fails, even where skipping is allowed', async () => {
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...withoutKey, WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main' },
+          { isSkippedWithoutKey: true },
+        ),
+      ).resolves.toEqual(KEY_MISSING)
+    })
+
+    it('of main holding the key checks the live rules', async () => {
+      const fetchRules = vi.fn(answering(downloadOf()))
+
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...BUILD_ENV, WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main' },
+          { isSkippedWithoutKey: true, fetchRules },
+        ),
+      ).resolves.toMatchObject({ status: 'passed' })
+      expect(fetchRules).toHaveBeenCalledOnce()
+    })
+
+    // A missing variable must not switch the check off for production.
+    it.each([
+      ['names no branch', undefined],
+      ['names an empty branch', ''],
+    ])('that %s without the key fails, even where skipping is allowed', async (_name, branch) => {
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...withoutKey, WORKERS_CI: '1', WORKERS_CI_BRANCH: branch },
+          { isSkippedWithoutKey: true },
+        ),
+      ).resolves.toEqual(KEY_MISSING)
+    })
+
+    it('is the only build that reads the branch', async () => {
+      const fetchRules = vi.fn(answering(downloadOf()))
+
+      await expect(
+        checkSwitchRulesForBuild(
+          { ...BUILD_ENV, WORKERS_CI_BRANCH: 'feature/preview' },
+          { isSkippedWithoutKey: true, fetchRules },
+        ),
+      ).resolves.toMatchObject({ status: 'passed' })
+      expect(fetchRules).toHaveBeenCalledOnce()
+    })
+  })
+
   describe('in a Storybook build', () => {
     // Storybook sets STORYBOOK=true before it loads the Vite config.
     it.each([

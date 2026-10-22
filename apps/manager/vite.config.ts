@@ -16,8 +16,9 @@ import { MANAGER_ENDPOINTS } from './src/endpoints'
 /**
  * A build must not deploy a Manager whose switches the live rules cannot
  * decide, so it checks them in the env of its own mode. Without the secret
- * key it skips the check and says so, unless a Cloudflare Workers build, which
- * deploys, is missing it. A Storybook build deploys no Worker and skips it.
+ * key it skips the check and says so, unless a Cloudflare Workers build of the
+ * production branch, which deploys, is missing it. A Storybook build deploys no
+ * Worker, and a Workers build of another branch makes a preview: both skip it.
  */
 const assertSwitchRulesDecideEverySwitch = async (
   env: Readonly<Record<string, string | undefined>>,
