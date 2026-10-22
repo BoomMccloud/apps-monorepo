@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { urlOf } from '../inputUrl'
+import { isRecord } from '../isRecord'
 import { POSTHOG_PROJECT_SETTINGS, postHogAnswerFor } from './postHogAnswers'
 import { isGzip, jsonTextOf } from './postHogBody'
 import { eventsIn, type SentEvent } from './postHogEvents'
@@ -195,12 +196,23 @@ export const keepHistoryMethods = (): void => {
   vi.spyOn(history, 'replaceState')
 }
 
-/** Give the page an address, as happy-dom lets a test do; its window type does not say so. */
+/** happy-dom's own handle on its window, which the window's type does not declare. */
+type HappyDomWindow = {
+  readonly happyDOM: { readonly setURL: (url: string) => void }
+}
+
+const isHappyDomWindow = (page: unknown): page is HappyDomWindow =>
+  isRecord(page) &&
+  isRecord(page.happyDOM) &&
+  typeof page.happyDOM.setURL === 'function'
+
+/**
+ * Give the page an address, as happy-dom lets a test do. Outside happy-dom it
+ * does nothing, and the test's own checks then fail.
+ */
 export const setPageUrl = (url: string): void => {
-  const { happyDOM } = window as unknown as {
-    readonly happyDOM: { readonly setURL: (url: string) => void }
-  }
-  happyDOM.setURL(url)
+  const page: unknown = window
+  if (isHappyDomWindow(page)) page.happyDOM.setURL(url)
 }
 
 /** Set a cookie as another tab or app would have, or clear it with `max-age=0`. */
