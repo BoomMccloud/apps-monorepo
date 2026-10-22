@@ -133,15 +133,66 @@ describe('subname pages', () => {
     ).toEqual([
       { v1Wrapping: { isWrapped: false }, subnameCount: 0 },
       {
-        v1Wrapping: { isWrapped: true, parentCannotControl: false },
+        v1Wrapping: {
+          isWrapped: true,
+          parentCannotControl: false,
+          canOwnerClear: true,
+        },
         subnameCount: undefined,
       },
       {
-        v1Wrapping: { isWrapped: true, parentCannotControl: true },
+        v1Wrapping: {
+          isWrapped: true,
+          parentCannotControl: true,
+          canOwnerClear: true,
+        },
         subnameCount: undefined,
       },
       { v1Wrapping: null, subnameCount: undefined },
     ])
+  })
+
+  // NameWrapper `setRecord` refuses these fuses, and unwrapping refuses CANNOT_UNWRAP.
+  it('says whether a wrapped subname’s owner can zero it', async () => {
+    const fuses = (burnt: Record<string, boolean>) => ({
+      fuses: 0,
+      cannot_unwrap: false,
+      cannot_burn_fuses: false,
+      cannot_transfer: false,
+      cannot_set_resolver: false,
+      cannot_set_ttl: false,
+      cannot_create_subdomain: false,
+      cannot_approve: false,
+      parent_cannot_control: true,
+      is_dot_eth: false,
+      can_extend_expiry: false,
+      ...burnt,
+    })
+    vi.mocked(bigname.subnames).mockReturnValue(
+      page(
+        [
+          row('locked', { ens_v1: { wrapper_state: 'locked' } }),
+          row('frozen', {
+            ens_v1: {
+              wrapper_state: 'emancipated',
+              wrapper_fuses: fuses({ cannot_transfer: true }),
+            },
+          }),
+          row('free', {
+            ens_v1: { wrapper_state: 'emancipated', wrapper_fuses: fuses({}) },
+          }),
+        ],
+        { total: 3 },
+      ),
+    )
+
+    const subnames = await firstPage('test.eth')
+
+    expect(
+      subnames.map(({ v1Wrapping }) =>
+        v1Wrapping?.isWrapped ? v1Wrapping.canOwnerClear : null,
+      ),
+    ).toEqual([false, false, true])
   })
 
   it('counts expired children only when asked, as a row’s count does', async () => {
