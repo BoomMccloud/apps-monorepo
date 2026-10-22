@@ -936,6 +936,10 @@ msgstr "Disconnect"
 msgid "Disconnecting..."
 msgstr "Disconnecting..."
 
+#: src/components/NoticeBanner.tsx
+msgid "Dismiss notice"
+msgstr "Dismiss notice"
+
 #: src/features/dashboard/components/FaqSection.tsx
 msgid "Do I have to upgrade my names? What happens if I don't?"
 msgstr "Do I have to upgrade my names? What happens if I don't?"
@@ -1733,10 +1737,6 @@ msgstr "Nothing has been lost. Contact ENS support before trying again."
 #: src/features/notifications/inbox/list.tsx
 msgid "Nothing here yet!"
 msgstr "Nothing here yet!"
-
-#: src/components/SepoliaNoticeBanner.tsx
-msgid "Notice: ENS v2 is in active development. Registered names on Sepolia and state data may be reset periodically due to routine contract deployments. The most recent deployment was on {LAST_SEPOLIA_DEPLOYMENT_DATE}."
-msgstr "Notice: ENS v2 is in active development. Registered names on Sepolia and state data may be reset periodically due to routine contract deployments. The most recent deployment was on {LAST_SEPOLIA_DEPLOYMENT_DATE}."
 
 #: src/features/notifications/settings/preferences.tsx
 msgid "Notification schedule"
