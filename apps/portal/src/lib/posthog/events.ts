@@ -21,4 +21,4 @@ export type PostHogEvents = SharedPostHogEvents & {
   }
 }
 
-export const { track, trackWithOptions } = createTracker<PostHogEvents>(posthog)
+export const { track } = createTracker<PostHogEvents>(posthog)
