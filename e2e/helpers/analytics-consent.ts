@@ -190,7 +190,7 @@ const CARD_WIDTHS_PX = [320, 360, 390, 768] as const
  * leaves still sits inside the button's border, and the room that matters is
  * the room around the words a visitor reads.
  */
-export const expectLabelsKeepRoom = async (page: Page): Promise<void> => {
+const expectLabelsKeepRoom = async (page: Page): Promise<void> => {
   const width = page.viewportSize()?.width ?? 'an unknown number of'
   for (const button of [acceptButton(page), declineButton(page)]) {
     const { label, left, right } = await button.evaluate((element) => {
