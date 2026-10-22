@@ -67,7 +67,7 @@ export const SubnameUpgradeNotice = ({ name }: { readonly name: string }) => {
           )
           .otherwise(({ affectedCount }) => {
             const subnameLabel = affectedCount === 1 ? 'subname' : 'subnames'
-            return `Upgrading this name on its own would affect ${affectedCount} ${subnameLabel}. Review which subnames will be carried over in Manager before continuing.`
+            return `Upgrading this name on its own would delete ${affectedCount} ${subnameLabel}. Review which subnames will be carried over in Manager before continuing.`
           })}
       </span>
     </p>

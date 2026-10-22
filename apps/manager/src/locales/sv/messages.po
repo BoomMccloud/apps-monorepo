@@ -155,7 +155,7 @@ msgid "{selectedCount} selected"
 msgstr ""
 
 #: src/features/migration/components/SubnameMigrationDialog.tsx
-msgid "{selectedNameCount, plural, one {The selected name has subnames which will no longer resolve after upgrading to ENS v2.} other {The selected names have subnames which will no longer resolve after upgrading to ENS v2.}}"
+msgid "{selectedNameCount, plural, one {The selected name has subnames which will be deleted when upgrading to ENS v2.} other {The selected names have subnames which will be deleted when upgrading to ENS v2.}}"
 msgstr ""
 
 #: src/features/migration/components/GameStep.tsx
@@ -1298,6 +1298,10 @@ msgstr ""
 
 #: src/features/renew/components/ThirdPartyRenewalDialog.tsx
 msgid "I Understand"
+msgstr ""
+
+#: src/features/migration/components/SubnameMigrationDialog.tsx
+msgid "I understand that the affected subnames will be deleted."
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
@@ -2592,7 +2596,7 @@ msgid "Some subnames can't upgrade until their parent name is upgraded. Upgrade 
 msgstr ""
 
 #: src/features/migration/components/SubnameMigrationDialog.tsx
-msgid "Some subnames will stop resolving"
+msgid "Some subnames will be deleted"
 msgstr ""
 
 #: src/features/migration/components/SelectNamesStep.tsx

@@ -615,8 +615,10 @@ export const MigrationPage = () => {
         .exhaustive()}
 
       <SubnameMigrationDialog
+        hasAcknowledgedImpact={confirmation.hasAcknowledgedImpact}
         isChecking={confirmation.isChecking}
         isOpen={confirmation.isOpen}
+        onAcknowledgeImpact={confirmation.acknowledgeImpact}
         onCancel={confirmation.cancel}
         onContinue={() => void confirmation.confirm()}
         onRestoreFocus={confirmation.restoreFocus}

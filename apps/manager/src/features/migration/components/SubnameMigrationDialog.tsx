@@ -96,6 +96,8 @@ export const SubnameMigrationDialog = ({
   selectedNameCount,
   state,
   isChecking,
+  hasAcknowledgedImpact,
+  onAcknowledgeImpact,
   onCancel,
   onContinue,
   onRestoreFocus,
@@ -104,6 +106,8 @@ export const SubnameMigrationDialog = ({
   readonly selectedNameCount: number
   readonly state: SubnameMigrationImpactState
   readonly isChecking: boolean
+  readonly hasAcknowledgedImpact: boolean
+  readonly onAcknowledgeImpact: (isAcknowledged: boolean) => void
   readonly onCancel: () => void
   readonly onContinue: () => void
   readonly onRestoreFocus: () => void
@@ -144,7 +148,7 @@ export const SubnameMigrationDialog = ({
               <Trans>Checking your subnames</Trans>
             ))
             .with({ hasImpact: true }, () => (
-              <Trans>Some subnames will stop resolving</Trans>
+              <Trans>Some subnames will be deleted</Trans>
             ))
             .otherwise(() => (
               <Trans>Your subnames are unaffected</Trans>
@@ -172,8 +176,8 @@ export const SubnameMigrationDialog = ({
             .with({ hasImpact: true }, () => (
               <>
                 <Plural
-                  one="The selected name has subnames which will no longer resolve after upgrading to ENS v2."
-                  other="The selected names have subnames which will no longer resolve after upgrading to ENS v2."
+                  one="The selected name has subnames which will be deleted when upgrading to ENS v2."
+                  other="The selected names have subnames which will be deleted when upgrading to ENS v2."
                   value={selectedNameCount}
                 />{' '}
                 <Trans>
@@ -199,6 +203,24 @@ export const SubnameMigrationDialog = ({
             ))}
         </DialogDescription>
         <ImpactSummary isLoading={isLoading} state={state} />
+        {hasImpact && (
+          <label className="mt-5 flex min-h-11 shrink-0 cursor-pointer items-start gap-3 py-2 text-ens-garnet-900 text-sm leading-normal">
+            <input
+              checked={hasAcknowledgedImpact}
+              className="mt-0.5 size-5 shrink-0 rounded-sm accent-ens-garnet-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ens-garnet-900 focus-visible:ring-offset-2 focus-visible:ring-offset-ens-quartz-100 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={
+                isLoading || state.status !== 'ready' || !state.canReview
+              }
+              onChange={(event) => onAcknowledgeImpact(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <Trans>
+                I understand that the affected subnames will be deleted.
+              </Trans>
+            </span>
+          </label>
+        )}
         <div className="mt-7 flex shrink-0 flex-col-reverse gap-3 sm:flex-row">
           <button
             className="min-h-12 flex-1 rounded-xl border border-ens-garnet-900/15 bg-transparent px-5 font-medium text-sm transition-colors hover:bg-ens-garnet-900/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ens-garnet-900 focus-visible:ring-offset-2 focus-visible:ring-offset-ens-quartz-100 motion-reduce:transition-none"
@@ -210,7 +232,12 @@ export const SubnameMigrationDialog = ({
           </button>
           <button
             className="min-h-12 flex-1 rounded-xl bg-ens-garnet-900 px-5 font-medium text-ens-quartz-100 text-sm transition-colors hover:bg-ens-garnet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ens-garnet-900 focus-visible:ring-offset-2 focus-visible:ring-offset-ens-quartz-100 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
-            disabled={isLoading || state.status !== 'ready' || !state.canReview}
+            disabled={
+              isLoading ||
+              state.status !== 'ready' ||
+              !state.canReview ||
+              (hasImpact && !hasAcknowledgedImpact)
+            }
             onClick={onContinue}
             type="button"
           >
