@@ -100,6 +100,7 @@ describe('subname pages', () => {
         labelName: 'sub',
         labelhash: labelhash('sub'),
         owner: '0x1234567890AbcdEF1234567890aBcdef12345678',
+        protocol: null,
         v1Wrapping: null,
         subnameCount: undefined,
       },
@@ -159,6 +160,23 @@ describe('subname pages', () => {
 
     await getSubnamesCount({ name: 'test.eth', protocolVersion: 'ENSv1' })
     expect(asked(1)[1]).toMatchObject({ include_expired: 'false' })
+  })
+
+  it('carries the era bigname serves each subname from', async () => {
+    vi.mocked(bigname.subnames).mockReturnValue(
+      page(
+        [
+          row('old', { authority: 'ens_v1' }),
+          row('new', { authority: 'ens_v2' }),
+          row('unsaid'),
+        ],
+        { total: 3 },
+      ),
+    )
+
+    const subnames = await firstPage('test.eth')
+
+    expect(subnames.map(({ protocol }) => protocol)).toEqual(['v1', 'v2', null])
   })
 
   it('asks for counts only on V1 pages', async () => {
@@ -291,19 +309,21 @@ describe('getSubnamePagesQueryOptions', () => {
 })
 
 describe('getSubnamesCountQueryOptions', () => {
-  it.each([
-    'ENSv1',
-    'ENSv2',
-  ] as const)('reads the %s count as bigname’s total, without listing the subnames', async (protocolVersion) => {
-    vi.mocked(bigname.subnames).mockReturnValue(page([row('a')], { total: 7 }))
+  it.each(['ENSv1', 'ENSv2'] as const)(
+    'reads the %s count as bigname’s total, without listing the subnames',
+    async (protocolVersion) => {
+      vi.mocked(bigname.subnames).mockReturnValue(
+        page([row('a')], { total: 7 }),
+      )
 
-    const count = await new QueryClient().fetchQuery(
-      getSubnamesCountQueryOptions({ name: 'test.eth', protocolVersion }),
-    )
+      const count = await new QueryClient().fetchQuery(
+        getSubnamesCountQueryOptions({ name: 'test.eth', protocolVersion }),
+      )
 
-    expect(count).toBe(7)
-    expect(asked()?.[1]).toMatchObject({ page_size: 1 })
-  })
+      expect(count).toBe(7)
+      expect(asked()?.[1]).toMatchObject({ page_size: 1 })
+    },
+  )
 })
 
 describe('getIsSubnameTakenQueryOptions', () => {
