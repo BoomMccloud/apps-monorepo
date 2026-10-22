@@ -4,6 +4,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022", "ES2024.Promise", "DOM"],
+    "jsx": "react-jsx",
 
     /* Bundler mode */
     "moduleResolution": "bundler",

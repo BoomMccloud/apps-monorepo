@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest --typecheck",
     "test:run": "vitest run --typecheck",
+    "test:coverage": "vitest run --typecheck --coverage",
     "lint": "biome check"
   },
   "devDependencies": {
