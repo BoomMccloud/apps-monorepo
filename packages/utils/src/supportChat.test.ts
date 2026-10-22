@@ -13,7 +13,7 @@ const consent = vi.hoisted(() => ({
   status: vi.fn<() => AnalyticsConsent>(),
 }))
 const analytics = {
-  get_distinct_id: () => 'visitor-id',
+  get_distinct_id: vi.fn(() => 'visitor-id'),
   get_session_replay_url: () => 'https://replay.example/session',
   get_explicit_consent_status: () => consent.status(),
   capture: vi.fn(),
@@ -38,6 +38,7 @@ describe('createSupportChat', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     consent.status.mockReturnValue('granted')
+    analytics.get_distinct_id.mockReturnValue('visitor-id')
     intercom.getVisitorId.mockReturnValue('intercom-visitor')
     supportChat = createSupportChat({ appId: 'app-id', analytics })
   })
@@ -82,10 +83,13 @@ describe('createSupportChat', () => {
     expect(intercom.getVisitorId).toHaveBeenCalledTimes(3)
   })
 
-  it('stops asking once the visitor no longer has accepted', async () => {
+  it.each([
+    ['denied'],
+    ['pending'],
+  ] as const)('stops asking once the choice is %s', async (choice) => {
     intercom.getVisitorId.mockReturnValue(undefined)
     supportChat.bootSupportChat('granted')
-    consent.status.mockReturnValue('denied')
+    consent.status.mockReturnValue(choice)
 
     await vi.advanceTimersByTimeAsync(60_000)
 
@@ -109,6 +113,16 @@ describe('createSupportChat', () => {
     supportChat.linkSupportChat()
 
     expect(analytics.capture).toHaveBeenCalledExactlyOnceWith(...RECORDED)
+  })
+
+  it("records the chat's visitor again for a new visitor id of the analytics", () => {
+    supportChat.bootSupportChat('granted')
+    analytics.get_distinct_id.mockReturnValue('wallet-visitor')
+
+    supportChat.relinkSupportChat()
+
+    expect(analytics.capture).toHaveBeenCalledTimes(2)
+    expect(analytics.capture).toHaveBeenLastCalledWith(...RECORDED)
   })
 
   it('ties a chat already booted to the analytics on Accept', () => {
@@ -143,6 +157,24 @@ describe('createSupportChat', () => {
       recent_replay: '',
     })
     expect(intercom.boot).not.toHaveBeenCalled()
+  })
+
+  it("never lets a failing ask for the chat's visitor crash the app", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    intercom.getVisitorId
+      .mockReturnValueOnce(undefined)
+      .mockImplementation(() => {
+        throw new Error('widget gone')
+      })
+    supportChat.bootSupportChat('granted')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(warn).toHaveBeenCalledWith(
+      '[intercom] link failed',
+      expect.any(Error),
+    )
+    expect(analytics.capture).not.toHaveBeenCalled()
   })
 
   it('never lets a failing chat crash the app', () => {
