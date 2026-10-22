@@ -58,7 +58,7 @@ import {
 
 const PORTAL_APP_URL = process.env.PORTAL_APP_URL ?? 'http://localhost:3001'
 const ORIGIN = new URL(PORTAL_APP_URL).origin
-// Any resolver address: the page's sidebar holds the Help and Settings menus.
+// Any resolver address: the page's sidebar holds the Settings menu.
 const RESOLVER_PAGE = '/resolver/0x8FADE66B79cC9f707aB26799354482EB93a5B7dD'
 
 const NOTICE_PATH = '/privacy'
@@ -88,15 +88,6 @@ const openFresh = async (page: Page, path = '/'): Promise<void> => {
 
 const connectButton = (page: Page) =>
   page.getByRole('button', { name: /^Connect( wallet)?$/ }).first()
-
-/**
- * Open the Help menu, which a page with the resolver sidebar has, and follow
- * its Privacy settings entry.
- */
-const openPrivacySettingsFromHelp = async (page: Page): Promise<void> => {
-  await page.getByRole('button', { name: 'Help', exact: true }).click()
-  await page.getByRole('link', { name: 'Privacy settings' }).click()
-}
 
 /**
  * Open the Settings menu, which the home page and every page with a sidebar
@@ -202,12 +193,12 @@ test.describe('Explorer analytics choice', () => {
 
     // The banner's link goes to the ENS privacy policy, which opens in a new
     // tab and is not followed. The notice is on the Privacy settings page,
-    // which the Help menu opens inside the Explorer, and the banner stays
+    // which the Settings menu opens inside the Explorer, and the banner stays
     // until the visitor chooses.
     await expectPolicyLink(policyLink(page))
     await page.setViewportSize(DESKTOP)
     await openFresh(page, RESOLVER_PAGE)
-    await openPrivacySettingsFromHelp(page)
+    await openPrivacySettingsFromSettings(page)
     await expect(page).toHaveURL(`${ORIGIN}${NOTICE_PATH}`)
     await expect(analyticsNotice(page)).toBeVisible()
     await expect(banner).toBeVisible()
