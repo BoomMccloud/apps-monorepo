@@ -39,11 +39,14 @@ export function useSmartSessionGate(): SmartSessionGate {
   // Only a failure during this prompt shows the error state, not one from an earlier visit.
   const [hasFailed, setHasFailed] = useState(false)
   const pendingRef = useRef<(() => void) | null>(null)
+  // Bumped on every open and dismiss, so a request from an earlier prompt cannot touch this one.
+  const promptRef = useRef(0)
 
   const gate = useCallback(
     (onProceed: () => void) => {
       if (needsSessionBeforeRegistration(account)) {
         pendingRef.current = onProceed
+        promptRef.current += 1
         setHasFailed(false)
         setIsOpen(true)
         return
@@ -56,11 +59,14 @@ export function useSmartSessionGate(): SmartSessionGate {
   // Dismissing drops the deferred action: the next attempt starts from the user's own click.
   const dismiss = useCallback(() => {
     pendingRef.current = null
+    promptRef.current += 1
     setIsOpen(false)
   }, [])
 
   const onEnableSession = useCallback(async () => {
+    const prompt = promptRef.current
     const outcome = await account.enableSession()
+    if (promptRef.current !== prompt) return
     if (outcome.status === 'failed') {
       setHasFailed(true)
       return

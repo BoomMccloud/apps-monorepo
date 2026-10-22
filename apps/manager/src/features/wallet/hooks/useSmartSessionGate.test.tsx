@@ -87,7 +87,7 @@ describe('useSmartSessionGate', () => {
     expect(screen.getByText('Enable Sessions')).toBeInTheDocument()
   })
 
-  it('drops the deferred action when dismissed while the signature is pending', async () => {
+  it('ignores the result of a request dismissed before it finished, even after reopening', async () => {
     let resolve: (outcome: EnableSessionOutcome) => void = () => {}
     enableSession.mockReturnValue(
       new Promise<EnableSessionOutcome>((r) => {
@@ -104,9 +104,12 @@ describe('useSmartSessionGate', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     )
+    openDialog()
 
-    resolve(enabled)
+    resolve({ status: 'failed', message: 'boom' })
     await waitFor(() => expect(enableSession).toHaveBeenCalledOnce())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Enable Sessions')).toBeInTheDocument()
     expect(proceed).not.toHaveBeenCalled()
   })
 })
