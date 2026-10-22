@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 // Fails if patches/posthog-js@*.patch stops applying (WEB-1832).
-import { analyticsStartupConfig } from '@ens-apps/utils/analyticsConsent'
 import { PostHog as DefaultBuildPostHog } from 'posthog-js'
 import posthog, { PostHog } from 'posthog-js/dist/module.full.no-external'
 import { afterEach, describe, expect, it } from 'vitest'
+import { analyticsStartupConfig } from './analyticsConsent'
 
 const TOKEN = 'phc_test_token'
 

@@ -4,9 +4,14 @@ import {
   update as updateIntercom,
 } from '@intercom/messenger-js-sdk'
 import type { AnalyticsConsentState } from './analyticsConsentContext'
+import {
+  type CapturingClient,
+  createTracker,
+  type SharedPostHogEvents,
+} from './postHogTrack'
 
 /** The part of PostHog's SDK that ties a support conversation to the visitor. */
-interface SupportChatAnalytics {
+interface SupportChatAnalytics extends CapturingClient {
   get_distinct_id(): string
   get_session_replay_url(): string
   get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
@@ -15,8 +20,6 @@ interface SupportChatAnalytics {
 type SupportChatOptions = {
   readonly appId: string
   readonly analytics: SupportChatAnalytics
-  /** Record the support chat's visitor id against the visitor's analytics. */
-  readonly recordSupportChatVisitor: (intercomVisitorId: string) => void
 }
 
 /**
@@ -29,13 +32,17 @@ const VISITOR_ID_POLL_LIMIT = 30
 /**
  * The support chat of an ENS app. It works whatever the visitor's analytics
  * choice, is tied to the visitor's analytics only after Accept, and loses the
- * tie on Decline.
+ * tie on Decline. It records the chat's visitor id against the visitor's
+ * analytics (the `intercom:booted` event) itself.
  */
-export const createSupportChat = ({
-  appId,
-  analytics,
-  recordSupportChatVisitor,
-}: SupportChatOptions) => {
+export const createSupportChat = ({ appId, analytics }: SupportChatOptions) => {
+  const { trackWithOptions } = createTracker<SharedPostHogEvents>(analytics)
+
+  const recordSupportChatVisitor = (intercomVisitorId: string): void =>
+    trackWithOptions('intercom:booted', undefined, {
+      $set: { intercom_visitor_id: intercomVisitorId },
+    })
+
   /** What ties a support conversation to the visitor's analytics. */
   const supportChatLink = () => ({
     posthog_distinct_id: analytics.get_distinct_id(),

@@ -15,14 +15,21 @@ const analytics = {
   get_distinct_id: () => 'visitor-id',
   get_session_replay_url: () => 'https://replay.example/session',
   get_explicit_consent_status: () => consent.status(),
+  capture: vi.fn(),
 }
 const LINK = {
   posthog_distinct_id: 'visitor-id',
   recent_replay: 'https://replay.example/session',
 }
+// What the chat records against the visitor's analytics once its widget has a
+// visitor of its own.
+const RECORDED = [
+  'intercom:booted',
+  undefined,
+  { $set: { intercom_visitor_id: 'intercom-visitor' } },
+] as const
 
 describe('createSupportChat', () => {
-  const recordSupportChatVisitor = vi.fn()
   // A new chat for each test: it remembers the visitors it has recorded.
   let supportChat: ReturnType<typeof createSupportChat>
 
@@ -31,11 +38,7 @@ describe('createSupportChat', () => {
     vi.clearAllMocks()
     consent.status.mockReturnValue('granted')
     intercom.getVisitorId.mockReturnValue('intercom-visitor')
-    supportChat = createSupportChat({
-      appId: 'app-id',
-      analytics,
-      recordSupportChatVisitor,
-    })
+    supportChat = createSupportChat({ appId: 'app-id', analytics })
   })
 
   afterEach(() => {
@@ -50,7 +53,7 @@ describe('createSupportChat', () => {
     supportChat.bootSupportChat(choice)
 
     expect(intercom.boot).toHaveBeenCalledExactlyOnceWith({ app_id: 'app-id' })
-    expect(recordSupportChatVisitor).not.toHaveBeenCalled()
+    expect(analytics.capture).not.toHaveBeenCalled()
   })
 
   it('boots the chat linked to the analytics, and records its visitor, after Accept', () => {
@@ -60,9 +63,7 @@ describe('createSupportChat', () => {
       app_id: 'app-id',
       ...LINK,
     })
-    expect(recordSupportChatVisitor).toHaveBeenCalledExactlyOnceWith(
-      'intercom-visitor',
-    )
+    expect(analytics.capture).toHaveBeenCalledExactlyOnceWith(...RECORDED)
   })
 
   it("asks again for the chat's visitor until its widget has one, then records it once", async () => {
@@ -72,13 +73,11 @@ describe('createSupportChat', () => {
       .mockReturnValue('intercom-visitor')
 
     supportChat.bootSupportChat('granted')
-    expect(recordSupportChatVisitor).not.toHaveBeenCalled()
+    expect(analytics.capture).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(10_000)
 
-    expect(recordSupportChatVisitor).toHaveBeenCalledExactlyOnceWith(
-      'intercom-visitor',
-    )
+    expect(analytics.capture).toHaveBeenCalledExactlyOnceWith(...RECORDED)
     expect(intercom.getVisitorId).toHaveBeenCalledTimes(3)
   })
 
@@ -89,7 +88,7 @@ describe('createSupportChat', () => {
 
     await vi.advanceTimersByTimeAsync(60_000)
 
-    expect(recordSupportChatVisitor).not.toHaveBeenCalled()
+    expect(analytics.capture).not.toHaveBeenCalled()
     expect(intercom.getVisitorId).toHaveBeenCalledTimes(1)
   })
 
@@ -99,7 +98,7 @@ describe('createSupportChat', () => {
 
     await vi.advanceTimersByTimeAsync(120_000)
 
-    expect(recordSupportChatVisitor).not.toHaveBeenCalled()
+    expect(analytics.capture).not.toHaveBeenCalled()
     // The first ask, and thirty more.
     expect(intercom.getVisitorId).toHaveBeenCalledTimes(31)
   })
@@ -108,18 +107,14 @@ describe('createSupportChat', () => {
     supportChat.bootSupportChat('granted')
     supportChat.linkSupportChat()
 
-    expect(recordSupportChatVisitor).toHaveBeenCalledExactlyOnceWith(
-      'intercom-visitor',
-    )
+    expect(analytics.capture).toHaveBeenCalledExactlyOnceWith(...RECORDED)
   })
 
   it('ties a chat already booted to the analytics on Accept', () => {
     supportChat.linkSupportChat()
 
     expect(intercom.update).toHaveBeenCalledExactlyOnceWith(LINK)
-    expect(recordSupportChatVisitor).toHaveBeenCalledExactlyOnceWith(
-      'intercom-visitor',
-    )
+    expect(analytics.capture).toHaveBeenCalledExactlyOnceWith(...RECORDED)
   })
 
   it("ties the chat to the visitor's new id after the id changed, while the visitor has accepted", () => {

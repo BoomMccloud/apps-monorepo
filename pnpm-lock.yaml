@@ -1224,6 +1224,9 @@ importers:
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
+      posthog-js:
+        specifier: 'catalog:'
+        version: 1.404.1(patch_hash=4dd74f3f89898cb5d2ede434c6bb7f433ff3174d959dae30ecf8ab70ff98e3ee)
       viem:
         specifier: 'catalog:'
         version: 2.52.2(typescript@7.0.2)(zod@4.6.5)
@@ -1237,9 +1240,6 @@ importers:
       happy-dom:
         specifier: 'catalog:'
         version: 20.13.2
-      posthog-js:
-        specifier: 'catalog:'
-        version: 1.404.1(patch_hash=4dd74f3f89898cb5d2ede434c6bb7f433ff3174d959dae30ecf8ab70ff98e3ee)
       react:
         specifier: ^19.2.5
         version: 19.2.5
