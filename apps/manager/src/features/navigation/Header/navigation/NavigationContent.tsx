@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   GithubIcon,
   MessageCircleIcon,
-  MessageSquareIcon,
+  NewspaperIcon,
   TwitterIcon,
   YoutubeIcon,
 } from 'lucide-react'
@@ -128,8 +128,8 @@ const navigationSections: readonly NavigationSection[] = [
 const socialIcons: readonly SocialIcon[] = [
   { href: 'https://x.com/ensdomains', icon: TwitterIcon },
   { href: 'https://github.com/ensdomains', icon: GithubIcon },
-  { href: 'https://chat.ens.domains', icon: MessageCircleIcon },
-  { href: 'https://support.ens.domains', icon: MessageSquareIcon },
+  { href: 'https://ens.mirror.xyz/', icon: NewspaperIcon },
+  { href: 'https://discuss.ens.domains/', icon: MessageCircleIcon },
   { href: 'https://www.youtube.com/@ENSdomains', icon: YoutubeIcon },
 ]
 
