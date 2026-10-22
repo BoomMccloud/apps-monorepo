@@ -257,7 +257,7 @@ describe('useFeatureSwitchSync', () => {
     )
   })
 
-  it('hands back the same function on every render, so wagmi sets its watcher up once', () => {
+  it('hands back the same function on every render', () => {
     vi.mocked(getFeatureSwitches).mockReturnValue(pendingAnswer().promise)
     const { result, rerender } = renderSync(BASE)
     const first = result.current

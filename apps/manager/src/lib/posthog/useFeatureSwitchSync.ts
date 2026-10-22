@@ -44,8 +44,8 @@ export type FeatureSwitchSyncInput = {
  *
  * Returns what to call once the SDK has been reset. A reset empties the SDK's
  * switches without telling the page, so the hook forgets what it wrote and
- * writes the answers known at the next render again. The same function every
- * time: wagmi's connection watcher is set up again when its handlers change.
+ * writes the answers known at the next render again. It is the same function
+ * on every render.
  */
 export const useFeatureSwitchSync = ({
   wallet,
