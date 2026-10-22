@@ -242,7 +242,12 @@ beforeEach(() => {
 describe('subnames route with a subregistry that is not a registry', () => {
   beforeEach(() => {
     subnames = [
-      { name: `cold.${NAME}`, labelhash: labelhash('cold'), owner: CONNECTED },
+      {
+        name: `cold.${NAME}`,
+        labelhash: labelhash('cold'),
+        owner: CONNECTED,
+        protocol: 'v2',
+      },
     ]
   })
 
@@ -290,17 +295,20 @@ describe('subnames route with a subregistry that is not a registry', () => {
       },
       ['isRegistry', SUBREGISTRY],
     ],
-  ])('keeps the subnames on screen when a refresh of %s fails', async (_, fail, queryKey) => {
-    const queryClient = createTestQueryClient()
-    renderRoute(queryClient)
-    expect(await screen.findByRole('table')).toBeInTheDocument()
+  ])(
+    'keeps the subnames on screen when a refresh of %s fails',
+    async (_, fail, queryKey) => {
+      const queryClient = createTestQueryClient()
+      renderRoute(queryClient)
+      expect(await screen.findByRole('table')).toBeInTheDocument()
 
-    fail()
-    await act(() => queryClient.refetchQueries({ queryKey }))
+      fail()
+      await act(() => queryClient.refetchQueries({ queryKey }))
 
-    expect(queryClient.getQueryState(queryKey)?.status).toBe('error')
-    expect(screen.getByRole('table')).toBeInTheDocument()
-  })
+      expect(queryClient.getQueryState(queryKey)?.status).toBe('error')
+      expect(screen.getByRole('table')).toBeInTheDocument()
+    },
+  )
 })
 
 describe('V1 subname creation', () => {
