@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { urlOf } from '../inputUrl'
+import { POSTHOG_PROJECT_SETTINGS, postHogAnswerFor } from './postHogAnswers'
 import { eventsIn, type SentEvent } from './postHogEvents'
 
 /**
@@ -17,16 +18,6 @@ import { eventsIn, type SentEvent } from './postHogEvents'
  *   const { PostHog } = await import('posthog-js/dist/module.full.no-external')
  */
 
-/** The project's settings as PostHog serves them, with everything on. */
-const PROJECT_SETTINGS = {
-  // Once these arrive the SDK gzips what it sends, with the platform's stream.
-  supportedCompression: ['gzip', 'gzip-js'],
-  sessionRecording: { endpoint: '/s/' },
-  surveys: true,
-  heatmaps: true,
-  capturePerformance: { web_vitals: true },
-} as const
-
 /** One request that reached the network, after the send guard. */
 type WireRequest = {
   readonly via: 'fetch' | 'beacon'
@@ -39,30 +30,23 @@ type WireRequest = {
 type NetworkAnswers = {
   /** What a request carrying events gets, each time one arrives. */
   readonly events?: () => Response | Promise<Response>
-  readonly projectSettings?: object
+  readonly projectSettings?: Readonly<Record<string, unknown>>
   /** The surveys the project serves; none by default. */
   readonly surveys?: readonly object[]
 }
 
-/** The answers of PostHog's host, by path. */
+/** The answers of PostHog's host, by path (`postHogAnswerFor`), and the events' own. */
 export const answering =
   ({
     events = () => Response.json({ status: 1 }),
-    projectSettings = PROJECT_SETTINGS,
+    projectSettings = POSTHOG_PROJECT_SETTINGS,
     surveys = [],
   }: NetworkAnswers = {}) =>
   async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     const { pathname } = new URL(urlOf(input))
-    if (/^\/array\/[^/]+\/config$/.test(pathname)) {
-      return Response.json(projectSettings)
-    }
-    if (pathname.startsWith('/api/surveys')) {
-      return Response.json({ surveys })
-    }
-    if (pathname.startsWith('/flags')) {
-      return Response.json({ flags: {}, featureFlags: {} })
-    }
-    return pathname.startsWith('/e') ? events() : Response.json({ status: 1 })
+    return pathname.startsWith('/e')
+      ? events()
+      : Response.json(postHogAnswerFor(pathname, { projectSettings, surveys }))
   }
 
 // The SDK encodes a body as gzip bytes, as `data=<base64 of the JSON>`, or as

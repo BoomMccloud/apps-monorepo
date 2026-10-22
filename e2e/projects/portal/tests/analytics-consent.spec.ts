@@ -1,3 +1,4 @@
+import { POSTHOG_PROJECT_SETTINGS } from '@ens-apps/utils/testing/postHogAnswers'
 import type { Page } from '@playwright/test'
 import {
   connectWithHeadlessWallet,
@@ -46,7 +47,6 @@ import {
 import {
   type PostHogStandIn,
   STAND_IN_FLAG_RULES,
-  STAND_IN_REMOTE_CONFIG,
   startPostHogStandIn,
   TEST_WALLET,
 } from '../../../helpers/posthog-stand-in.js'
@@ -69,7 +69,7 @@ let standIn: PostHogStandIn
 test.beforeAll(async () => {
   standIn = await startPostHogStandIn({
     rules: STAND_IN_FLAG_RULES,
-    remoteConfig: STAND_IN_REMOTE_CONFIG,
+    remoteConfig: POSTHOG_PROJECT_SETTINGS,
   })
 })
 

@@ -1,3 +1,4 @@
+import { POSTHOG_PROJECT_SETTINGS } from '@ens-apps/utils/testing/postHogAnswers'
 import { expect, type Page, test } from '@playwright/test'
 import {
   acceptButton,
@@ -11,7 +12,6 @@ import {
 import {
   type PostHogStandIn,
   STAND_IN_FLAG_RULES,
-  STAND_IN_REMOTE_CONFIG,
   startPostHogStandIn,
 } from '../../../helpers/posthog-stand-in.js'
 import { baseConfig } from '../../../playwright.config.base.js'
@@ -69,7 +69,7 @@ let standIn: PostHogStandIn
 test.beforeAll(async () => {
   standIn = await startPostHogStandIn({
     rules: STAND_IN_FLAG_RULES,
-    remoteConfig: STAND_IN_REMOTE_CONFIG,
+    remoteConfig: POSTHOG_PROJECT_SETTINGS,
   })
 })
 

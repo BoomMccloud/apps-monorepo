@@ -6,6 +6,7 @@ import {
 } from 'node:http'
 import { gunzipSync } from 'node:zlib'
 import { TaggedError } from '@ens-apps/utils/neverthrow'
+import { postHogAnswerFor } from '@ens-apps/utils/testing/postHogAnswers'
 import {
   eventsIn as eventsOfBody,
   type SentEvent,
@@ -181,28 +182,6 @@ const sendJson = (
   response.end(JSON.stringify(payload))
 }
 
-/** What the stand-in answers on a path, as PostHog would answer it. */
-const answerFor = (path: string, options: StandInOptions): unknown => {
-  if (path.startsWith('/api/feature_flag/local_evaluation')) {
-    return options.rules
-  }
-  if (/^\/array\/[^/]+\/config(\.js)?$/.test(path)) {
-    return options.remoteConfig
-  }
-  if (path.startsWith('/api/surveys')) {
-    return { surveys: [] }
-  }
-  if (path.startsWith('/flags')) {
-    return {
-      flags: {},
-      featureFlags: {},
-      featureFlagPayloads: {},
-      errorsWhileComputingFlags: false,
-    }
-  }
-  return { status: 1 }
-}
-
 /**
  * Start the stand-in on its port. Every request is recorded before it is
  * answered, preflights included, so "the host received nothing" means
@@ -254,7 +233,16 @@ export const startPostHogStandIn = async (
           )
           return
         }
-        sendJson(request, response, 200, answerFor(url.pathname, options))
+        sendJson(
+          request,
+          response,
+          200,
+          postHogAnswerFor(url.pathname, {
+            projectSettings: options.remoteConfig,
+            surveys: [],
+            rules: options.rules,
+          }),
+        )
       },
       // A client that goes away mid-upload has no answer to wait for.
       () => response.destroy(),
@@ -350,36 +338,4 @@ export const STAND_IN_FLAG_RULES: FlagRules = {
   ],
   group_type_mapping: {},
   cohorts: {},
-}
-
-/**
- * The project settings the browser SDK loads after Accept: recordings,
- * surveys, heatmaps, dead clicks and performance timings on, as a project
- * that ran them before the pause would have them.
- */
-export const STAND_IN_REMOTE_CONFIG: Readonly<Record<string, unknown>> = {
-  supportedCompression: ['gzip', 'gzip-js'],
-  hasFeatureFlags: false,
-  autocapture_opt_out: false,
-  autocaptureExceptions: false,
-  captureDeadClicks: true,
-  capturePerformance: { network_timing: true, web_vitals: true },
-  heatmaps: true,
-  surveys: true,
-  defaultIdentifiedOnly: true,
-  elementsChainAsString: true,
-  siteApps: [],
-  sessionRecording: {
-    endpoint: '/s/',
-    consoleLogRecordingEnabled: false,
-    recorderVersion: 'v2',
-    sampleRate: null,
-    minimumDurationMilliseconds: null,
-    linkedFlag: null,
-    networkPayloadCapture: null,
-    urlTriggers: [],
-    urlBlocklist: [],
-    eventTriggers: [],
-    scriptConfig: null,
-  },
 }
