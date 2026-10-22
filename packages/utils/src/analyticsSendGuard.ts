@@ -21,11 +21,11 @@
  * period, after the visitor has accepted again.
  *
  * The SDK keeps the `fetch` it finds when its module loads, so this module has
- * to run before the SDK's. In each app the one module that imports the SDK,
- * lib/posthog/client.ts, imports this first, which holds in a production
- * bundle as well; the guard cannot be the first import of the app's entry
- * instead, because the bundler may run a shared chunk that holds the SDK
- * before the entry's own chunk. It installs itself in a browser only, once.
+ * to run before the SDK's. The one module that imports the SDK,
+ * postHogClient.ts, imports this first, which holds in a production bundle as
+ * well; the guard cannot be the first import of an app's entry instead,
+ * because the bundler may run a shared chunk that holds the SDK before the
+ * entry's own chunk. It installs itself in a browser only, once.
  */
 
 import { urlOf } from './inputUrl'

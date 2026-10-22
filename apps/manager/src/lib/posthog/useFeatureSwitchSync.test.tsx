@@ -3,21 +3,31 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
   type FeatureSwitches,
 } from './feature-flags'
-import { getFeatureSwitches } from './getFeatureSwitches'
 import {
   type FeatureSwitchSyncInput,
   useFeatureSwitchSync,
 } from './useFeatureSwitchSync'
 
+// Whether the SDK has started: it takes no switches before it has.
+const sdk = vi.hoisted(() => ({ isLoaded: vi.fn(() => true) }))
+
 vi.mock('posthog-js/dist/module.full.no-external', () => ({
-  default: { __loaded: true, updateFlags: vi.fn() },
+  default: {
+    get __loaded() {
+      return sdk.isLoaded()
+    },
+    updateFlags: vi.fn(),
+  },
 }))
-vi.mock('./getFeatureSwitches', () => ({ getFeatureSwitches: vi.fn() }))
+vi.mock('@/server/posthog/getFeatureSwitches', () => ({
+  getFeatureSwitches: vi.fn(),
+}))
 
 const WALLET = '0x1111111111111111111111111111111111111111'
 const OTHER_WALLET = '0x2222222222222222222222222222222222222222'
@@ -43,7 +53,6 @@ const BASE: FeatureSwitchSyncInput = {
   wallet: WALLET,
   isConnectionSettled: true,
   pageStart: { wallet: WALLET, switches: WALLET_SWITCHES },
-  resetCount: 0,
 }
 
 const written = (switches: FeatureSwitches) =>
@@ -78,6 +87,7 @@ const renderSync = (input: FeatureSwitchSyncInput) => {
 describe('useFeatureSwitchSync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sdk.isLoaded.mockReturnValue(true)
   })
 
   it('writes the answers the page started with for the wallet it started with, and asks the server for nothing', () => {
@@ -182,10 +192,10 @@ describe('useFeatureSwitchSync', () => {
   })
 
   it('writes again after a reset, which empties the SDK without telling the page', () => {
-    const { rerender } = renderSync(BASE)
+    const { result } = renderSync(BASE)
     vi.mocked(posthog.updateFlags).mockClear()
 
-    rerender({ ...BASE, resetCount: 1 })
+    act(() => result.current())
 
     expect(posthog.updateFlags).toHaveBeenCalledOnce()
     expect(posthog.updateFlags).toHaveBeenLastCalledWith(
@@ -193,23 +203,68 @@ describe('useFeatureSwitchSync', () => {
     )
   })
 
-  it('after a reset, writes every switch off for a wallet whose answers are not known yet', () => {
-    vi.mocked(getFeatureSwitches).mockReturnValue(pendingAnswer().promise)
-    const { rerender } = renderSync({ ...BASE, wallet: OTHER_WALLET })
+  it('writes once for each reset, and again for none while nothing changes', () => {
+    const { result, rerender } = renderSync(BASE)
     vi.mocked(posthog.updateFlags).mockClear()
 
-    rerender({ ...BASE, wallet: OTHER_WALLET, resetCount: 1 })
+    act(() => result.current())
+    rerender(BASE)
+    expect(posthog.updateFlags).toHaveBeenCalledOnce()
+
+    act(() => result.current())
+    expect(posthog.updateFlags).toHaveBeenCalledTimes(2)
+  })
+
+  it('after a reset, writes every switch off for a wallet whose answers are not known yet', () => {
+    vi.mocked(getFeatureSwitches).mockReturnValue(pendingAnswer().promise)
+    const { result } = renderSync({ ...BASE, wallet: OTHER_WALLET })
+    vi.mocked(posthog.updateFlags).mockClear()
+
+    act(() => result.current())
 
     expect(posthog.updateFlags).toHaveBeenLastCalledWith(
       ...written(ALL_SWITCHES_OFF),
     )
   })
 
-  it('writes nothing for a reset that comes while the connection is still being restored', () => {
-    const { rerender } = renderSync({ ...BASE, isConnectionSettled: false })
-
-    rerender({ ...BASE, isConnectionSettled: false, resetCount: 1 })
-
+  it('writes nothing before the SDK has started, and the answers at a reset after it has', () => {
+    sdk.isLoaded.mockReturnValue(false)
+    const { result } = renderSync(BASE)
     expect(posthog.updateFlags).not.toHaveBeenCalled()
+
+    sdk.isLoaded.mockReturnValue(true)
+    act(() => result.current())
+
+    expect(posthog.updateFlags).toHaveBeenCalledOnce()
+    expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+      ...written(WALLET_SWITCHES),
+    )
+  })
+
+  it('writes nothing for a reset that comes while the connection is still being restored, and the answers once it has been', () => {
+    const { result, rerender } = renderSync({
+      ...BASE,
+      isConnectionSettled: false,
+    })
+
+    act(() => result.current())
+    expect(posthog.updateFlags).not.toHaveBeenCalled()
+
+    rerender(BASE)
+    expect(posthog.updateFlags).toHaveBeenCalledOnce()
+    expect(posthog.updateFlags).toHaveBeenLastCalledWith(
+      ...written(WALLET_SWITCHES),
+    )
+  })
+
+  it('hands back the same function on every render, so wagmi sets its watcher up once', () => {
+    vi.mocked(getFeatureSwitches).mockReturnValue(pendingAnswer().promise)
+    const { result, rerender } = renderSync(BASE)
+    const first = result.current
+
+    act(() => first())
+    rerender({ ...BASE, wallet: OTHER_WALLET })
+
+    expect(result.current).toBe(first)
   })
 })

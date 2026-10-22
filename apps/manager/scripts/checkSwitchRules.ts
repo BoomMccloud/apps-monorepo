@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern'
 import { loadEnv } from 'vite'
-import { checkSwitchRulesForBuild } from '../src/lib/posthog/switchRulesBuildCheck'
+import { checkSwitchRulesForBuild } from './switchRulesBuildCheck'
 
 /**
  * The rules check against the live project, run by hand:

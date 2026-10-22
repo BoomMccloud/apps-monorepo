@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { forgetLegacyProjects } from './analyticsLegacyStorage'
-import { clearCookies, cookieValue, writeCookie } from './postHogTestKit'
+import {
+  clearCookies,
+  cookieValue,
+  writeCookie,
+} from './testing/postHogTestKit'
 
 const OLD = 'phc_old_project_key'
 const CURRENT = 'phc_current_project_key'

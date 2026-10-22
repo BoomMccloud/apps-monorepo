@@ -1,7 +1,7 @@
+import posthog from '@ens-apps/utils/postHogClient'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Address } from 'viem'
-import posthog from './client'
 import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
@@ -11,13 +11,18 @@ import { getFeatureSwitchesQueryOptions } from './featureSwitches.query'
 
 /**
  * Put the answers into the SDK, replacing every switch it holds, which also
- * tells `useFeatureFlagEnabled`. Not exported: this module is the one place
- * that writes the SDK's switches.
+ * tells `useFeatureFlagEnabled`. Says whether the SDK took them: it takes none
+ * before it has started. Not exported: this module is the one place that
+ * writes the SDK's switches.
  */
-const writeFeatureSwitches = (switches: FeatureSwitches): void => {
-  if (!posthog.__loaded) return
+const writeFeatureSwitches = (switches: FeatureSwitches): boolean => {
+  if (!posthog.__loaded) return false
   posthog.updateFlags(switches, undefined, { merge: false })
+  return true
 }
+
+/** What the SDK holds from this hook: none of the switches before a first write and after a reset. */
+type Written = { readonly switches?: FeatureSwitches }
 
 export type FeatureSwitchSyncInput = {
   /** The wallet connected now, or null for none. */
@@ -26,8 +31,6 @@ export type FeatureSwitchSyncInput = {
   readonly isConnectionSettled: boolean
   /** The answers the server rendered the page with, and the wallet they were decided for. */
   readonly pageStart: DecidedFeatureSwitches
-  /** How many times the SDK has been reset; each reset empties its switches without telling the page. */
-  readonly resetCount: number
 }
 
 /**
@@ -38,13 +41,17 @@ export type FeatureSwitchSyncInput = {
  * answer arriving and a reset all come through here. The answers the page
  * started with are known answers for the wallet they were decided for, and
  * hold while wagmi is still restoring the connection.
+ *
+ * Returns what to call once the SDK has been reset. A reset empties the SDK's
+ * switches without telling the page, so the hook forgets what it wrote and
+ * writes the answers known at the next render again. The same function every
+ * time: wagmi's connection watcher is set up again when its handlers change.
  */
 export const useFeatureSwitchSync = ({
   wallet,
   isConnectionSettled,
   pageStart,
-  resetCount,
-}: FeatureSwitchSyncInput): void => {
+}: FeatureSwitchSyncInput): (() => void) => {
   const { data } = useQuery(
     getFeatureSwitchesQueryOptions({
       wallet,
@@ -53,12 +60,18 @@ export const useFeatureSwitchSync = ({
         wallet === pageStart.wallet ? pageStart.switches : undefined,
     }),
   )
+  // A reset sets a new record, so that the effect sees it whether or not
+  // anything had been written before.
+  const [written, setWritten] = useState<Written>({})
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `resetCount` writes the answers again after a reset, which empties the SDK's switches though `data` has not changed
   useEffect(() => {
     if (!isConnectionSettled) return
     // greptile: query-data-unwrapped: loading, an error and no data all mean
     // the same here, every switch off, so the three states are not told apart.
-    writeFeatureSwitches(data ?? ALL_SWITCHES_OFF)
-  }, [data, isConnectionSettled, resetCount])
+    const answers = data ?? ALL_SWITCHES_OFF
+    if (answers === written.switches) return
+    if (writeFeatureSwitches(answers)) setWritten({ switches: answers })
+  }, [data, isConnectionSettled, written])
+
+  return useCallback(() => setWritten({}), [])
 }

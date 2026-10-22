@@ -7,8 +7,10 @@
  * apps do with the choice: the settings for each state of it, the steps that
  * change it, and following a change made in another tab or app. What is sent
  * is held back until the visitor accepts by `analyticsSendGuard`, and what an
- * error report may carry is cut by `analyticsErrorReports`. Each app keeps its
- * own banner, notice and wiring.
+ * error report may carry is cut by `analyticsErrorReports`. The hooks that put
+ * the choice to use (`useConsentChoice`, `useAnalyticsBanner` and
+ * `useAnalyticsNotice`) are in this package as well; each app keeps only the
+ * markup of its banner and notice, and the settings it passes in.
  */
 import { fromPromise, ok } from 'neverthrow'
 import type { PostHogConfig } from 'posthog-js/dist/module.full.no-external'

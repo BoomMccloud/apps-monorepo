@@ -16,8 +16,8 @@ import { NotFoundPage } from '@/features/not-found/pages/NotFoundPage'
 // register workflow (steps, machines, transaction-manager deps), which would
 // end up in the chunk every route loads.
 import { useOrphanRegistrationCleanup } from '@/features/register-v2/state/useOrphanRegistrationCleanup'
-import { getFeatureSwitches } from '@/lib/posthog/getFeatureSwitches'
 import { RootProviders } from '@/lib/RootProviders'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import appCss from '@/styles/index.css?url'
 import { DEBUG_FEATURES_ENABLED } from '@/utils/debug-features'
 import { defaultOgImageUrl, seo } from '@/utils/seo'

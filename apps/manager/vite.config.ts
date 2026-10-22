@@ -10,8 +10,8 @@ import {
   assertDeploymentEnvironment,
   assertNetworkConfig,
 } from '../../packages/config/src/index'
+import { checkSwitchRulesForBuild } from './scripts/switchRulesBuildCheck'
 import { MANAGER_ENDPOINTS } from './src/endpoints'
-import { checkSwitchRulesForBuild } from './src/lib/posthog/switchRulesBuildCheck'
 
 /**
  * A build must not deploy a Manager whose switches the live rules cannot

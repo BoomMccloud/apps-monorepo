@@ -11,7 +11,7 @@ import {
   postHogStorage,
   settle,
   writeCookie,
-} from './postHogTestKit'
+} from './testing/postHogTestKit'
 
 /**
  * The shared choice on the real SDK, every request it would send seen on the
@@ -107,7 +107,8 @@ const SURVEY = {
 } as const
 
 const surveysOnPage = (): number => {
-  // eslint-disable-next-line agent/no-foreign-testid -- The SDK mounts a survey in a shadow root under an element of this class, which has no role, label or text to find it by.
+  // The SDK mounts a survey in a shadow root under an element of this class,
+  // which has no role, label or text to find it by.
   const hosts = document.querySelectorAll('[class*="PostHogSurvey-"]')
   return hosts.length
 }
@@ -200,6 +201,33 @@ describe('the analytics choice on the installed SDK', () => {
         request.path.startsWith('/flags'),
       ),
     ).toEqual([])
+  })
+
+  it("reads the switches an app's server decided with no request, and takes new answers whole", async () => {
+    const switches = { i18n: true, migration: true, 'migration-nft': false }
+    const client = startClient(
+      analyticsStartupConfig({
+        apiHost: API_HOST,
+        bootstrapSwitches: switches,
+      }),
+    )
+    expect(startAnalyticsChoice(client, CHOICE)).toBe('pending')
+
+    expect(client.isFeatureEnabled('migration', { send_event: false })).toBe(
+      true,
+    )
+    expect(client.isFeatureEnabled('i18n', { send_event: false })).toBe(true)
+    expect(
+      client.isFeatureEnabled('migration-nft', { send_event: false }),
+    ).toBeFalsy()
+
+    client.updateFlags({ ...switches, migration: false }, undefined, {
+      merge: false,
+    })
+    expect(
+      client.isFeatureEnabled('migration', { send_event: false }),
+    ).toBeFalsy()
+    expect(network.fetch).not.toHaveBeenCalled()
   })
 
   it('captures a page view for each move within the app after Accept', async () => {

@@ -195,47 +195,6 @@ export const expectEqualButtons = async (page: Page): Promise<void> => {
   expect(await computedStyle(accept)).toEqual(await computedStyle(decline))
 }
 
-type Box = {
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-}
-
-const intersects = (a: Box, b: Box): boolean =>
-  a.x < b.x + b.width &&
-  b.x < a.x + a.width &&
-  a.y < b.y + b.height &&
-  b.y < a.y + a.height
-
-const visibleBoxes = async (locator: Locator): Promise<Box[]> => {
-  const boxes: Box[] = []
-  for (const element of await locator.all()) {
-    if (!(await element.isVisible())) continue
-    const box = await element.boundingBox()
-    if (box && box.width > 0 && box.height > 0) boxes.push(box)
-  }
-  return boxes
-}
-
-/** The card covers none of these controls. */
-export const expectCardClearOf = async (
-  card: Locator,
-  controls: Locator,
-  what: string,
-): Promise<void> => {
-  const cardBox = await card.boundingBox()
-  expect(cardBox).not.toBeNull()
-  const boxes = await visibleBoxes(controls)
-  expect(boxes.length, `${what}: some controls are visible`).toBeGreaterThan(0)
-  for (const box of boxes) {
-    expect(
-      intersects(cardBox as Box, box),
-      `${what}: the card overlaps a control at ${JSON.stringify(box)}`,
-    ).toBe(false)
-  }
-}
-
 export const expectNoSidewaysScroll = async (page: Page): Promise<void> => {
   const { scrollWidth, innerWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -244,23 +203,21 @@ export const expectNoSidewaysScroll = async (page: Page): Promise<void> => {
   expect(scrollWidth).toBeLessThanOrEqual(innerWidth)
 }
 
-/** On a phone the card sits at the top, under the header and inside the screen. */
-export const expectCardUnderHeader = async (
+/** On a phone the card sits at the bottom of the screen, inside it. */
+export const expectCardAtBottom = async (
   page: Page,
   card: Locator,
-  header: Locator,
 ): Promise<void> => {
   const viewport = page.viewportSize()
-  const [cardBox, headerBox] = await Promise.all([
-    card.boundingBox(),
-    header.boundingBox(),
-  ])
+  const cardBox = await card.boundingBox()
   expect(cardBox).not.toBeNull()
-  expect(headerBox).not.toBeNull()
   expect(viewport).not.toBeNull()
-  if (!cardBox || !headerBox || !viewport) return
-  expect(cardBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
-  expect(cardBox.y).toBeLessThan(viewport.height / 2)
+  if (!cardBox || !viewport) return
+  expect(viewport.height - (cardBox.y + cardBox.height)).toBeLessThanOrEqual(
+    CORNER_GAP_PX,
+  )
+  expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(viewport.height)
+  expect(cardBox.y).toBeGreaterThanOrEqual(0)
   expect(cardBox.x).toBeGreaterThanOrEqual(0)
   expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(viewport.width)
 }

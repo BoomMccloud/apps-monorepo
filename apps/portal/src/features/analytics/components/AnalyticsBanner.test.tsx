@@ -2,16 +2,11 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
-import { BOTTOM_BAR_CLEARANCE_PROPERTY } from '@ens-apps/utils/bottomBarClearance'
+import { describeAnalyticsBanner } from '@ens-apps/utils/testing/describeAnalyticsBanner'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { AnalyticsBanner } from './AnalyticsBanner'
-
-vi.mock('@tanstack/react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
-  useLocation: () => '/',
-}))
 
 const renderBanner = (consent: AnalyticsConsentState) => {
   const accept = vi.fn()
@@ -28,67 +23,25 @@ const banner = () =>
   screen.queryByRole('region', { name: 'Help us improve ENS' })
 
 describe('AnalyticsBanner', () => {
-  it('asks a visitor who has not chosen, with equal buttons and a link to the privacy policy', () => {
-    renderBanner('pending')
-
-    expect(banner()).toBeInTheDocument()
-    expect(banner()).toHaveTextContent(
-      /Optional analytics help ENS understand how the apps are used, find problems and improve the experience/,
-    )
-    expect(banner()).toHaveTextContent(
-      /PostHog processes for ENS: your wallet address/,
-    )
-    const accept = screen.getByRole('button', { name: 'Accept Analytics' })
-    const decline = screen.getByRole('button', { name: 'Decline' })
-    expect(accept.className).toBe(decline.className)
-  })
-
-  it('links the ENS privacy policy, which opens in a new tab', () => {
-    renderBanner('pending')
-
-    const policy = screen.getByRole('link', { name: 'Privacy policy' })
-    expect(policy).toHaveAttribute(
-      'href',
-      'https://ens.domains/legal/privacy-policy',
-    )
-    expect(policy).toHaveAttribute('target', '_blank')
-    expect(policy).toHaveAttribute('rel', 'noopener noreferrer')
-  })
-
-  it('says where the choice can be changed', () => {
-    renderBanner('pending')
-
-    expect(banner()).toHaveTextContent(
-      'you can change it in Privacy settings at any time',
-    )
-  })
-
-  it('sits above a bar fixed to the bottom of the page, by the space the bars publish', () => {
+  it('sits at the bottom of the screen on a phone, and keeps its corner from 640 px', () => {
     renderBanner('pending')
 
     // greptile: no-arbitrary-tailwind: this is the class the component
     // justifies, written out so that the test can look for it.
-    expect(banner()?.className).toContain(
-      `bottom-[calc(1.5rem+var(${BOTTOM_BAR_CLEARANCE_PROPERTY},0px))]`,
+    expect(banner()).toHaveClass(
+      'bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))]',
+      'sm:bottom-6',
+      'sm:right-6',
     )
+    expect(
+      Array.from(banner()?.classList ?? []).filter(
+        (name) => name.startsWith('top-') || name.startsWith('sm:top-'),
+      ),
+    ).toEqual([])
   })
+})
 
-  it.each([
-    'granted',
-    'denied',
-    'unknown',
-  ] as const)('is not shown once the choice is %s', (consent) => {
-    renderBanner(consent)
-    expect(banner()).not.toBeInTheDocument()
-  })
-
-  it('passes each press on', async () => {
-    const user = userEvent.setup()
-    const { accept, decline } = renderBanner('pending')
-
-    await user.click(screen.getByRole('button', { name: 'Accept Analytics' }))
-    expect(accept).toHaveBeenCalledOnce()
-    await user.click(screen.getByRole('button', { name: 'Decline' }))
-    expect(decline).toHaveBeenCalledOnce()
-  })
+describeAnalyticsBanner({
+  Banner: AnalyticsBanner,
+  kit: { render, screen, press: (element) => userEvent.setup().click(element) },
 })

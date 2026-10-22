@@ -1,12 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   backendAuthStore,
+  backendClient,
   DEFAULT_BACKEND_API_URL,
   getBackendApiBaseUrl,
   resolveBackendApiBaseUrl,
 } from './backend-client'
 
 const ATTACKER_URL = 'https://attacker.example'
+
+// The SDK the visitor's analytics id comes from, and what it says of the choice.
+const sdk = vi.hoisted(() => ({
+  isLoaded: vi.fn(() => true),
+  consent: vi.fn<() => 'granted' | 'denied' | 'pending'>(),
+}))
+vi.mock('@ens-apps/utils/postHogClient', () => ({
+  default: {
+    get __loaded() {
+      return sdk.isLoaded()
+    },
+    get_explicit_consent_status: () => sdk.consent(),
+    get_distinct_id: () => 'visitor-id',
+  },
+}))
 
 describe('resolveBackendApiBaseUrl', () => {
   it('returns the default URL when debug features are disabled', () => {
@@ -110,5 +126,48 @@ describe('apiBaseUrlOverride when debug features are disabled', () => {
 
     expect(isolatedStore.get().context.authKey).toBeUndefined()
     expect(isolatedStore.get().context.address).toBeUndefined()
+  })
+})
+
+describe("the visitor id sent to ENS's backend", () => {
+  const sentHeaders = async (): Promise<Headers> => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => Response.json({}))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await backendClient.favorites.$get()
+
+    return new Headers(fetchSpy.mock.calls[0]?.[1]?.headers)
+  }
+
+  beforeEach(() => {
+    sdk.isLoaded.mockReturnValue(true)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('is sent after Accept', async () => {
+    sdk.consent.mockReturnValue('granted')
+
+    expect((await sentHeaders()).get('X-PostHog-Distinct-ID')).toBe(
+      'visitor-id',
+    )
+  })
+
+  it.each([
+    'pending',
+    'denied',
+  ] as const)('is not sent while the choice is %s', async (choice) => {
+    sdk.consent.mockReturnValue(choice)
+
+    expect((await sentHeaders()).has('X-PostHog-Distinct-ID')).toBe(false)
+  })
+
+  it('is not sent before the SDK has started', async () => {
+    sdk.isLoaded.mockReturnValue(false)
+    sdk.consent.mockReturnValue('granted')
+
+    expect((await sentHeaders()).has('X-PostHog-Distinct-ID')).toBe(false)
   })
 })

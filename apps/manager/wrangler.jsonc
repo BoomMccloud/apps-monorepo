@@ -21,7 +21,7 @@
     }
   ],
   // PostHog's feature-switch rules: the cron below stores the last good rules
-  // here and every request reads them (src/lib/posthog). No id: `wrangler
+  // here and every request reads them (src/server/posthog). No id: `wrangler
   // deploy` provisions the namespace, and local dev keeps one of its own.
   "kv_namespaces": [{ "binding": "POSTHOG_SWITCH_RULES" }],
   "triggers": {

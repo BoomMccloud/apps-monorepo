@@ -1,29 +1,15 @@
-import {
-  type AnalyticsConsent,
-  acceptAnalytics,
-  declineAnalytics,
-} from '@ens-apps/utils/analyticsConsent'
-import {
-  AnalyticsConsentContext,
-  type AnalyticsConsentState,
-} from '@ens-apps/utils/analyticsConsentContext'
-import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
-import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
+import { AnalyticsConsentContext } from '@ens-apps/utils/analyticsConsentContext'
+import { reactClient } from '@ens-apps/utils/postHogClient'
+import { useConsentChoice } from '@ens-apps/utils/useConsentChoice'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
-import { match } from 'ts-pattern'
-import { useConnection } from 'wagmi'
-import posthog, { reactClient } from './client'
-import {
-  linkSupportChat,
-  relinkSupportChat,
-  unlinkSupportChat,
-} from './supportChat'
+import { useConnection, useConnectionEffect } from 'wagmi'
+import { INTERCOM_APP_ID } from '@/lib/intercom'
+import { useFailedRunTelemetry } from './failedRunTelemetry'
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'
-import { usePostHogStart } from './usePostHogStart'
-import { useWalletAnalytics } from './useWalletAnalytics'
+
+const wagmi = { useConnection, useConnectionEffect }
 
 /**
  * PostHog for the Manager: analytics only after the visitor accepts, feature
@@ -37,60 +23,27 @@ export const PHProvider = ({
 }): React.ReactNode => {
   const isHydrated = useHydrated()
   const pageStart = useLoaderData({ from: rootRouteId })
-  const { address, chainId, connector } = useConnection()
+  const { address } = useConnection()
   const isConnectionSettled = useIsConnectionSettled()
-  const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
-  // Each reset empties the SDK's switches; the sync hook writes them again.
-  const [resetCount, setResetCount] = useState(0)
-  // Memoized: useWalletAnalytics keeps its disconnect handler stable on it.
-  const recordReset = useCallback(() => setResetCount((count) => count + 1), [])
 
-  // What the page does about a choice, whether the visitor pressed it here or
-  // it was made in another tab or app.
-  const applyChoice = (choice: AnalyticsConsent) => {
-    setConsent(choice)
-    match(choice)
-      .with('granted', linkSupportChat)
-      .with('denied', () => {
-        unlinkSupportChat()
-        // The reset that clears the visitor id also empties the switches.
-        recordReset()
-      })
-      .with('pending', unlinkSupportChat)
-      .exhaustive()
-  }
-
-  usePostHogStart(isHydrated, pageStart.switches, setConsent)
-  useFollowedChoice(
-    posthog,
-    consent !== 'unknown',
-    import.meta.env.DEV,
-    applyChoice,
-  )
-  useWalletIdentity(
-    posthog,
-    consent,
-    address ? { address, chainId, connectorName: connector?.name } : null,
-    relinkSupportChat,
-  )
-  useFeatureSwitchSync({
+  const choice = useConsentChoice({
+    wagmi,
+    intercomAppId: INTERCOM_APP_ID,
+    projectKey: import.meta.env.VITE_PUBLIC_POSTHOG_KEY,
+    apiHost: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+    isDev: import.meta.env.DEV,
+    isReady: isHydrated,
+    bootstrapSwitches: pageStart.switches,
+    // Each reset empties the SDK's switches; the sync hook, which has to come
+    // after the hook that starts the SDK, writes them again.
+    onVisitorReset: () => recordReset(),
+  })
+  const recordReset = useFeatureSwitchSync({
     wallet: address ?? null,
     isConnectionSettled,
     pageStart,
-    resetCount,
   })
-
-  useWalletAnalytics(recordReset)
-
-  const accept = () => {
-    void acceptAnalytics(posthog, { isDev: import.meta.env.DEV })
-    applyChoice('granted')
-  }
-
-  const decline = () => {
-    declineAnalytics(posthog)
-    applyChoice('denied')
-  }
+  useFailedRunTelemetry(isHydrated)
 
   const content =
     isHydrated && reactClient ? (
@@ -100,8 +53,6 @@ export const PHProvider = ({
     )
 
   return (
-    <AnalyticsConsentContext value={{ consent, accept, decline }}>
-      {content}
-    </AnalyticsConsentContext>
+    <AnalyticsConsentContext value={choice}>{content}</AnalyticsConsentContext>
   )
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installPostHogNetwork } from './postHogTestKit'
+import { installPostHogNetwork } from './testing/postHogTestKit'
 
 // The guard wraps the `fetch` and `sendBeacon` it finds when it loads, so the
 // network goes in first.

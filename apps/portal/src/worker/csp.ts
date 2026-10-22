@@ -149,7 +149,7 @@ const INTERCOM_SCRIPT_HOSTS = [
 // PostHog used to lazy-load its extension bundles (recorder, surveys,
 // dead-clicks, web-vitals) from the analytics host at runtime, which required
 // allowlisting it here — but the app now imports
-// `posthog-js/dist/module.full.no-external` (see lib/posthog/client.ts), so
+// `posthog-js/dist/module.full.no-external` (see packages/utils/src/postHogClient.ts), so
 // the entire SDK is in our own bundle (served from 'self') and nothing loads
 // from the analytics host. PostHog ingestion calls go over connect-src instead.
 // The DQA overlay script (QA/preview builds only) is the other exception. It
