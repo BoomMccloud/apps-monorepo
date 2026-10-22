@@ -1,6 +1,7 @@
 import {
   type NoticeSection,
   PRIVACY_POLICY_URL,
+  PRIVACY_SETTINGS_PAGE,
 } from '@ens-apps/utils/analyticsConsentWording'
 import { useAnalyticsNotice } from '@ens-apps/utils/useAnalyticsNotice'
 import { Switch } from '@/components/ui/switch'
@@ -53,7 +54,7 @@ export const PrivacySettingsPage = () => {
     <div className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-12">
       <article>
         <h1 className="mb-6 font-bold text-3xl text-ens-blue-dark md:text-4xl">
-          Privacy settings
+          {PRIVACY_SETTINGS_PAGE.heading}
         </h1>
         <section aria-labelledby={notice.headingId} className="mb-8">
           <h2
@@ -96,7 +97,7 @@ export const PrivacySettingsPage = () => {
             rel="noopener noreferrer"
             target="_blank"
           >
-            Read the full privacy policy
+            {PRIVACY_SETTINGS_PAGE.policyLink}
           </a>
         </p>
       </article>

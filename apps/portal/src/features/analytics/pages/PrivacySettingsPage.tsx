@@ -1,6 +1,7 @@
 import {
   type NoticeSection,
   PRIVACY_POLICY_URL,
+  PRIVACY_SETTINGS_PAGE,
 } from '@ens-apps/utils/analyticsConsentWording'
 import { useAnalyticsNotice } from '@ens-apps/utils/useAnalyticsNotice'
 import { ExternalLink } from 'react-external-link'
@@ -49,7 +50,9 @@ export const PrivacySettingsPage = () => {
     <main className="flex min-h-screen flex-col items-center gap-10 px-6 pt-6 pb-18">
       <HomeHeader />
       <article className="flex w-full max-w-175 flex-col gap-8">
-        <h1 className="text-foreground text-h1">Privacy settings</h1>
+        <h1 className="text-foreground text-h1">
+          {PRIVACY_SETTINGS_PAGE.heading}
+        </h1>
         <section
           aria-labelledby={notice.headingId}
           className="flex flex-col gap-4"
@@ -92,7 +95,7 @@ export const PrivacySettingsPage = () => {
             className="underline underline-offset-4"
             href={PRIVACY_POLICY_URL}
           >
-            Read the full privacy policy
+            {PRIVACY_SETTINGS_PAGE.policyLink}
           </ExternalLink>
         </p>
       </article>

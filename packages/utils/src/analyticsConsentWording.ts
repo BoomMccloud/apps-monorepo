@@ -25,6 +25,12 @@ export const ANALYTICS_BANNER = {
   policyLink: 'Privacy policy',
 } as const
 
+/** The page that holds the notice in each app: its heading, and its link to the full policy. */
+export const PRIVACY_SETTINGS_PAGE = {
+  heading: 'Privacy settings',
+  policyLink: 'Read the full privacy policy',
+} as const
+
 /** The notice's own heading, which names its region on the page. */
 export const ANALYTICS_NOTICE_HEADING = 'Analytics'
 
