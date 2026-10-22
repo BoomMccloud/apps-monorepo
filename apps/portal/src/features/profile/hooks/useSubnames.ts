@@ -53,8 +53,8 @@ export type V1SubnameWrapping =
   | {
       readonly isWrapped: true
       readonly parentCannotControl: boolean
-      /** The NameWrapper lets its owner zero it: no fuse `setRecord` refuses is burned. */
-      readonly canOwnerClear: boolean
+      /** CANNOT_UNWRAP burned, so the NameWrapper won't let its owner zero it. */
+      readonly isLocked: boolean
     }
 
 type Subname = {
@@ -102,31 +102,19 @@ const toLabelName = (row: BignameSubname, rowLabelhash: Hex) => {
     : null
 }
 
-// `setRecord` refuses these, and zeroing the owner unwraps, which CANNOT_UNWRAP refuses.
-const canOwnerClear = ({ ens_v1 }: BignameSubname): boolean => {
-  const fuses = ens_v1?.wrapper_fuses
-  if (!fuses) return ens_v1?.wrapper_state !== 'locked'
-  return !(
-    fuses.cannot_unwrap ||
-    fuses.cannot_transfer ||
-    fuses.cannot_set_resolver ||
-    fuses.cannot_set_ttl
-  )
-}
-
-const toV1Wrapping = (row: BignameSubname): V1SubnameWrapping | null =>
-  match(row.ens_v1?.wrapper_state)
+const toV1Wrapping = ({ ens_v1 }: BignameSubname): V1SubnameWrapping | null =>
+  match(ens_v1?.wrapper_state)
     .with('unwrapped', () => ({ isWrapped: false }) as const)
     .with('wrapped', () => ({
       isWrapped: true,
       parentCannotControl:
-        row.ens_v1?.wrapper_fuses?.parent_cannot_control ?? false,
-      canOwnerClear: canOwnerClear(row),
+        ens_v1?.wrapper_fuses?.parent_cannot_control ?? false,
+      isLocked: false,
     }))
-    .with(P.union('emancipated', 'locked'), () => ({
+    .with(P.union('emancipated', 'locked'), (state) => ({
       isWrapped: true,
       parentCannotControl: true,
-      canOwnerClear: canOwnerClear(row),
+      isLocked: state === 'locked',
     }))
     .otherwise(() => null)
 

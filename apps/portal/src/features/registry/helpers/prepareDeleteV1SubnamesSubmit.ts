@@ -119,12 +119,7 @@ const checkSubname = ResultFn(async function* (
           : wrapped && {
               isWrapped: true,
               parentCannotControl: wrapped.fuses.parent.PARENT_CANNOT_CONTROL,
-              canOwnerClear: !(
-                wrapped.fuses.child.CANNOT_UNWRAP ||
-                wrapped.fuses.child.CANNOT_TRANSFER ||
-                wrapped.fuses.child.CANNOT_SET_RESOLVER ||
-                wrapped.fuses.child.CANNOT_SET_TTL
-              ),
+              isLocked: wrapped.fuses.child.CANNOT_UNWRAP,
             },
       subnameCount,
       holder: owner.owner ?? null,

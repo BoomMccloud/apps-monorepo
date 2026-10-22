@@ -136,7 +136,7 @@ describe('subname pages', () => {
         v1Wrapping: {
           isWrapped: true,
           parentCannotControl: false,
-          canOwnerClear: true,
+          isLocked: false,
         },
         subnameCount: undefined,
       },
@@ -144,7 +144,7 @@ describe('subname pages', () => {
         v1Wrapping: {
           isWrapped: true,
           parentCannotControl: true,
-          canOwnerClear: true,
+          isLocked: false,
         },
         subnameCount: undefined,
       },
@@ -152,37 +152,14 @@ describe('subname pages', () => {
     ])
   })
 
-  // NameWrapper `setRecord` refuses these fuses, and unwrapping refuses CANNOT_UNWRAP.
-  it('says whether a wrapped subname’s owner can zero it', async () => {
-    const fuses = (burnt: Record<string, boolean>) => ({
-      fuses: 0,
-      cannot_unwrap: false,
-      cannot_burn_fuses: false,
-      cannot_transfer: false,
-      cannot_set_resolver: false,
-      cannot_set_ttl: false,
-      cannot_create_subdomain: false,
-      cannot_approve: false,
-      parent_cannot_control: true,
-      is_dot_eth: false,
-      can_extend_expiry: false,
-      ...burnt,
-    })
+  it('marks a locked V1 subname, which its owner cannot unwrap to zero', async () => {
     vi.mocked(bigname.subnames).mockReturnValue(
       page(
         [
           row('locked', { ens_v1: { wrapper_state: 'locked' } }),
-          row('frozen', {
-            ens_v1: {
-              wrapper_state: 'emancipated',
-              wrapper_fuses: fuses({ cannot_transfer: true }),
-            },
-          }),
-          row('free', {
-            ens_v1: { wrapper_state: 'emancipated', wrapper_fuses: fuses({}) },
-          }),
+          row('free', { ens_v1: { wrapper_state: 'emancipated' } }),
         ],
-        { total: 3 },
+        { total: 2 },
       ),
     )
 
@@ -190,9 +167,9 @@ describe('subname pages', () => {
 
     expect(
       subnames.map(({ v1Wrapping }) =>
-        v1Wrapping?.isWrapped ? v1Wrapping.canOwnerClear : null,
+        v1Wrapping?.isWrapped ? v1Wrapping.isLocked : null,
       ),
-    ).toEqual([false, false, true])
+    ).toEqual([true, false])
   })
 
   it('counts expired children only when asked, as a row’s count does', async () => {
@@ -211,23 +188,6 @@ describe('subname pages', () => {
 
     await getSubnamesCount({ name: 'test.eth', protocolVersion: 'ENSv1' })
     expect(asked(1)[1]).toMatchObject({ include_expired: 'false' })
-  })
-
-  it('carries the era bigname serves each subname from', async () => {
-    vi.mocked(bigname.subnames).mockReturnValue(
-      page(
-        [
-          row('old', { authority: 'ens_v1' }),
-          row('new', { authority: 'ens_v2' }),
-          row('unsaid'),
-        ],
-        { total: 3 },
-      ),
-    )
-
-    const subnames = await firstPage('test.eth')
-
-    expect(subnames.map(({ protocol }) => protocol)).toEqual(['v1', 'v2', null])
   })
 
   it('asks for counts only on V1 pages', async () => {

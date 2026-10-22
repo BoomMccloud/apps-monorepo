@@ -79,7 +79,7 @@ export type V1SubnameDeleteGate =
   | { readonly reason: 'unknown-label' }
   /** The wrap step re-issues the label, which CANNOT_CREATE_SUBDOMAIN forbids. */
   | { readonly reason: 'burned-fuse' }
-  /** A fuse the NameWrapper's `setRecord` refuses is burned, so its holder can't zero it. */
+  /** CANNOT_UNWRAP burned: the NameWrapper won't let its holder zero it. */
   | { readonly reason: 'locked' }
 
 /** Whether the holder of `parent` can delete `child`, and with which writes. */
@@ -123,7 +123,7 @@ export const getV1SubnameDeleteGate = (
     .otherwise(() => ({ reason: 'ok', target: 'wrap-then-delete' }) as const)
 
 /** Whether the subname's own holder can zero it on its own node. */
-export const getV1SubnameHolderDeleteGate = ({
+const getV1SubnameHolderDeleteGate = ({
   wrapping,
   subnameCount,
 }: V1SubnameDeleteChild): V1SubnameDeleteGate =>
@@ -142,7 +142,7 @@ export const getV1SubnameHolderDeleteGate = ({
       () => ({ reason: 'ok', target: 'registry-as-holder' }) as const,
     )
     .with(
-      { wrapping: { canOwnerClear: false } },
+      { wrapping: { isLocked: true } },
       () => ({ reason: 'locked' }) as const,
     )
     .otherwise(() => ({ reason: 'ok', target: 'wrapper-as-holder' }) as const)

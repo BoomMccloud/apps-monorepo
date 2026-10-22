@@ -54,7 +54,7 @@ const child = (
 const WRAPPED = {
   isWrapped: true,
   parentCannotControl: false,
-  canOwnerClear: true,
+  isLocked: false,
 } as const
 const EMANCIPATED = { ...WRAPPED, parentCannotControl: true } as const
 
@@ -212,11 +212,11 @@ describe('getV1SubnameDeleteAccess', () => {
     ).toEqual({ reason: 'emancipated' })
   })
 
-  it('refuses the holder of a locked subname, which setRecord cannot zero', () => {
+  it('refuses the holder of a locked subname, which the NameWrapper cannot unwrap', () => {
     expect(
       getV1SubnameDeleteAccess(
         null,
-        asHolder({ wrapping: { ...EMANCIPATED, canOwnerClear: false } }),
+        asHolder({ wrapping: { ...EMANCIPATED, isLocked: true } }),
         ACCOUNT,
       ),
     ).toEqual({ reason: 'locked' })

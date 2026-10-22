@@ -150,7 +150,6 @@ export const V1SubnamesContent = ({ name }: V1SubnamesContentProps) => {
     )
   }
 
-  // A child's own holder can delete it without holding the parent.
   const canDeleteSubname = rows.some(
     (row) => row.canDelete || row.deleteBlockedReason !== undefined,
   )
