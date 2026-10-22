@@ -9,12 +9,13 @@ import {
 } from '@ens-apps/utils/analyticsConsentContext'
 import posthog, { reactClient } from '@ens-apps/utils/postHogClient'
 import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
+import { useWalletAnalytics } from '@ens-apps/utils/useWalletAnalytics'
 import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { rootRouteId, useHydrated, useLoaderData } from '@tanstack/react-router'
 import { useState } from 'react'
 import { match } from 'ts-pattern'
-import { useConnection } from 'wagmi'
+import { useConnection, useConnectionEffect } from 'wagmi'
 import {
   linkSupportChat,
   relinkSupportChat,
@@ -23,7 +24,6 @@ import {
 import { useFeatureSwitchSync } from './useFeatureSwitchSync'
 import { useIsConnectionSettled } from './useIsConnectionSettled'
 import { usePostHogStart } from './usePostHogStart'
-import { useWalletAnalytics } from './useWalletAnalytics'
 
 /**
  * PostHog for the Manager: analytics only after the visitor accepts, feature
@@ -77,7 +77,11 @@ export const PHProvider = ({
     import.meta.env.DEV,
     applyChoice,
   )
-  useWalletAnalytics(recordReset)
+  useWalletAnalytics({
+    wagmi: { useConnectionEffect },
+    relinkSupportChat,
+    onVisitorReset: recordReset,
+  })
 
   const accept = () => {
     void acceptAnalytics(posthog, { isDev: import.meta.env.DEV })
