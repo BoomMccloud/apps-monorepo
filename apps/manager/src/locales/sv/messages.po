@@ -322,6 +322,18 @@ msgstr ""
 msgid "Approve {name}"
 msgstr ""
 
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Approve and register"
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerDialog.tsx
+msgid "Approve and register name"
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Approve in wallet"
+msgstr ""
+
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Approve payment"
 msgstr ""
@@ -340,6 +352,10 @@ msgstr ""
 
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 msgid "Approve the network fee?"
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Approve the payment in your wallet to let ENS use your selected token for registration. Registration starts after approval completes."
 msgstr ""
 
 #: src/features/renew/components/RenewalFundingDialog.tsx
@@ -1676,6 +1692,10 @@ msgstr ""
 msgid "Notice: ENS v2 is in active development. Registered names on Sepolia and state data may be reset periodically due to routine contract deployments. The most recent deployment was on {LAST_SEPOLIA_DEPLOYMENT_DATE}."
 msgstr ""
 
+#: src/features/notifications/settings/preferences.tsx
+msgid "Notification schedule"
+msgstr ""
+
 #: src/routes/notifications/_authenticated/index.tsx
 msgid "Notification Settings"
 msgstr ""
@@ -1683,6 +1703,10 @@ msgstr ""
 #: src/features/navigation/Header/notifications/NotificationsMenuItem.tsx
 #: src/features/notifications/dropdown/notification-dropdown.tsx
 msgid "Notifications"
+msgstr ""
+
+#: src/features/notifications/settings/preferences.tsx
+msgid "Notifications are sent 30, 7 and 1 day before expiry, and 7 and 1 day before the end of the grace period, before the name is released."
 msgstr ""
 
 #: src/features/notifications/settings/contact-methods/push.tsx
@@ -1755,6 +1779,10 @@ msgstr ""
 msgid "Pay with stablecoins"
 msgstr ""
 
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Payment approval was cancelled. Approve the payment in your wallet to start registration."
+msgstr ""
+
 #: src/features/notifications/settings/contact-methods/email.tsx
 msgid "Pending"
 msgstr ""
@@ -1806,6 +1834,10 @@ msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Preparing commitment"
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Preparing registration..."
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
@@ -3193,6 +3225,10 @@ msgstr ""
 msgid "Wallet isn’t ready yet. Try again in a moment."
 msgstr ""
 
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "We couldn't approve your payment. Please try again and approve the payment in your wallet."
+msgstr ""
+
 #: src/features/migration/components/MigrationApprovalSettings.tsx
 msgid "We couldn't check your upgrade access."
 msgstr ""
@@ -3216,6 +3252,10 @@ msgstr ""
 
 #: src/features/migration/pages/MigrationPage.tsx
 msgid "We couldn't safely retry. Nothing was submitted and nothing changed."
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "We couldn't start your registration. Please try again."
 msgstr ""
 
 #: src/features/migration/pages/MigrationPage.tsx
@@ -3529,4 +3569,8 @@ msgstr ""
 
 #: src/features/migration/components/SelectNamesStepFooter.tsx
 msgid "Your wallet shows the final fee before you approve."
+msgstr ""
+
+#: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
+msgid "Your wallet will ask you to sign a payment approval (permit) for the amount shown. This lets ENS use your USDC to pay for registration and network fees. Registration starts after you approve."
 msgstr ""
