@@ -11,8 +11,10 @@ import { PHONE } from '../../../helpers/analytics-walks.js'
 
 const PAGE_WIDTH_PX = 420
 
-// The heading names the section, as it names the banner the helper looks for.
-const pageWithCard = (cardStyle: string): string => `
+// The doctype puts the page in standards mode, as the apps' pages are: without
+// it the root element's scrollWidth leaves out a card that sticks out. The
+// heading names the section, as it names the banner the helper looks for.
+const pageWithCard = (cardStyle: string): string => `<!doctype html>
   <body style="margin: 0">
     <div style="width: ${PAGE_WIDTH_PX}px; height: 40px">A block wider than a phone</div>
     <section aria-labelledby="card-heading" style="${cardStyle}">
