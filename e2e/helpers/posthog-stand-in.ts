@@ -9,11 +9,11 @@ import { TaggedError } from '@ens-apps/utils/neverthrow'
 import {
   eventsIn as eventsOfBody,
   type SentEvent,
-} from '@ens-apps/utils/postHogEvents'
+} from '@ens-apps/utils/testing/postHogEvents'
 import {
   type RequestSource,
   requestSourceOf,
-} from '@ens-apps/utils/postHogRequestSource'
+} from '@ens-apps/utils/testing/postHogRequestSource'
 import { fromThrowable } from 'neverthrow'
 
 /**

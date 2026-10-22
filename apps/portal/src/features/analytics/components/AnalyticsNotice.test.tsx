@@ -3,7 +3,7 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
-import { NOTICE_STATEMENTS } from '@ens-apps/utils/analyticsNoticeStatements'
+import { NOTICE_STATEMENTS } from '@ens-apps/utils/testing/analyticsNoticeStatements'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'

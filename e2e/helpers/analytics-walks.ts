@@ -1,4 +1,4 @@
-import { NOTICE_STATEMENTS } from '@ens-apps/utils/analyticsNoticeStatements'
+import { NOTICE_STATEMENTS } from '@ens-apps/utils/testing/analyticsNoticeStatements'
 import {
   type BrowserContext,
   expect,

@@ -4,7 +4,7 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
-import { NOTICE_STATEMENTS } from '@ens-apps/utils/analyticsNoticeStatements'
+import { NOTICE_STATEMENTS } from '@ens-apps/utils/testing/analyticsNoticeStatements'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { AnalyticsNotice } from './AnalyticsNotice'

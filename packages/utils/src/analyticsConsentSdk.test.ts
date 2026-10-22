@@ -11,7 +11,7 @@ import {
   postHogStorage,
   settle,
   writeCookie,
-} from './postHogTestKit'
+} from './testing/postHogTestKit'
 
 /**
  * The shared choice on the real SDK, every request it would send seen on the

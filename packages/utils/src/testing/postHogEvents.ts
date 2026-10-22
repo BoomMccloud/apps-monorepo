@@ -1,4 +1,4 @@
-import { isRecord } from './isRecord'
+import { isRecord } from '../isRecord'
 
 /** One event as the SDK sends it. */
 export type SentEvent = {

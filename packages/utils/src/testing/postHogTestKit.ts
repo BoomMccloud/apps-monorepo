@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { urlOf } from './inputUrl'
+import { urlOf } from '../inputUrl'
 import { eventsIn, type SentEvent } from './postHogEvents'
 
 /**
