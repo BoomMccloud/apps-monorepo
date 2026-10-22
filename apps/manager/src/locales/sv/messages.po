@@ -1311,10 +1311,6 @@ msgstr ""
 msgid "it has no ENSv2 reservation."
 msgstr ""
 
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "It looks like the session setup didn't complete. Please try again — without it, you won't be able to register or manage names."
-msgstr ""
-
 #: src/features/wallet/components/RevokeSessionsModal.tsx
 msgid "It takes two transactions from your wallet, one to set up the account and one to revoke, and both cost gas. Your next registration will ask you to sign a new session."
 msgstr ""
@@ -2550,16 +2546,8 @@ msgstr ""
 msgid "Smart account"
 msgstr ""
 
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "Smart Account"
-msgstr ""
-
 #: src/features/migration/components/MigrationApprovalSettings.tsx
 msgid "Smart account access"
-msgstr ""
-
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "Smart sessions are required to use this app."
 msgstr ""
 
 #: src/features/profile/components/view/ProfileSocialSection.tsx
@@ -2803,6 +2791,10 @@ msgstr ""
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 #: src/features/profile/components/dialogs/edit-profile/useEditProfileDialogSave.ts
 msgid "The replacement resolver could not be verified. Please try again."
+msgstr ""
+
+#: src/features/wallet/components/EnableSessionModal.tsx
+msgid "The session wasn't enabled."
 msgstr ""
 
 #: src/features/migration/service/migrationPreparationError.ts
@@ -3338,6 +3330,10 @@ msgstr ""
 
 #: src/features/register-v2/workflow/pricing/components/PriceCooldownBanner/PriceCooldownExpandedContent.tsx
 msgid "You can buy this name at any point during the {periodDays}-day cooldown."
+msgstr ""
+
+#: src/features/wallet/components/EnableSessionModal.tsx
+msgid "You can keep browsing, but registering or managing names needs a session. Try again when you're ready."
 msgstr ""
 
 #: src/features/wallet/components/BackendAuthModal.tsx
