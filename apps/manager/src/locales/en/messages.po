@@ -1306,10 +1306,6 @@ msgstr "is too short to register"
 msgid "it has no ENSv2 reservation."
 msgstr "it has no ENSv2 reservation."
 
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "It looks like the session setup didn't complete. Please try again — without it, you won't be able to register or manage names."
-msgstr "It looks like the session setup didn't complete. Please try again — without it, you won't be able to register or manage names."
-
 #: src/features/wallet/components/RevokeSessionsModal.tsx
 msgid "It takes two transactions from your wallet, one to set up the account and one to revoke, and both cost gas. Your next registration will ask you to sign a new session."
 msgstr "It takes two transactions from your wallet, one to set up the account and one to revoke, and both cost gas. Your next registration will ask you to sign a new session."
@@ -2545,17 +2541,9 @@ msgstr "Signing in..."
 msgid "Smart account"
 msgstr "Smart account"
 
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "Smart Account"
-msgstr "Smart Account"
-
 #: src/features/migration/components/MigrationApprovalSettings.tsx
 msgid "Smart account access"
 msgstr "Smart account access"
-
-#: src/features/wallet/components/EnableSessionModal.tsx
-msgid "Smart sessions are required to use this app."
-msgstr "Smart sessions are required to use this app."
 
 #: src/features/profile/components/view/ProfileSocialSection.tsx
 msgid "Social"
@@ -2799,6 +2787,10 @@ msgstr "The renewal price includes a 10% buffer: the rent is priced when the ren
 #: src/features/profile/components/dialogs/edit-profile/useEditProfileDialogSave.ts
 msgid "The replacement resolver could not be verified. Please try again."
 msgstr "The replacement resolver could not be verified. Please try again."
+
+#: src/features/wallet/components/EnableSessionModal.tsx
+msgid "The session wasn't enabled."
+msgstr "The session wasn't enabled."
 
 #: src/features/migration/service/migrationPreparationError.ts
 msgid "The upgrade contracts don't match this account. Please contact support."
@@ -3334,6 +3326,10 @@ msgstr "You approve"
 #: src/features/register-v2/workflow/pricing/components/PriceCooldownBanner/PriceCooldownExpandedContent.tsx
 msgid "You can buy this name at any point during the {periodDays}-day cooldown."
 msgstr "You can buy this name at any point during the {periodDays}-day cooldown."
+
+#: src/features/wallet/components/EnableSessionModal.tsx
+msgid "You can keep browsing, but registering or managing names needs a session. Try again when you're ready."
+msgstr "You can keep browsing, but registering or managing names needs a session. Try again when you're ready."
 
 #: src/features/wallet/components/BackendAuthModal.tsx
 msgid "You can still use the manager, but these features won't be available:"

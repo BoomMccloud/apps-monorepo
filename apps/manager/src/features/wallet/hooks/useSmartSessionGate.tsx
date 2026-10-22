@@ -36,12 +36,15 @@ export interface SmartSessionGate {
 export function useSmartSessionGate(): SmartSessionGate {
   const account = useSmartAccountContext()
   const [isOpen, setIsOpen] = useState(false)
+  // Only a failure during this prompt shows the error state, not one from an earlier visit.
+  const [hasFailed, setHasFailed] = useState(false)
   const pendingRef = useRef<(() => void) | null>(null)
 
   const gate = useCallback(
     (onProceed: () => void) => {
       if (needsSessionBeforeRegistration(account)) {
         pendingRef.current = onProceed
+        setHasFailed(false)
         setIsOpen(true)
         return
       }
@@ -50,27 +53,37 @@ export function useSmartSessionGate(): SmartSessionGate {
     [account],
   )
 
+  // Dismissing drops the deferred action: the next attempt starts from the user's own click.
+  const dismiss = useCallback(() => {
+    pendingRef.current = null
+    setIsOpen(false)
+  }, [])
+
   const onEnableSession = useCallback(async () => {
-    // The single ENABLE signature. On success, close the modal and run the
-    // deferred action — the session is now active, so the downstream flow runs
-    // prompt-free off `account.signer`.
-    const enabled = await account.enableSession()
-    if (!enabled) return // modal stays open, surfaces account.sessionError
+    const outcome = await account.enableSession()
+    if (outcome.status === 'failed') {
+      setHasFailed(true)
+      return
+    }
+    if (outcome.status === 'declined') {
+      dismiss()
+      return
+    }
+    // The session is now active, so the downstream flow runs prompt-free off
+    // `account.signer`.
     setIsOpen(false)
     const pending = pendingRef.current
     pendingRef.current = null
     pending?.()
-  }, [account])
+  }, [account, dismiss])
 
   const sessionModal = (
     <EnableSessionModal
-      hasError={!!account.sessionError}
+      hasError={hasFailed}
       isEnabling={account.isEnablingSession}
+      onDismiss={dismiss}
       onEnableSession={onEnableSession}
-      onOpenChange={setIsOpen}
       open={isOpen}
-      smartAccountAddress={account.accountAddress ?? undefined}
-      walletAddress={account.ownerAddress ?? undefined}
     />
   )
 
