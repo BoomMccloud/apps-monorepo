@@ -59,7 +59,7 @@ Worker's domain routing and Rhinestone credentials separately:
 The mainnet token rate limiter uses a separate namespace.
 
 The feature switches are decided on the server from PostHog's rules
-([`src/lib/posthog`](src/lib/posthog)), the way PostHog's Cloudflare KV example
+([`src/server/posthog`](src/server/posthog)), the way PostHog's Cloudflare KV example
 does it: a scheduled job (every minute, see `wrangler.jsonc`) has PostHog's SDK
 fetch the rules and stores them, once they pass a check that every switch can
 be decided, in the Worker's own `POSTHOG_SWITCH_RULES` KV namespace, which

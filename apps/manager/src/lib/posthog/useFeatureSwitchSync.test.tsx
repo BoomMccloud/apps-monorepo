@@ -3,12 +3,12 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,
   type FeatureSwitches,
 } from './feature-flags'
-import { getFeatureSwitches } from './getFeatureSwitches'
 import {
   type FeatureSwitchSyncInput,
   useFeatureSwitchSync,
@@ -25,7 +25,9 @@ vi.mock('posthog-js/dist/module.full.no-external', () => ({
     updateFlags: vi.fn(),
   },
 }))
-vi.mock('./getFeatureSwitches', () => ({ getFeatureSwitches: vi.fn() }))
+vi.mock('@/server/posthog/getFeatureSwitches', () => ({
+  getFeatureSwitches: vi.fn(),
+}))
 
 const WALLET = '0x1111111111111111111111111111111111111111'
 const OTHER_WALLET = '0x2222222222222222222222222222222222222222'

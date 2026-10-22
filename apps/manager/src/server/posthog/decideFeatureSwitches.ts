@@ -5,7 +5,7 @@ import {
   ALL_SWITCHES_OFF,
   FEATURE_SWITCH_NAMES,
   type FeatureSwitches,
-} from './feature-flags'
+} from '@/lib/posthog/feature-flags'
 import { evaluateStoredSwitches, switchVisitor } from './switchRules'
 import { type ReaderFailure, switchRulesReader } from './switchRulesCache'
 

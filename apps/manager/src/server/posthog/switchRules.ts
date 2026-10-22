@@ -9,7 +9,10 @@ import type { Address } from 'viem'
 // build check before any workspace package can be resolved.
 import { isRecord } from '../../../../../packages/utils/src/isRecord'
 import { TaggedError } from '../../../../../packages/utils/src/neverthrow'
-import { FEATURE_SWITCH_NAMES, type FeatureSwitchName } from './feature-flags'
+import {
+  FEATURE_SWITCH_NAMES,
+  type FeatureSwitchName,
+} from '../../lib/posthog/feature-flags'
 
 /**
  * PostHog's rules for the project's feature switches, as its local-evaluation

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getConnectionCookie } from '@/lib/connection-cookie'
+import { ALL_SWITCHES_OFF } from '@/lib/posthog/feature-flags'
 import { decideFeatureSwitches } from './decideFeatureSwitches'
-import { ALL_SWITCHES_OFF } from './feature-flags'
 import { getFeatureSwitches } from './getFeatureSwitches'
 
 const WORKER_ENV = vi.hoisted(() => ({

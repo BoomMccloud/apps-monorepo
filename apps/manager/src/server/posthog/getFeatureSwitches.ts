@@ -4,8 +4,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { match, P } from 'ts-pattern'
 import { isAddress } from 'viem'
 import { getConnectionCookie } from '@/lib/connection-cookie'
+import type { DecidedFeatureSwitches } from '@/lib/posthog/feature-flags'
 import { decideFeatureSwitches } from './decideFeatureSwitches'
-import type { DecidedFeatureSwitches } from './feature-flags'
 
 type FeatureSwitchesInput = {
   /**

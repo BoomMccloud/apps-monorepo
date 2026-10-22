@@ -11,8 +11,8 @@ import posthog from 'posthog-js/dist/module.full.no-external'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnection, useConnectionEffect } from 'wagmi'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import type { DecidedFeatureSwitches, FeatureSwitches } from './feature-flags'
-import { getFeatureSwitches } from './getFeatureSwitches'
 import { PHProvider } from './provider'
 
 const WALLET = '0x1111111111111111111111111111111111111111'
@@ -72,7 +72,9 @@ vi.mock('wagmi', () => ({
   useConnection: vi.fn(),
   useConnectionEffect: vi.fn(),
 }))
-vi.mock('./getFeatureSwitches', () => ({ getFeatureSwitches: vi.fn() }))
+vi.mock('@/server/posthog/getFeatureSwitches', () => ({
+  getFeatureSwitches: vi.fn(),
+}))
 vi.mock('@ens-apps/transaction-manager', () => ({
   transactionManager: {
     onFailedRunTelemetry: vi.fn(() => vi.fn()),

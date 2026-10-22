@@ -11,8 +11,8 @@ import { MigrationPage } from '@/features/migration/pages/MigrationPage'
 import { MigrationUiProvider } from '@/features/migration/state/migrationUi.context'
 import { useOnDisconnected } from '@/features/wallet/hooks/useOnDisconnected'
 import { getConnectionCookie } from '@/lib/connection-cookie'
-import { getFeatureSwitches } from '@/lib/posthog/getFeatureSwitches'
 import { useSmartAccountContext } from '@/lib/smart-account'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 
 export const Route = createFileRoute('/upgrade')({
   beforeLoad: async () => {

@@ -1,6 +1,6 @@
 import handler, { createServerEntry } from '@tanstack/react-start/server-entry'
-import type { SwitchRulesEnv } from '@/lib/posthog/decideFeatureSwitches'
-import { refreshSwitchRules } from '@/lib/posthog/refreshSwitchRules'
+import type { SwitchRulesEnv } from '@/server/posthog/decideFeatureSwitches'
+import { refreshSwitchRules } from '@/server/posthog/refreshSwitchRules'
 
 /**
  * The cron's run. A refresh that fails is thrown here, once, so the failed

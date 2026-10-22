@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ALL_SWITCHES_OFF } from './feature-flags'
+import { ALL_SWITCHES_OFF } from '@/lib/posthog/feature-flags'
 import type { SwitchRules } from './switchRules'
 import {
   memoryKv,

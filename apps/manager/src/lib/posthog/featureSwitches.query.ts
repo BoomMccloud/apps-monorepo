@@ -7,8 +7,8 @@ import { resultQueryOptions } from '@ens-apps/utils/tanstack-query/neverthrow'
 import { qk } from '@ens-apps/utils/tanstack-query/queryKey'
 import { fromPromise, ok } from 'neverthrow'
 import type { Address } from 'viem'
+import { getFeatureSwitches } from '@/server/posthog/getFeatureSwitches'
 import type { FeatureSwitches } from './feature-flags'
-import { getFeatureSwitches } from './getFeatureSwitches'
 
 class GetFeatureSwitchesError extends TaggedError('GetFeatureSwitchesError')<{
   readonly cause: unknown

@@ -3,8 +3,8 @@ import {
   type FetchSwitchRulesOptions,
   fetchSwitchRules,
   type SwitchRulesSource,
-} from '../src/lib/posthog/fetchSwitchRules'
-import { switchRulesWriter } from '../src/lib/posthog/switchRulesCache'
+} from '../src/server/posthog/fetchSwitchRules'
+import { switchRulesWriter } from '../src/server/posthog/switchRulesCache'
 
 const SECRET_KEY_NAME = 'POSTHOG_PROJECT_SECRET_API_KEY'
 
