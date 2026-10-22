@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import { urlOf } from '../inputUrl'
 import { POSTHOG_PROJECT_SETTINGS, postHogAnswerFor } from './postHogAnswers'
+import { isGzip, jsonTextOf } from './postHogBody'
 import { eventsIn, type SentEvent } from './postHogEvents'
 
 /**
@@ -50,21 +51,12 @@ export const answering =
   }
 
 // The SDK encodes a body as gzip bytes, as `data=<base64 of the JSON>`, or as
-// plain JSON, according to its compression settings and the request.
-const fromBase64 = (text: string): string =>
-  new TextDecoder().decode(
-    Uint8Array.from(atob(text), (char) => char.charCodeAt(0)),
-  )
-
+// plain JSON, according to its compression settings and the request
+// (`postHogBody`); the platform's stream gunzips it here.
 const gunzip = (bytes: BufferSource): Promise<string> =>
   new Response(
     new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')),
   ).text()
-
-const GZIP_MAGIC_BYTES = [0x1f, 0x8b] as const
-
-const isGzip = (bytes: Uint8Array): boolean =>
-  GZIP_MAGIC_BYTES.every((byte, index) => bytes[index] === byte)
 
 // Bytes are gzip when they start as gzip does, and text otherwise: a Blob
 // handed to `sendBeacon` holds either, according to the SDK's compression.
@@ -73,12 +65,7 @@ const textOfBytes = async (bytes: Uint8Array): Promise<string> =>
     ? gunzip(Uint8Array.from(bytes))
     : new TextDecoder().decode(bytes)
 
-const parseBody = (text: string): unknown =>
-  JSON.parse(
-    text.startsWith('data=')
-      ? fromBase64(decodeURIComponent(text.slice('data='.length)))
-      : text,
-  )
+const parseBody = (text: string): unknown => JSON.parse(jsonTextOf(text))
 
 const decodeBody = async (
   raw: string | ArrayBuffer | ArrayBufferView,

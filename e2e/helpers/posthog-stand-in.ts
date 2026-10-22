@@ -7,6 +7,7 @@ import {
 import { gunzipSync } from 'node:zlib'
 import { TaggedError } from '@ens-apps/utils/neverthrow'
 import { postHogAnswerFor } from '@ens-apps/utils/testing/postHogAnswers'
+import { isGzip, jsonTextOf } from '@ens-apps/utils/testing/postHogBody'
 import {
   eventsIn as eventsOfBody,
   type SentEvent,
@@ -87,27 +88,17 @@ type StandInOptions = {
 /** The answer to a request the stand-in fails on purpose. */
 const FAILURE_STATUS = 502
 
-const GZIP_MAGIC = [0x1f, 0x8b] as const
 /** A PostHog project's public key, as each app and the SDK send it. */
 const PROJECT_KEY = /phc_[A-Za-z0-9]+/
 
-const decodeBody = (raw: Buffer): string => {
-  if (raw.length === 0) return ''
-  if (raw[0] === GZIP_MAGIC[0] && raw[1] === GZIP_MAGIC[1]) {
-    return gunzipSync(raw).toString('utf8')
-  }
-  const text = raw.toString('utf8')
-  // Base64 compression, used for beacons and the flags request:
-  // `data=<url-encoded base64 of the JSON>`.
-  if (text.startsWith('data=')) {
-    const encoded = decodeURIComponent(text.slice('data='.length))
-    const decoded = Buffer.from(encoded, 'base64').toString('utf8')
-    return decoded.startsWith('[') || decoded.startsWith('{')
-      ? decoded
-      : encoded
-  }
-  return text
-}
+// Read as the SDK encoded it (`postHogBody`), with zlib for gzip; the base64
+// of beacons and the flags request comes as a `data=` field.
+const decodeBody = (raw: Buffer): string =>
+  raw.length === 0
+    ? ''
+    : jsonTextOf(
+        isGzip(raw) ? gunzipSync(raw).toString('utf8') : raw.toString('utf8'),
+      )
 
 // Another program on the port may send a body that does not decode (a gzip
 // body that is cut, a `data=` body that is not escaped): it is read as text.
