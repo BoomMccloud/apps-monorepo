@@ -13,6 +13,7 @@ import {
   expectCardInBottomCorner,
   expectEqualButtons,
   expectEventsSent,
+  expectLabelsKeepRoomAtCardWidths,
   expectNoPostHogStorage,
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
@@ -175,6 +176,8 @@ test.describe('Manager analytics choice', () => {
     await expectCardAtBottom(page, banner)
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'manager-banner-360')
+    // The card takes other widths too, and its labels keep their room in each.
+    await expectLabelsKeepRoomAtCardWidths(page)
 
     // The banner's link goes to the ENS privacy policy, which opens in a new
     // tab and is not followed. The notice is on the Privacy settings page,

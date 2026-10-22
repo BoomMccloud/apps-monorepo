@@ -17,6 +17,7 @@ import {
   expectCardInBottomCorner,
   expectEqualButtons,
   expectEventsSent,
+  expectLabelsKeepRoomAtCardWidths,
   expectNoPostHogStorage,
   expectNoSendAfterDecline,
   expectNoSidewaysScroll,
@@ -178,6 +179,8 @@ test.describe('Explorer analytics choice', () => {
     await expectCardAtBottom(page, banner)
     await expectNoSidewaysScroll(page)
     await keepScreenshot(page, testInfo, 'explorer-banner-360')
+    // The card takes other widths too, and its labels keep their room in each.
+    await expectLabelsKeepRoomAtCardWidths(page)
 
     await openFresh(page, RESOLVER_PAGE)
     await expect(banner).toBeVisible()

@@ -173,6 +173,71 @@ const computedStyle = (locator: Locator): Promise<Record<string, string>> =>
     [...STYLE_PROPERTIES],
   )
 
+/** How much of its button's width must stay free on each side of a label. */
+const LABEL_ROOM_PX = 8
+
+/**
+ * The widths the card takes: a small phone's whole screen, the screens of the
+ * two phones the card was judged on (360 and 390 px), and the 320 px corner
+ * card that a tablet shows from 768 px up.
+ */
+const CARD_WIDTHS_PX = [320, 360, 390, 768] as const
+
+/**
+ * Each button's label keeps room inside its button, on the left and on the
+ * right. The label is measured as the words themselves (a Range over its text
+ * node), not as the button's content box: a label wider than the padding
+ * leaves still sits inside the button's border, and the room that matters is
+ * the room around the words a visitor reads.
+ */
+export const expectLabelsKeepRoom = async (page: Page): Promise<void> => {
+  const width = page.viewportSize()?.width ?? 'an unknown number of'
+  for (const button of [acceptButton(page), declineButton(page)]) {
+    const { label, left, right } = await button.evaluate((element) => {
+      const text = document
+        .createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) =>
+            /\S/.test(node.textContent ?? '')
+              ? NodeFilter.FILTER_ACCEPT
+              : NodeFilter.FILTER_REJECT,
+        })
+        .nextNode()
+      if (!text) throw new Error('the button holds no label')
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      const labelBox = range.getBoundingClientRect()
+      const buttonBox = element.getBoundingClientRect()
+      return {
+        label: text.textContent ?? '',
+        left: labelBox.left - buttonBox.left,
+        right: buttonBox.right - labelBox.right,
+      }
+    })
+    for (const [side, room] of [
+      ['left', left],
+      ['right', right],
+    ] as const) {
+      expect(
+        room,
+        `the label "${label}" has ${room.toFixed(1)} px of room on the ${side} of its button in a window ${width} px wide, and needs ${LABEL_ROOM_PX}`,
+      ).toBeGreaterThanOrEqual(LABEL_ROOM_PX)
+    }
+  }
+}
+
+/** The labels keep their room at every width the card takes; the viewport is put back after. */
+export const expectLabelsKeepRoomAtCardWidths = async (
+  page: Page,
+): Promise<void> => {
+  const original = page.viewportSize()
+  for (const width of CARD_WIDTHS_PX) {
+    await page.setViewportSize({ width, height: original?.height ?? 780 })
+    await expect(consentBanner(page)).toBeVisible()
+    await expectLabelsKeepRoom(page)
+  }
+  if (original) await page.setViewportSize(original)
+}
+
 /** Accept Analytics and Decline are the same size and the same style. */
 export const expectEqualButtons = async (page: Page): Promise<void> => {
   const accept = acceptButton(page)
