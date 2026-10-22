@@ -130,7 +130,7 @@ const socialIcons: readonly SocialIcon[] = [
   { href: 'https://github.com/ensdomains', icon: GithubIcon },
   { href: 'https://ens.mirror.xyz/', icon: NewspaperIcon },
   { href: 'https://discuss.ens.domains/', icon: MessageCircleIcon },
-  { href: 'https://www.youtube.com/@ENSdomains', icon: YoutubeIcon },
+  { href: 'https://www.youtube.com/ensdomains', icon: YoutubeIcon },
 ]
 
 const linkClassName =
