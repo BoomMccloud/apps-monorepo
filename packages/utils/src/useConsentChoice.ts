@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   type AnalyticsClient,
   type AnalyticsConsent,
@@ -17,6 +17,7 @@ import { LEGACY_POSTHOG_PROJECT_KEYS } from './analyticsLegacyStorage'
 import { startAnalyticsSdk } from './analyticsStart'
 import posthog from './postHogClient'
 import { createSupportChat } from './supportChat'
+import { useLatest } from './useLatest'
 import { useWalletAnalytics, type WagmiHooks } from './useWalletAnalytics'
 
 /**
@@ -31,17 +32,14 @@ const useFollowedChoice = (
 ): void => {
   // The page's latest handler, read when a change arrives, so the follower
   // does not restart each time the page renders a new one.
-  const onChangeRef = useRef(onChange)
-  useEffect(() => {
-    onChangeRef.current = onChange
-  })
+  const latestOnChange = useLatest(onChange)
   useEffect(() => {
     if (!isStarted) return
     return followStoredChoice(client, {
       isDev,
-      onChange: (consent) => onChangeRef.current(consent),
+      onChange: (consent) => latestOnChange.current(consent),
     })
-  }, [client, isStarted, isDev])
+  }, [client, isStarted, isDev, latestOnChange])
 }
 
 /**

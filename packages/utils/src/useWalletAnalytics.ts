@@ -1,9 +1,10 @@
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback } from 'react'
 import type { Address } from 'viem'
 import { identifyWallet, resetVisitor } from './analyticsConsent'
 import posthog from './postHogClient'
 import { createTracker, type SharedPostHogEvents } from './postHogTrack'
+import { useLatest } from './useLatest'
 
 const { track } = createTracker<SharedPostHogEvents>(posthog)
 
@@ -55,43 +56,41 @@ export const useWalletAnalytics = ({
   relinkSupportChat,
   onVisitorReset,
 }: WalletAnalyticsOptions): void => {
-  // The page's latest callbacks, read when a wallet connects or disconnects.
   // wagmi lists both handlers below as the dependencies of the effect that
   // watches the connection, which new ones would set up again on every render
-  // of the page, so they never depend on what the page passes in.
-  const callbacks = useRef({ relinkSupportChat, onVisitorReset })
-  useEffect(() => {
-    callbacks.current = { relinkSupportChat, onVisitorReset }
-  })
+  // of the page, so they read the page's callbacks through `useLatest`.
+  const callbacks = useLatest({ relinkSupportChat, onVisitorReset })
 
-  const onConnect = useCallback((event: ConnectionEvent) => {
-    try {
-      identifyWallet(posthog, {
-        address: event.address,
-        chainId: event.chainId,
-        connectorName: event.connector.name,
-      })
-      callbacks.current.relinkSupportChat()
-      track('wallet:connect', {
+  const onConnect = useCallback(
+    (event: ConnectionEvent) => {
+      const wallet = {
         wallet_address: event.address,
         chain_id: event.chainId,
         wallet_connector: event.connector.name,
-        is_reconnected: event.isReconnected,
-      })
-    } catch (error) {
-      console.warn('[posthog] wallet:connect failed', error)
-    }
+      }
+      try {
+        identifyWallet(posthog, {
+          address: event.address,
+          chainId: event.chainId,
+          connectorName: event.connector.name,
+        })
+        callbacks.current.relinkSupportChat()
+        track('wallet:connect', {
+          ...wallet,
+          is_reconnected: event.isReconnected,
+        })
+      } catch (error) {
+        console.warn('[posthog] wallet:connect failed', error)
+      }
 
-    try {
-      trackIntercomEvent('wallet:connect', {
-        wallet_address: event.address,
-        chain_id: event.chainId,
-        wallet_connector: event.connector.name,
-      })
-    } catch (error) {
-      console.warn('[intercom] wallet:connect failed', error)
-    }
-  }, [])
+      try {
+        trackIntercomEvent('wallet:connect', wallet)
+      } catch (error) {
+        console.warn('[intercom] wallet:connect failed', error)
+      }
+    },
+    [callbacks],
+  )
 
   const onDisconnect = useCallback(() => {
     // A new visitor id for whoever uses the browser next; the choice stays.
@@ -103,7 +102,7 @@ export const useWalletAnalytics = ({
     } catch (error) {
       console.warn('[posthog] reset on disconnect failed', error)
     }
-  }, [])
+  }, [callbacks])
 
   wagmi.useConnectionEffect({ onConnect, onDisconnect })
 }
