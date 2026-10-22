@@ -133,15 +133,43 @@ describe('subname pages', () => {
     ).toEqual([
       { v1Wrapping: { isWrapped: false }, subnameCount: 0 },
       {
-        v1Wrapping: { isWrapped: true, parentCannotControl: false },
+        v1Wrapping: {
+          isWrapped: true,
+          parentCannotControl: false,
+          isLocked: false,
+        },
         subnameCount: undefined,
       },
       {
-        v1Wrapping: { isWrapped: true, parentCannotControl: true },
+        v1Wrapping: {
+          isWrapped: true,
+          parentCannotControl: true,
+          isLocked: false,
+        },
         subnameCount: undefined,
       },
       { v1Wrapping: null, subnameCount: undefined },
     ])
+  })
+
+  it('marks a locked V1 subname, which its owner cannot unwrap to zero', async () => {
+    vi.mocked(bigname.subnames).mockReturnValue(
+      page(
+        [
+          row('locked', { ens_v1: { wrapper_state: 'locked' } }),
+          row('free', { ens_v1: { wrapper_state: 'emancipated' } }),
+        ],
+        { total: 2 },
+      ),
+    )
+
+    const subnames = await firstPage('test.eth')
+
+    expect(
+      subnames.map(({ v1Wrapping }) =>
+        v1Wrapping?.isWrapped ? v1Wrapping.isLocked : null,
+      ),
+    ).toEqual([true, false])
   })
 
   it('counts expired children only when asked, as a row’s count does', async () => {

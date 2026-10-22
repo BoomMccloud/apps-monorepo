@@ -50,7 +50,12 @@ export class GetIsV1SubnameTakenError extends TaggedError(
 /** How bigname says an ENSv1 subname is held. */
 export type V1SubnameWrapping =
   | { readonly isWrapped: false }
-  | { readonly isWrapped: true; readonly parentCannotControl: boolean }
+  | {
+      readonly isWrapped: true
+      readonly parentCannotControl: boolean
+      /** CANNOT_UNWRAP burned, so the NameWrapper won't let its owner zero it. */
+      readonly isLocked: boolean
+    }
 
 type Subname = {
   readonly name: string
@@ -104,10 +109,12 @@ const toV1Wrapping = ({ ens_v1 }: BignameSubname): V1SubnameWrapping | null =>
       isWrapped: true,
       parentCannotControl:
         ens_v1?.wrapper_fuses?.parent_cannot_control ?? false,
+      isLocked: false,
     }))
-    .with(P.union('emancipated', 'locked'), () => ({
+    .with(P.union('emancipated', 'locked'), (state) => ({
       isWrapped: true,
       parentCannotControl: true,
+      isLocked: state === 'locked',
     }))
     .otherwise(() => null)
 

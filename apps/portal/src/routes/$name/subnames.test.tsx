@@ -393,11 +393,15 @@ describe('V1 subname deletion', () => {
       ancestorRegistration: null,
     }
   }
-  const v1Row = (label: string, subnameCount: number) => ({
+  const v1Row = (
+    label: string,
+    subnameCount: number,
+    owner = PARENT_REGISTRY,
+  ) => ({
     name: `${label}.${NAME}`,
     labelName: label,
     labelhash: labelhash(label),
-    owner: PARENT_REGISTRY,
+    owner,
     v1Wrapping: { isWrapped: false },
     subnameCount,
   })
@@ -418,6 +422,21 @@ describe('V1 subname deletion', () => {
       screen.getAllByLabelText(/can’t delete branch\..*delete those first/i)
         .length,
     ).toBeGreaterThan(0)
+  })
+
+  // WEB-1909: the subname's own holder deletes it without holding the parent.
+  it('offers the subname’s own holder a delete for it, and nothing else', async () => {
+    holdUnwrapped(PARENT_REGISTRY)
+    subnames = [v1Row('mine', 0, CONNECTED), v1Row('theirs', 0)]
+    renderRoute()
+
+    expect(
+      (await screen.findAllByRole('button', { name: `Delete mine.${NAME}` }))
+        .length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.queryByRole('button', { name: `Delete theirs.${NAME}` }),
+    ).not.toBeInTheDocument()
   })
 
   it('offers nothing to an account that does not hold the name', async () => {
