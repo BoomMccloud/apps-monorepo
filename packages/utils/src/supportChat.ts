@@ -3,6 +3,7 @@ import {
   getVisitorId,
   update as updateIntercom,
 } from '@intercom/messenger-js-sdk'
+import type { AnalyticsConsent } from './analyticsConsent'
 import type { AnalyticsConsentState } from './analyticsConsentContext'
 import {
   type CapturingClient,
@@ -14,7 +15,7 @@ import {
 interface SupportChatAnalytics extends CapturingClient {
   get_distinct_id(): string
   get_session_replay_url(): string
-  get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
+  get_explicit_consent_status(): AnalyticsConsent
 }
 
 type SupportChatOptions = {

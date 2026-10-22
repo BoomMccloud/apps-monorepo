@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AnalyticsConsent } from './analyticsConsent'
 import { createSupportChat } from './supportChat'
 
 const intercom = vi.hoisted(() => ({
@@ -9,7 +10,7 @@ const intercom = vi.hoisted(() => ({
 vi.mock('@intercom/messenger-js-sdk', () => intercom)
 
 const consent = vi.hoisted(() => ({
-  status: vi.fn<() => 'granted' | 'denied' | 'pending'>(),
+  status: vi.fn<() => AnalyticsConsent>(),
 }))
 const analytics = {
   get_distinct_id: () => 'visitor-id',

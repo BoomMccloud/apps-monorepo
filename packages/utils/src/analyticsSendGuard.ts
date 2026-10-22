@@ -28,12 +28,13 @@
  * entry's own chunk. It installs itself in a browser only, once.
  */
 
+import type { AnalyticsConsent } from './analyticsConsent'
 import { urlOf } from './inputUrl'
 
 /** The part of the SDK the guard reads: where it sends, and the visitor's choice. */
 interface GuardedClient {
   readonly config: { readonly api_host: string }
-  get_explicit_consent_status(): 'granted' | 'denied' | 'pending'
+  get_explicit_consent_status(): AnalyticsConsent
 }
 
 const isGranted = (client: GuardedClient): boolean => {

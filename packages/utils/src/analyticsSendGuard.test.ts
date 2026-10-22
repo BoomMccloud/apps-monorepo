@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AnalyticsConsent } from './analyticsConsent'
 import { installPostHogNetwork } from './testing/postHogTestKit'
 
 // The guard wraps the `fetch` and `sendBeacon` it finds when it loads, so the
@@ -12,10 +13,7 @@ const { endConsentPeriod, guardPostHogSends } = await import(
 const HOST = 'https://posthog.example'
 const EVENTS_URL = `${HOST}/e/`
 
-const clientWith = (
-  consent: 'granted' | 'denied' | 'pending',
-  apiHost = HOST,
-) => ({
+const clientWith = (consent: AnalyticsConsent, apiHost = HOST) => ({
   config: { api_host: apiHost },
   get_explicit_consent_status: () => consent,
 })

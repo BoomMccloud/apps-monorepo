@@ -1,3 +1,4 @@
+import type { AnalyticsConsent } from '@ens-apps/utils/analyticsConsent'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   backendAuthStore,
@@ -12,7 +13,7 @@ const ATTACKER_URL = 'https://attacker.example'
 // The SDK the visitor's analytics id comes from, and what it says of the choice.
 const sdk = vi.hoisted(() => ({
   isLoaded: vi.fn(() => true),
-  consent: vi.fn<() => 'granted' | 'denied' | 'pending'>(),
+  consent: vi.fn<() => AnalyticsConsent>(),
 }))
 vi.mock('@ens-apps/utils/postHogClient', () => ({
   default: {
