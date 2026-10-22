@@ -2,6 +2,7 @@ import { Trans } from '@lingui/react/macro'
 import { cva } from 'class-variance-authority'
 import { CircleAlert } from 'lucide-react'
 import ensMarkBadge from '@/assets/ens-mark-badge.svg'
+import type { RenewalProtocol } from '@/features/renew/utils/renewalProtocol'
 
 const pillVariants = cva(
   'inline-flex h-5 w-fit shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 font-sans text-sm leading-none tracking-[0.28px]',
@@ -38,9 +39,21 @@ export const Ensv1OnlyPill = () => (
 
 export type NameRole = 'owner' | 'manager'
 
-export const RolePill = ({ role }: { readonly role: NameRole }) => (
+export const RolePill = ({
+  role,
+  protocol,
+}: {
+  readonly role: NameRole
+  readonly protocol?: RenewalProtocol
+}) => (
   <span className={pillVariants({ tone: role })}>
-    {role === 'owner' ? <Trans>Owner</Trans> : <Trans>Manager</Trans>}
+    {role === 'owner' ? (
+      <Trans>Owner</Trans>
+    ) : protocol === 'v2' ? (
+      <Trans>Registry roles</Trans>
+    ) : (
+      <Trans>Manager</Trans>
+    )}
   </span>
 )
 

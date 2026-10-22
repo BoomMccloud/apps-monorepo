@@ -31,6 +31,7 @@ import { ProfileCards } from './ProfileCards'
 import { type ProfileDraft, ProfileDraftProvider } from './ProfileDraft.context'
 import { ProfileHeader } from './ProfileHeader'
 import { ProfileLoading } from './ProfileLoading'
+import { ProfileRegistryRolesNotice } from './ProfileRegistryRolesNotice'
 import {
   ProfileGracePeriodBanner,
   ProfileMigrationBanner,
@@ -232,6 +233,14 @@ export const ProfileView = ({ name }: ProfileViewProps) => {
               ownerReverseName={ownerReverseName.data}
               records={displayRecords}
               registrationDate={registration.data?.registrationDate}
+            />
+            <ProfileRegistryRolesNotice
+              isExpiryError={isExpiryError}
+              isInGrace={expiry.isInGrace}
+              isOwner={resolvedIsOwner}
+              isUpgradeRequired={isUpgradeRequired}
+              name={name}
+              protocol={ownerData?.protocol}
             />
             {isExpiryError ? (
               <p className="px-4 pt-2 text-muted-foreground text-xs">
