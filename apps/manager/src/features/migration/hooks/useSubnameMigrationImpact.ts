@@ -19,6 +19,7 @@ type Parameters = {
   readonly managerRestorationNames?: readonly string[]
   readonly isEnabled: boolean
   readonly isPrepared: boolean
+  readonly isRefetchEnabled?: boolean
 }
 
 const FRESH_FOR_MS = 60_000
@@ -31,6 +32,7 @@ export const getSubnameMigrationImpactQueryOptions = ({
   isEnabled,
   isPrepared,
   hasSelectedNames,
+  isRefetchEnabled = true,
 }: {
   readonly selectionKey: string
   readonly migratingNames: readonly string[]
@@ -39,6 +41,7 @@ export const getSubnameMigrationImpactQueryOptions = ({
   readonly isEnabled: boolean
   readonly isPrepared: boolean
   readonly hasSelectedNames: boolean
+  readonly isRefetchEnabled?: boolean
 }) =>
   resultQueryOptions({
     queryKey: qk('migration', 'subname_impact', { selectionKey }),
@@ -53,8 +56,8 @@ export const getSubnameMigrationImpactQueryOptions = ({
       }),
     enabled: isEnabled && isPrepared && hasSelectedNames,
     staleTime: FRESH_FOR_MS,
-    refetchInterval: isEnabled ? FRESH_FOR_MS : false,
-    refetchOnWindowFocus: 'always',
+    refetchInterval: isEnabled && isRefetchEnabled ? FRESH_FOR_MS : false,
+    refetchOnWindowFocus: isRefetchEnabled ? 'always' : false,
     retry: false,
   })
 
@@ -66,6 +69,7 @@ export const useSubnameMigrationImpact = ({
   managerRestorationNames = [],
   isEnabled,
   isPrepared,
+  isRefetchEnabled = true,
 }: Parameters) => {
   const selected = new Set(selectedNames.map((name) => name.toLowerCase()))
   const migratingNames = [
@@ -117,6 +121,7 @@ export const useSubnameMigrationImpact = ({
       isEnabled,
       isPrepared,
       hasSelectedNames: selected.size > 0,
+      isRefetchEnabled,
     }),
   )
   const status = match({

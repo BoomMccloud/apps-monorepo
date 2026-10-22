@@ -539,6 +539,7 @@ export const MigrationPage = () => {
             onManagerRestorationChange={handleManagerRestorationChange}
             onNamesChange={handleNamesChange}
             onNext={() => confirmation.request('start')}
+            ownerAddress={ownerAddress}
             renewal={renewal}
             renewalGasEstimate={renewalGasEstimate}
           />
