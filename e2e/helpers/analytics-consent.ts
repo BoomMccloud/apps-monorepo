@@ -24,7 +24,7 @@ export const CONSENT_COOKIE_NAME = 'ens.analytics.consent'
 const BANNER_HEADING = 'Help us improve ENS'
 const FRIENDLY_SENTENCE =
   /Optional analytics help ENS understand how the apps are used, find problems and improve the experience/
-// The statement of what is collected names, at least, these.
+// What the notice lists as collected, and the banner no longer does.
 const COLLECTED = [
   /wallet address/i,
   /pages you visit/i,
@@ -124,7 +124,11 @@ export const expectNoPostHogStorage = async (page: Page): Promise<void> => {
   expect(await postHogStorageKeys(page)).toEqual([])
 }
 
-/** The banner's words come in the order the ticket gives them. */
+/**
+ * The banner's words come in this order: the heading, what the analytics are
+ * for, where the choice is changed, the buttons and the policy link. It lists
+ * no data; the notice on the Privacy settings page does.
+ */
 export const expectBannerWording = async (banner: Locator): Promise<void> => {
   await expect(
     banner.getByRole('heading', { name: BANNER_HEADING }),
@@ -132,20 +136,15 @@ export const expectBannerWording = async (banner: Locator): Promise<void> => {
   const text = (await banner.textContent()) ?? ''
   const headingAt = text.indexOf(BANNER_HEADING)
   const sentenceAt = text.search(FRIENDLY_SENTENCE)
-  const collectedAt = Math.max(...COLLECTED.map((part) => text.search(part)))
+  const changedAt = text.search(/change it in Privacy settings at any time/)
   const buttonsAt = text.indexOf('Accept Analytics')
   expect(headingAt, 'the heading').toBeGreaterThanOrEqual(0)
   expect(sentenceAt, 'the friendly sentence').toBeGreaterThan(headingAt)
+  expect(changedAt, 'where the choice is changed').toBeGreaterThan(sentenceAt)
+  expect(buttonsAt, 'the buttons come last').toBeGreaterThan(changedAt)
   for (const part of COLLECTED) {
-    expect(text, `what is collected: ${part}`).toMatch(part)
+    expect(text, `the banner lists no data: ${part}`).not.toMatch(part)
   }
-  expect(
-    Math.min(...COLLECTED.map((part) => text.search(part))),
-  ).toBeGreaterThan(sentenceAt)
-  expect(buttonsAt, 'the buttons come last').toBeGreaterThan(collectedAt)
-  expect(text, 'where the choice is changed').toMatch(
-    /change it in Privacy settings at any time/,
-  )
   await expectPolicyLink(banner.getByRole('link', { name: 'Privacy policy' }))
 }
 

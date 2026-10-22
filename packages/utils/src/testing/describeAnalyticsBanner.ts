@@ -43,9 +43,6 @@ export const describeAnalyticsBanner = ({
       expect(banner()?.textContent).toMatch(
         /Optional analytics help ENS understand how the apps are used, find problems and improve the experience/,
       )
-      expect(banner()?.textContent).toMatch(
-        /PostHog processes for ENS: your wallet address/,
-      )
       const accept = screen.getByRole('button', { name: 'Accept Analytics' })
       const decline = screen.getByRole('button', { name: 'Decline' })
       expect(accept.className).toBe(decline.className)
@@ -67,6 +64,23 @@ export const describeAnalyticsBanner = ({
 
       expect(banner()?.textContent).toContain(
         'you can change it in Privacy settings at any time',
+      )
+    })
+
+    // What is collected is the notice's to list, on the Privacy settings page.
+    it('lists no data: it holds the intro and where the choice is changed, and no more', () => {
+      renderBanner('pending')
+
+      const paragraphs = Array.from(
+        banner()?.querySelectorAll('p') ?? [],
+        (paragraph) => paragraph.textContent,
+      )
+      expect(paragraphs).toEqual([
+        'Optional analytics help ENS understand how the apps are used, find problems and improve the experience.',
+        'Your choice applies to all ENS apps that share it, and you can change it in Privacy settings at any time.',
+      ])
+      expect(banner()?.textContent).not.toMatch(
+        /PostHog|wallet address|IP address|error reports/i,
       )
     })
 

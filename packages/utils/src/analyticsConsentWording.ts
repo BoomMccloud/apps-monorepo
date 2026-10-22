@@ -18,8 +18,6 @@ export const ANALYTICS_BANNER = {
   heading: 'Help us improve ENS',
   intro:
     'Optional analytics help ENS understand how the apps are used, find problems and improve the experience.',
-  collected:
-    'If you accept, PostHog processes for ENS: your wallet address when you connect one, the pages you visit (page addresses can contain names and wallet addresses), what you do in the apps, error reports, and your IP address, time zone and browser details.',
   shared:
     'Your choice applies to all ENS apps that share it, and you can change it in Privacy settings at any time.',
   accept: 'Accept Analytics',

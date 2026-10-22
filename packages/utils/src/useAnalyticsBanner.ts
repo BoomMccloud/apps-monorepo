@@ -2,11 +2,7 @@ import { useId } from 'react'
 import { ANALYTICS_BANNER, PRIVACY_POLICY_URL } from './analyticsConsentWording'
 import { useAnalyticsConsent } from './useAnalyticsConsent'
 
-const PARAGRAPHS = [
-  ANALYTICS_BANNER.intro,
-  ANALYTICS_BANNER.collected,
-  ANALYTICS_BANNER.shared,
-] as const
+const PARAGRAPHS = [ANALYTICS_BANNER.intro, ANALYTICS_BANNER.shared] as const
 
 /**
  * What the analytics banner shows and does, for an app to put in its own
