@@ -1,9 +1,4 @@
-import {
-  ANALYTICS_BANNER,
-  PRIVACY_POLICY_URL,
-} from '@ens-apps/utils/analyticsConsentWording'
-import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
-import { useId } from 'react'
+import { useAnalyticsBanner } from '@ens-apps/utils/useAnalyticsBanner'
 import { Button } from '@/components/ui/button'
 import { floatingWrapperGlassClassName } from '@/features/navigation/Header/shared/FloatingWrapper'
 import { cn } from '@/lib/utils'
@@ -16,14 +11,13 @@ import { cn } from '@/lib/utils'
  * wallet modal included.
  */
 export const AnalyticsBanner = () => {
-  const { consent, accept, decline } = useAnalyticsConsent()
-  const headingId = useId()
+  const banner = useAnalyticsBanner()
 
-  if (consent !== 'pending') return null
+  if (!banner.isShown) return null
 
   return (
     <section
-      aria-labelledby={headingId}
+      aria-labelledby={banner.headingId}
       className={cn(
         // greptile: no-arbitrary-tailwind: the gap above the bottom edge is the
         // gap at the sides plus the device's safe area, which only the browser
@@ -33,39 +27,42 @@ export const AnalyticsBanner = () => {
         floatingWrapperGlassClassName,
       )}
     >
-      <h2 className="font-medium text-base text-foreground" id={headingId}>
-        {ANALYTICS_BANNER.heading}
+      <h2
+        className="font-medium text-base text-foreground"
+        id={banner.headingId}
+      >
+        {banner.heading}
       </h2>
       <div className="flex flex-col gap-2 text-muted-foreground text-sm">
-        <p>{ANALYTICS_BANNER.intro}</p>
-        <p>{ANALYTICS_BANNER.collected}</p>
-        <p>{ANALYTICS_BANNER.shared}</p>
+        {banner.paragraphs.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Button
           className="w-full"
-          onClick={accept}
+          onClick={banner.accept.press}
           type="button"
           variant="outline"
         >
-          {ANALYTICS_BANNER.accept}
+          {banner.accept.label}
         </Button>
         <Button
           className="w-full"
-          onClick={decline}
+          onClick={banner.decline.press}
           type="button"
           variant="outline"
         >
-          {ANALYTICS_BANNER.decline}
+          {banner.decline.label}
         </Button>
       </div>
       <a
         className="self-start text-ens-blue text-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-        href={PRIVACY_POLICY_URL}
+        href={banner.policy.href}
         rel="noopener noreferrer"
         target="_blank"
       >
-        {ANALYTICS_BANNER.policyLink}
+        {banner.policy.label}
       </a>
     </section>
   )

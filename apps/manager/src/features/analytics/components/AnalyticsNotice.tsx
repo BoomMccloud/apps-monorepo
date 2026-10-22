@@ -1,14 +1,5 @@
-import { NOT_CAPTURED_CLASS } from '@ens-apps/utils/analyticsConsent'
-import {
-  ANALYTICS_CHOICE_STATUS,
-  ANALYTICS_NOTICE_HEADING,
-  ANALYTICS_NOTICE_INTRO,
-  ANALYTICS_NOTICE_SECTIONS,
-  ANALYTICS_SWITCH_LABEL,
-  type NoticeSection,
-} from '@ens-apps/utils/analyticsConsentWording'
-import { useAnalyticsConsent } from '@ens-apps/utils/useAnalyticsConsent'
-import { useId } from 'react'
+import type { NoticeSection } from '@ens-apps/utils/analyticsConsentWording'
+import { useAnalyticsNotice } from '@ens-apps/utils/useAnalyticsNotice'
 import { Switch } from '@/components/ui/switch'
 
 const NoticeSectionView = ({
@@ -49,37 +40,40 @@ const NoticeSectionView = ({
 
 /** The analytics notice: what is collected, and the visitor's choice. */
 export const AnalyticsNotice = () => {
-  const { consent, accept, decline } = useAnalyticsConsent()
-  const headingId = useId()
-  const switchId = useId()
+  const notice = useAnalyticsNotice()
 
   return (
-    <section aria-labelledby={headingId} className="mb-8">
-      <h2 className="font-semibold text-ens-blue-dark text-xl" id={headingId}>
-        {ANALYTICS_NOTICE_HEADING}
+    <section aria-labelledby={notice.headingId} className="mb-8">
+      <h2
+        className="font-semibold text-ens-blue-dark text-xl"
+        id={notice.headingId}
+      >
+        {notice.heading}
       </h2>
-      {ANALYTICS_NOTICE_INTRO.map((paragraph) => (
+      {notice.intro.map((paragraph) => (
         <p className="mt-4 text-gray-700" key={paragraph}>
           {paragraph}
         </p>
       ))}
 
-      <div className={`mt-4 flex items-center gap-3 ${NOT_CAPTURED_CLASS}`}>
+      <div
+        className={`mt-4 flex items-center gap-3 ${notice.switch.wrapperClass}`}
+      >
         <Switch
-          checked={consent === 'granted'}
-          disabled={consent === 'unknown'}
-          id={switchId}
-          onCheckedChange={(isChecked) => (isChecked ? accept() : decline())}
+          checked={notice.switch.isOn}
+          disabled={notice.switch.isDisabled}
+          id={notice.switch.id}
+          onCheckedChange={notice.switch.change}
         />
-        <label className="text-gray-700" htmlFor={switchId}>
-          {ANALYTICS_SWITCH_LABEL}
+        <label className="text-gray-700" htmlFor={notice.switch.id}>
+          {notice.switch.label}
         </label>
       </div>
       <p aria-live="polite" className="mt-2 text-gray-500 text-sm">
-        {consent === 'unknown' ? null : ANALYTICS_CHOICE_STATUS[consent]}
+        {notice.status}
       </p>
 
-      {ANALYTICS_NOTICE_SECTIONS.map((section) => (
+      {notice.sections.map((section) => (
         <NoticeSectionView key={section.heading} section={section} />
       ))}
     </section>
