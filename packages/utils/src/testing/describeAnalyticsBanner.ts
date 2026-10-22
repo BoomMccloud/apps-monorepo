@@ -1,10 +1,11 @@
-import { type ComponentType, createElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import type { ComponentType } from 'react'
+import { describe, expect, it } from 'vitest'
+import type { AnalyticsConsentState } from '../analyticsConsentContext'
 import {
-  AnalyticsConsentContext,
-  type AnalyticsConsentState,
-} from '../analyticsConsentContext'
-import type { DomTestKit } from './domTestKit'
+  type DomTestKit,
+  expectPrivacyPolicyLink,
+  renderWithChoice,
+} from './domTestKit'
 
 /**
  * What the analytics banner does in every ENS app: it asks a visitor who has
@@ -19,18 +20,8 @@ export const describeAnalyticsBanner = ({
   readonly Banner: ComponentType
   readonly kit: DomTestKit
 }): void => {
-  const renderBanner = (consent: AnalyticsConsentState) => {
-    const accept = vi.fn()
-    const decline = vi.fn()
-    render(
-      createElement(
-        AnalyticsConsentContext,
-        { value: { consent, accept, decline } },
-        createElement(Banner),
-      ),
-    )
-    return { accept, decline }
-  }
+  const renderBanner = (consent: AnalyticsConsentState) =>
+    renderWithChoice(render, Banner, consent)
 
   const banner = () =>
     screen.queryByRole('region', { name: 'Help us improve ENS' })
@@ -51,12 +42,9 @@ export const describeAnalyticsBanner = ({
     it('links the ENS privacy policy, which opens in a new tab', () => {
       renderBanner('pending')
 
-      const policy = screen.getByRole('link', { name: 'Privacy policy' })
-      expect(policy.getAttribute('href')).toBe(
-        'https://ens.domains/legal/privacy-policy',
+      expectPrivacyPolicyLink(
+        screen.getByRole('link', { name: 'Privacy policy' }),
       )
-      expect(policy.getAttribute('target')).toBe('_blank')
-      expect(policy.getAttribute('rel')).toBe('noopener noreferrer')
     })
 
     it('says where the choice can be changed', () => {

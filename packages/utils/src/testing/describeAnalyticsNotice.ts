@@ -1,12 +1,9 @@
-import { type ComponentType, createElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import type { ComponentType } from 'react'
+import { describe, expect, it } from 'vitest'
 import { NOT_CAPTURED_CLASS } from '../analyticsConsent'
-import {
-  AnalyticsConsentContext,
-  type AnalyticsConsentState,
-} from '../analyticsConsentContext'
+import type { AnalyticsConsentState } from '../analyticsConsentContext'
 import { NOTICE_STATEMENTS } from './analyticsNoticeStatements'
-import type { DomTestKit } from './domTestKit'
+import { type DomTestKit, renderWithChoice } from './domTestKit'
 
 /**
  * What the analytics notice does in every ENS app: it says what is collected
@@ -21,18 +18,8 @@ export const describeAnalyticsNotice = ({
   readonly Notice: ComponentType
   readonly kit: DomTestKit
 }): void => {
-  const renderNotice = (consent: AnalyticsConsentState) => {
-    const accept = vi.fn()
-    const decline = vi.fn()
-    render(
-      createElement(
-        AnalyticsConsentContext,
-        { value: { consent, accept, decline } },
-        createElement(Notice),
-      ),
-    )
-    return { accept, decline }
-  }
+  const renderNotice = (consent: AnalyticsConsentState) =>
+    renderWithChoice(render, Notice, consent)
 
   const notice = () => screen.getByRole('region', { name: 'Analytics' })
   const analyticsSwitch = () =>
