@@ -190,6 +190,23 @@ describe('subname pages', () => {
     expect(asked(1)[1]).toMatchObject({ include_expired: 'false' })
   })
 
+  it('carries the era bigname serves each subname from', async () => {
+    vi.mocked(bigname.subnames).mockReturnValue(
+      page(
+        [
+          row('old', { authority: 'ens_v1' }),
+          row('new', { authority: 'ens_v2' }),
+          row('unsaid'),
+        ],
+        { total: 3 },
+      ),
+    )
+
+    const subnames = await firstPage('test.eth')
+
+    expect(subnames.map(({ protocol }) => protocol)).toEqual(['v1', 'v2', null])
+  })
+
   it('asks for counts only on V1 pages', async () => {
     vi.mocked(bigname.subnames).mockReturnValue(page([], { total: 0 }))
 
