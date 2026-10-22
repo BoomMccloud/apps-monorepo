@@ -1,8 +1,8 @@
 import { identifyWallet, resetVisitor } from '@ens-apps/utils/analyticsConsent'
+import posthog from '@ens-apps/utils/postHogClient'
 import { trackEvent as trackIntercomEvent } from '@intercom/messenger-js-sdk'
 import { useCallback } from 'react'
 import { type UseConnectionEffectParameters, useConnectionEffect } from 'wagmi'
-import posthog from './client'
 import { track } from './events'
 import { relinkSupportChat } from './supportChat'
 

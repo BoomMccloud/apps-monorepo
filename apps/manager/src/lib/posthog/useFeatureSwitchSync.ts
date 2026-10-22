@@ -1,7 +1,7 @@
+import posthog from '@ens-apps/utils/postHogClient'
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import type { Address } from 'viem'
-import posthog from './client'
 import {
   ALL_SWITCHES_OFF,
   type DecidedFeatureSwitches,

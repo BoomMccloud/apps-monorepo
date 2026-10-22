@@ -7,7 +7,7 @@ import { startPostHog } from './start'
 vi.mock('@ens-apps/utils/analyticsStart', () => ({
   startAnalyticsSdk: vi.fn(() => 'pending'),
 }))
-vi.mock('./client', () => ({ default: { stand: 'in' } }))
+vi.mock('@ens-apps/utils/postHogClient', () => ({ default: { stand: 'in' } }))
 vi.mock('./config', () => ({ startupConfig: () => ({ api_host: 'host' }) }))
 
 describe('startPostHog', () => {

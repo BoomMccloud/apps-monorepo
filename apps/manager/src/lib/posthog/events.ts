@@ -1,8 +1,11 @@
 import type { FailedRunPayloadV2 } from '@ens-apps/transaction-manager'
-import type { CaptureOptions } from 'posthog-js'
-import posthog from './client'
+import posthog from '@ens-apps/utils/postHogClient'
+import {
+  createTracker,
+  type SharedPostHogEvents,
+} from '@ens-apps/utils/postHogTrack'
 
-export type PostHogEvents = {
+export type PostHogEvents = SharedPostHogEvents & {
   'nft:completion_check': {
     outcome: 'complete' | 'incomplete' | 'reconciling' | 'error' | 'aborted'
     duration_ms: number
@@ -29,16 +32,6 @@ export type PostHogEvents = {
     source: 'header_search'
   }
 
-  'wallet:connect': {
-    wallet_address: string
-    chain_id: number
-    wallet_connector: string
-  }
-
-  'wallet:disconnect': undefined
-
-  'intercom:booted': undefined
-
   'tm:failed_run': {
     tm_payload: FailedRunPayloadV2
     tm_run_id: string
@@ -63,19 +56,4 @@ export type PostHogEvents = {
   }
 }
 
-export type PostHogEvent = keyof PostHogEvents
-
-export function track<N extends PostHogEvent>(
-  name: N,
-  ...args: PostHogEvents[N] extends undefined ? [] : [PostHogEvents[N]]
-): void {
-  posthog.capture(name, args[0])
-}
-
-export function trackWithOptions<N extends PostHogEvent>(
-  name: N,
-  args: PostHogEvents[N],
-  options: CaptureOptions,
-): void {
-  posthog.capture(name, args, options)
-}
+export const { track, trackWithOptions } = createTracker<PostHogEvents>(posthog)

@@ -1,7 +1,7 @@
 import type { AnalyticsConsentState } from '@ens-apps/utils/analyticsConsentContext'
 import { LEGACY_POSTHOG_PROJECT_KEYS } from '@ens-apps/utils/analyticsLegacyStorage'
 import { startAnalyticsSdk } from '@ens-apps/utils/analyticsStart'
-import posthog from './client'
+import posthog from '@ens-apps/utils/postHogClient'
 import { startupConfig } from './config'
 import type { FeatureSwitches } from './feature-flags'
 

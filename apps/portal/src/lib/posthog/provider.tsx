@@ -7,13 +7,13 @@ import {
   AnalyticsConsentContext,
   type AnalyticsConsentState,
 } from '@ens-apps/utils/analyticsConsentContext'
+import posthog, { reactClient } from '@ens-apps/utils/postHogClient'
 import { useFollowedChoice } from '@ens-apps/utils/useFollowedChoice'
 import { useWalletIdentity } from '@ens-apps/utils/useWalletIdentity'
 import { PostHogProvider } from '@posthog/react'
 import { useState } from 'react'
 import { match } from 'ts-pattern'
 import { useConnection } from 'wagmi'
-import posthog, { reactClient } from './client'
 import {
   linkSupportChat,
   relinkSupportChat,
