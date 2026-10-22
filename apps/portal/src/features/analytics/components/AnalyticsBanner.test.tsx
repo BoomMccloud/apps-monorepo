@@ -23,7 +23,7 @@ const banner = () =>
   screen.queryByRole('region', { name: 'Help us improve ENS' })
 
 describe('AnalyticsBanner', () => {
-  it('sits at the bottom of the screen on a phone, and keeps its corner from 640 px', () => {
+  it('sits at the bottom of the screen on a phone, and keeps its corner, 352 px wide, from 640 px', () => {
     renderBanner('pending')
 
     // greptile: no-arbitrary-tailwind: this is the class the component
@@ -32,6 +32,7 @@ describe('AnalyticsBanner', () => {
       'bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))]',
       'sm:bottom-6',
       'sm:right-6',
+      'sm:w-88',
     )
     expect(
       Array.from(banner()?.classList ?? []).filter(

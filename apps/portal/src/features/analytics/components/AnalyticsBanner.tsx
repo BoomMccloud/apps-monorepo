@@ -23,7 +23,7 @@ export const AnalyticsBanner = () => {
         // gap at the sides plus the device's safe area, which only the browser
         // knows, so no spacing token fits.
         'fixed inset-x-2.5 bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))] z-40 flex flex-col gap-3 rounded-xl border border-border bg-background p-4 text-foreground shadow-lg',
-        'sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-80',
+        'sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-88',
       )}
     >
       <h2 className="font-medium text-h3" id={banner.headingId}>

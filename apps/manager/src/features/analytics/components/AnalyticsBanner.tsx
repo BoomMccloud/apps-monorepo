@@ -23,7 +23,7 @@ export const AnalyticsBanner = () => {
         // gap at the sides plus the device's safe area, which only the browser
         // knows, so no spacing token fits.
         'fixed inset-x-2.5 bottom-[calc(0.625rem+env(safe-area-inset-bottom,0px))] z-40 flex flex-col gap-3 rounded-xl p-4 shadow-lg',
-        'xs:inset-x-auto xs:bottom-6 xs:left-6 xs:w-80',
+        'xs:inset-x-auto xs:bottom-6 xs:left-6 xs:w-88',
         floatingWrapperGlassClassName,
       )}
     >

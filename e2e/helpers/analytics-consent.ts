@@ -177,11 +177,13 @@ const computedStyle = (locator: Locator): Promise<Record<string, string>> =>
 const LABEL_ROOM_PX = 8
 
 /**
- * The widths the card takes: a small phone's whole screen, the screens of the
- * two phones the card was judged on (360 and 390 px), and the 320 px corner
- * card that a tablet shows from 768 px up.
+ * The window widths the labels are checked in: a narrow phone (320 px) and the
+ * two phones the card was judged on (360 and 390 px), where the card spans the
+ * screen and its buttons are stacked; the first widths at which the card sits
+ * in its corner, 352 px wide with its buttons side by side (480 px in the
+ * Manager, 640 px in the Explorer); and a tablet (768 px).
  */
-const CARD_WIDTHS_PX = [320, 360, 390, 768] as const
+const CARD_WIDTHS_PX = [320, 360, 390, 480, 640, 768] as const
 
 /**
  * Each button's label keeps room inside its button, on the left and on the
