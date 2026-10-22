@@ -1,11 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type AnalyticsClient,
+  type AnalyticsConsent,
   acceptAnalytics,
   collectionOff,
   collectionOn,
   declineAnalytics,
 } from './analyticsConsent'
+
+/** A client of the SDK's shape that reports the given choice and records each call. */
+const fakeClient = (consent: AnalyticsConsent) => ({
+  config: { token: 'test-key', api_host: 'https://posthog.example' },
+  get_explicit_consent_status: vi.fn(() => consent),
+  get_distinct_id: vi.fn(() => 'visitor'),
+  identify: vi.fn(),
+  register: vi.fn(),
+  opt_in_capturing: vi.fn(),
+  opt_out_capturing: vi.fn(),
+  shutdown: vi.fn(() => Promise.resolve()),
+  reset: vi.fn(),
+  set_config: vi.fn(),
+  _onRemoteConfig: vi.fn(),
+})
 
 describe('collection settings', () => {
   it('switch the same settings off and on', () => {
@@ -32,22 +48,8 @@ describe('collection settings', () => {
 })
 
 describe('declineAnalytics', () => {
-  const fakeClient = () => ({
-    config: { token: 'test-key', api_host: 'https://posthog.example' },
-    get_explicit_consent_status: vi.fn(() => 'denied' as const),
-    get_distinct_id: vi.fn(() => 'visitor'),
-    identify: vi.fn(),
-    register: vi.fn(),
-    opt_in_capturing: vi.fn(),
-    opt_out_capturing: vi.fn(),
-    shutdown: vi.fn(() => Promise.resolve()),
-    reset: vi.fn(),
-    set_config: vi.fn(),
-    _onRemoteConfig: vi.fn(),
-  })
-
   it('opts out before it turns any collection off, so what stopping a part would still send is held back', () => {
-    const client = fakeClient()
+    const client = fakeClient('denied')
 
     declineAnalytics(client satisfies AnalyticsClient)
 
@@ -58,7 +60,7 @@ describe('declineAnalytics', () => {
   })
 
   it('hands the SDK settings that say the project has no product tours, which it stops only on being told so', () => {
-    const client = fakeClient()
+    const client = fakeClient('denied')
 
     declineAnalytics(client satisfies AnalyticsClient)
 
@@ -69,7 +71,7 @@ describe('declineAnalytics', () => {
   })
 
   it('lets go of the requests waiting to be tried again after it opts out and before it resets', () => {
-    const client = fakeClient()
+    const client = fakeClient('denied')
 
     declineAnalytics(client satisfies AnalyticsClient)
 
@@ -81,7 +83,7 @@ describe('declineAnalytics', () => {
   })
 
   it('puts the choice back after the reset that erases it', () => {
-    const client = fakeClient()
+    const client = fakeClient('denied')
 
     declineAnalytics(client)
 
@@ -93,20 +95,6 @@ describe('declineAnalytics', () => {
 })
 
 describe('acceptAnalytics, when the project settings cannot be loaded', () => {
-  const acceptedClient = () => ({
-    config: { token: 'test-key', api_host: 'https://posthog.example' },
-    get_explicit_consent_status: vi.fn(() => 'granted' as const),
-    get_distinct_id: vi.fn(() => 'visitor'),
-    identify: vi.fn(),
-    register: vi.fn(),
-    opt_in_capturing: vi.fn(),
-    opt_out_capturing: vi.fn(),
-    shutdown: vi.fn(() => Promise.resolve()),
-    reset: vi.fn(),
-    set_config: vi.fn(),
-    _onRemoteConfig: vi.fn(),
-  })
-
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -121,7 +109,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
         throw offline
       }),
     )
-    const client = acceptedClient()
+    const client = fakeClient('granted')
 
     await acceptAnalytics(client satisfies AnalyticsClient, { isDev: false })
 
@@ -142,7 +130,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
       'fetch',
       vi.fn(async () => new Response('', { status: 503 })),
     )
-    const client = acceptedClient()
+    const client = fakeClient('granted')
 
     await acceptAnalytics(client, { isDev: false })
 
@@ -162,7 +150,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
       'fetch',
       vi.fn(async () => new Response('<html>', { status: 200 })),
     )
-    const client = acceptedClient()
+    const client = fakeClient('granted')
 
     await acceptAnalytics(client, { isDev: false })
 
@@ -183,7 +171,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
       'fetch',
       vi.fn(async () => Response.json({ supportedCompression: ['gzip'] })),
     )
-    const client = acceptedClient()
+    const client = fakeClient('granted')
 
     await acceptAnalytics(client, { isDev: false })
 
@@ -201,7 +189,7 @@ describe('acceptAnalytics, when the project settings cannot be loaded', () => {
     )
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const client = {
-      ...acceptedClient(),
+      ...fakeClient('granted'),
       get_explicit_consent_status: vi.fn(() => 'denied' as const),
     }
 
