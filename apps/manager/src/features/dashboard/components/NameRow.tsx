@@ -30,7 +30,6 @@ import {
   getFavoriteActionDisabled,
   getFavoriteActionIntent,
 } from '@/features/profile/components/common/favoriteAction.helpers'
-import { RegistryRolesNotice } from '@/features/profile/components/common/RegistryRolesNotice'
 import { imageRecordQuery } from '@/features/profile/service/profileImageRecord'
 import { getThemeVars } from '@/features/profile/utils/themeColor'
 import {
@@ -259,15 +258,9 @@ const NameRowTop = ({
   expiringInDays,
   verified,
   primaryNameAction,
-  renewalProtocol,
 }: Pick<
   NameRowProps,
-  | 'status'
-  | 'isInGrace'
-  | 'expiringInDays'
-  | 'verified'
-  | 'primaryNameAction'
-  | 'renewalProtocol'
+  'status' | 'isInGrace' | 'expiringInDays' | 'verified' | 'primaryNameAction'
 > & {
   readonly nameRoles: readonly NameRole[]
 }) => {
@@ -287,7 +280,7 @@ const NameRowTop = ({
         {status === 'eligibleUpgrade' && <EligibleForUpgradePill />}
         {status === 'ensv1Only' && <Ensv1OnlyPill />}
         {nameRoles.map((role) => (
-          <RolePill key={role} protocol={renewalProtocol} role={role} />
+          <RolePill key={role} role={role} />
         ))}
       </div>
       {isInGrace ? (
@@ -531,7 +524,6 @@ export const NameRow = ({
         isInGrace={isInGrace}
         nameRoles={resolvedNameRoles}
         primaryNameAction={primaryNameAction}
-        renewalProtocol={renewalProtocol}
         status={status}
         verified={verified}
       />
@@ -572,12 +564,6 @@ export const NameRow = ({
         label={label}
         renewalProtocol={renewalProtocol}
       />
-      {renewalProtocol === 'v2' &&
-      !isInGrace &&
-      resolvedNameRoles.includes('manager') &&
-      !resolvedNameRoles.includes('owner') ? (
-        <RegistryRolesNotice name={label} />
-      ) : null}
     </div>
   )
 }

@@ -39,11 +39,7 @@ describe('NameRow', () => {
 
   it('renders each supplied name role', () => {
     const { getByText } = render(
-      <NameRow
-        label="wrapped.eth"
-        nameRoles={['owner', 'manager']}
-        renewalProtocol="v1"
-      />,
+      <NameRow label="wrapped.eth" nameRoles={['owner', 'manager']} />,
     )
 
     expect(getByText('Owner')).toBeInTheDocument()
@@ -55,7 +51,6 @@ describe('NameRow', () => {
       <NameRow
         label="wrapped.eth"
         nameRoles={['owner', 'manager']}
-        renewalProtocol="v1"
         status="eligibleUpgrade"
         verified
       />,
@@ -75,11 +70,7 @@ describe('NameRow', () => {
 
   it('uses the same visual tone for owner and manager roles', () => {
     const { getByText } = render(
-      <NameRow
-        label="wrapped.eth"
-        nameRoles={['owner', 'manager']}
-        renewalProtocol="v1"
-      />,
+      <NameRow label="wrapped.eth" nameRoles={['owner', 'manager']} />,
     )
 
     const ownerBadge = getByText('Owner').closest('span')

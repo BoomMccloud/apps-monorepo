@@ -78,14 +78,11 @@ export const NamesTable = ({
   const { debouncedValue: search } = useDebounce(searchQuery.trim(), {
     delay: 300,
   })
-  const {
-    total: ownedTotal,
-    isError: isNamesError,
-    isPending: isNamesPending,
-  } = useDashboardNames({
+  const ownedNames = useDashboardNames({
     sortField: ownedSortState.field,
     sortDir: ownedSortState.dir,
   })
+  const { total: ownedTotal } = ownedNames
   // The chip counts do not depend on the sort, so they keep one read each.
   const v1Names = useDashboardNames({ version: 'v1' })
   const v2Names = useDashboardNames({ version: 'v2' })
@@ -95,17 +92,17 @@ export const NamesTable = ({
   })
 
   const favoritesCount = favorites.length
-  // A count is shown only once its list has been read.
+  // Filtered totals are exact only after every related name has been read.
   const countOf = (names: {
     readonly total: number
     readonly isPending: boolean
     readonly isError: boolean
-  }) => (names.isPending || names.isError ? undefined : names.total)
-  const ownedCount = countOf({
-    total: ownedTotal,
-    isPending: isNamesPending,
-    isError: isNamesError,
-  })
+    readonly isComplete: boolean
+  }) =>
+    names.isPending || names.isError || !names.isComplete
+      ? undefined
+      : names.total
+  const ownedCount = countOf(ownedNames)
 
   const favoriteLabels = useMemo(
     () => new Set(favorites.map((entry) => entry.name.toLowerCase())),

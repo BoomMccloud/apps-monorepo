@@ -2009,14 +2009,6 @@ msgstr "Registration Period"
 msgid "Registry"
 msgstr "Registry"
 
-#: src/features/dashboard/components/DashboardPills.tsx
-msgid "Registry roles"
-msgstr "Registry roles"
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Registry roles control the name. Record-editing access depends on its resolver."
-msgstr "Registry roles control the name. Record-editing access depends on its resolver."
-
 #: src/features/dashboard/components/NameRow.tsx
 msgid "Remind me"
 msgstr "Remind me"
@@ -2227,10 +2219,6 @@ msgstr "Reserving your name"
 #: src/features/profile/components/dialogs/edit-profile/EditProfileDialogFooter.tsx
 msgid "Resolve errors before previewing changes."
 msgstr "Resolve errors before previewing changes."
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Resolver permissions required"
-msgstr "Resolver permissions required"
 
 #: src/features/migration/components/WalletConfirmationStepsDialog.tsx
 msgid "Restore the managers you chose"
@@ -3108,10 +3096,6 @@ msgstr "View on OpenSea"
 msgid "View profile"
 msgstr "View profile"
 
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "View roles in Explorer"
-msgstr "View roles in Explorer"
-
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Waiting for approval confirmation"
 msgstr "Waiting for approval confirmation"
@@ -3394,10 +3378,6 @@ msgstr "Your card is ready to preview. Minting is optional and you pay the netwo
 #: src/features/migration/components/success/CommemorativeNftMintBanner.tsx
 msgid "Your commemorative NFT"
 msgstr "Your commemorative NFT"
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Your current resolver permissions do not allow editing this profile in Manager. Ask a resolver administrator to review your record permissions."
-msgstr "Your current resolver permissions do not allow editing this profile in Manager. Ask a resolver administrator to review your record permissions."
 
 #: src/features/register-v2/workflow/registering/components/RegistrationCompletionBanner.tsx
 msgid "Your ENS domain has been successfully registered and is now active."

@@ -142,7 +142,7 @@ describe('WEB-656 blind primary-name control oracle', () => {
     expect(
       screen.queryByRole('button', { name: /Primary Name/ }),
     ).not.toBeInTheDocument()
-    for (const label of ['Owner', 'Registry roles']) {
+    for (const label of ['Owner', 'Manager']) {
       expect(screen.getByText(label).closest('button, a')).toBeNull()
     }
   })

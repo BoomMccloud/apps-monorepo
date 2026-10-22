@@ -2014,14 +2014,6 @@ msgstr ""
 msgid "Registry"
 msgstr ""
 
-#: src/features/dashboard/components/DashboardPills.tsx
-msgid "Registry roles"
-msgstr ""
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Registry roles control the name. Record-editing access depends on its resolver."
-msgstr ""
-
 #: src/features/dashboard/components/NameRow.tsx
 msgid "Remind me"
 msgstr ""
@@ -2231,10 +2223,6 @@ msgstr ""
 
 #: src/features/profile/components/dialogs/edit-profile/EditProfileDialogFooter.tsx
 msgid "Resolve errors before previewing changes."
-msgstr ""
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Resolver permissions required"
 msgstr ""
 
 #: src/features/migration/components/WalletConfirmationStepsDialog.tsx
@@ -3113,10 +3101,6 @@ msgstr ""
 msgid "View profile"
 msgstr ""
 
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "View roles in Explorer"
-msgstr ""
-
 #: src/features/register-v2/workflow/registering/lib/txStageMessages.ts
 msgid "Waiting for approval confirmation"
 msgstr ""
@@ -3398,10 +3382,6 @@ msgstr ""
 
 #: src/features/migration/components/success/CommemorativeNftMintBanner.tsx
 msgid "Your commemorative NFT"
-msgstr ""
-
-#: src/features/profile/components/common/RegistryRolesNotice.tsx
-msgid "Your current resolver permissions do not allow editing this profile in Manager. Ask a resolver administrator to review your record permissions."
 msgstr ""
 
 #: src/features/register-v2/workflow/registering/components/RegistrationCompletionBanner.tsx
