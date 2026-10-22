@@ -1,5 +1,6 @@
 import { PRIVACY_POLICY_URL } from '@ens-apps/utils/analyticsConsentWording'
 import { isRecord } from '@ens-apps/utils/isRecord'
+import { isPostHogStorageKey } from '@ens-apps/utils/testing/postHogStorageKey'
 import {
   type BrowserContext,
   type Cookie,
@@ -105,9 +106,6 @@ export const storedConsent = async (
   context: BrowserContext,
 ): Promise<string | undefined> => (await consentCookie(context))?.value
 
-/** PostHog keeps its visitor id under `ph_<key>_posthog`; its own consent key under `__ph_opt_in_out_<key>`. */
-const isPostHogKey = (key: string): boolean => /^(__)?ph_/.test(key)
-
 /** Every PostHog entry the browser holds, in cookies or either storage. */
 const postHogStorageKeys = async (page: Page): Promise<string[]> => {
   const cookieNames = (await page.context().cookies()).map(
@@ -117,7 +115,7 @@ const postHogStorageKeys = async (page: Page): Promise<string[]> => {
     ...Object.keys(window.localStorage),
     ...Object.keys(window.sessionStorage),
   ])
-  return [...cookieNames, ...storageKeys].filter(isPostHogKey)
+  return [...cookieNames, ...storageKeys].filter(isPostHogStorageKey)
 }
 
 export const expectNoPostHogStorage = async (page: Page): Promise<void> => {

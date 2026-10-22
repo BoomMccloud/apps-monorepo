@@ -3,6 +3,7 @@ import { urlOf } from '../inputUrl'
 import { POSTHOG_PROJECT_SETTINGS, postHogAnswerFor } from './postHogAnswers'
 import { isGzip, jsonTextOf } from './postHogBody'
 import { eventsIn, type SentEvent } from './postHogEvents'
+import { isPostHogStorageKey } from './postHogStorageKey'
 
 /**
  * Test support for the real PostHog SDK: the network it sends on, replaced so
@@ -233,4 +234,4 @@ export const postHogStorage = (): string[] =>
     ...document.cookie
       .split(';')
       .map((cookie) => cookie.split('=')[0]?.trim() ?? ''),
-  ].filter((key) => /^(__)?ph_/.test(key))
+  ].filter(isPostHogStorageKey)
