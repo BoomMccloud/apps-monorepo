@@ -34,8 +34,8 @@ export const AnalyticsBanner = () => {
           <p key={paragraph}>{paragraph}</p>
         ))}
       </div>
-      {/* Stacked, so that each button has the card's whole width for its label: side by side, "Accept Analytics" filled a 140 px button from edge to edge. */}
-      <div className="flex flex-col gap-2">
+      {/* Stacked on a phone, side by side from sm */}
+      <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2">
         <Button
           className="w-full"
           onClick={banner.accept.press}
