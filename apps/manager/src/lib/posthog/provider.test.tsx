@@ -376,6 +376,44 @@ describe('PHProvider', () => {
     })
   })
 
+  describe('a wallet restored from an earlier visit, after Accept', () => {
+    beforeEach(() => {
+      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+      vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
+    })
+
+    it('is not identified while wagmi still restores it, though wagmi reports its address', () => {
+      restoring(WALLET)
+      renderProvider()
+
+      expect(posthog.identify).not.toHaveBeenCalled()
+    })
+
+    it('is identified once wagmi confirms it', () => {
+      restoring(WALLET)
+      const { rerenderProvider } = renderProvider()
+
+      connected(WALLET)
+      rerenderProvider()
+
+      expect(posthog.identify).toHaveBeenCalledExactlyOnceWith(
+        WALLET,
+        { address: WALLET },
+        { initial_address: WALLET },
+      )
+    })
+
+    it('is never identified when the restore ends with no wallet', () => {
+      restoring(WALLET)
+      const { rerenderProvider } = renderProvider()
+
+      connected(undefined)
+      rerenderProvider()
+
+      expect(posthog.identify).not.toHaveBeenCalled()
+    })
+  })
+
   it('reports failed transaction runs until unmount', () => {
     const unsubscribe = vi.fn()
     const unsubscribeLive = vi.fn()

@@ -24,6 +24,11 @@ export type WagmiHooks = {
     readonly address?: Address | undefined
     readonly chainId?: number | undefined
     readonly connector?: { readonly name: string } | undefined
+    readonly status:
+      | 'connecting'
+      | 'reconnecting'
+      | 'connected'
+      | 'disconnected'
   }
   readonly useConnectionEffect: (callbacks: {
     readonly onConnect?: (event: ConnectionEvent) => void

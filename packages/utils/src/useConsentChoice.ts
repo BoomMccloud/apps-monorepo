@@ -101,7 +101,7 @@ export const useConsentChoice = ({
   bootstrapSwitches,
   onVisitorReset,
 }: ConsentChoiceOptions): AnalyticsConsentValue => {
-  const { address, chainId, connector } = wagmi.useConnection()
+  const { address, chainId, connector, status } = wagmi.useConnection()
   const [consent, setConsent] = useState<AnalyticsConsentState>('unknown')
   const [supportChat] = useState(() =>
     createSupportChat({ appId: intercomAppId, analytics: posthog }),
@@ -121,10 +121,15 @@ export const useConsentChoice = ({
     supportChat.bootSupportChat(started)
   }, [isReady, projectKey, apiHost, isDev, bootstrapSwitches, supportChat])
 
+  // Only status says the wallet is confirmed: while wagmi restores the stored
+  // connection ('reconnecting') it reports the address it stored last time, and
+  // its isConnected is then true, since wagmi sets it to !!address.
   useWalletIdentity(
     posthog,
     consent,
-    address ? { address, chainId, connectorName: connector?.name } : null,
+    status === 'connected' && address
+      ? { address, chainId, connectorName: connector?.name }
+      : null,
     supportChat.relinkSupportChat,
   )
 

@@ -59,11 +59,22 @@ const wagmi = {
   useConnectionEffect: vi.fn<WagmiHooks['useConnectionEffect']>(),
 }
 
+/** wagmi's report once it has settled: a wallet connected, or none. */
 const connected = (address: `0x${string}` | undefined) =>
   wagmi.useConnection.mockReturnValue({
     address,
     chainId: 1,
     connector: { name: 'test-wallet' },
+    status: address ? 'connected' : 'disconnected',
+  })
+
+/** wagmi's report while it restores the stored connection: the address it stored last time. */
+const restoring = (address: `0x${string}`) =>
+  wagmi.useConnection.mockReturnValue({
+    address,
+    chainId: 1,
+    connector: { name: 'test-wallet' },
+    status: 'reconnecting',
   })
 
 const connectionCallbacks = () => {
@@ -313,6 +324,46 @@ describe('useConsentChoice', () => {
       )
       // Tied once on Accept, and again once the wallet was identified.
       expect(update).toHaveBeenCalledTimes(2)
+    })
+
+    describe('restored from an earlier visit, after Accept', () => {
+      beforeEach(() => {
+        vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+        vi.mocked(posthog.get_explicit_consent_status).mockReturnValue(
+          'granted',
+        )
+      })
+
+      it('is not identified while wagmi still restores it, though wagmi reports its address', () => {
+        restoring(WALLET)
+        renderChoice()
+
+        expect(posthog.identify).not.toHaveBeenCalled()
+      })
+
+      it('is identified once wagmi confirms it', () => {
+        restoring(WALLET)
+        const { rerender } = renderChoice()
+
+        connected(WALLET)
+        rerender()
+
+        expect(posthog.identify).toHaveBeenCalledExactlyOnceWith(
+          WALLET,
+          { address: WALLET },
+          { initial_address: WALLET },
+        )
+      })
+
+      it('is never identified when the restore ends with no wallet', () => {
+        restoring(WALLET)
+        const { rerender } = renderChoice()
+
+        connected(undefined)
+        rerender()
+
+        expect(posthog.identify).not.toHaveBeenCalled()
+      })
     })
 
     it('on disconnect, is recorded, then the visitor is forgotten, the choice kept and the chat tied to the new visitor', () => {

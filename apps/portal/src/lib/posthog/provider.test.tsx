@@ -36,7 +36,7 @@ vi.mock('@ens-apps/utils/analyticsConsent', async (importOriginal) => ({
   startAnalyticsChoice: vi.fn(() => 'pending'),
 }))
 vi.mock('wagmi', () => ({
-  useConnection: vi.fn(() => ({ address: undefined })),
+  useConnection: vi.fn(() => ({ address: undefined, status: 'disconnected' })),
   useConnectionEffect: vi.fn(),
 }))
 
