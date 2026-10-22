@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
+  type AnalyticsClient,
   type AnalyticsConsent,
   acceptAnalytics,
   analyticsStartupConfig,
+  type ConnectedWallet,
   declineAnalytics,
+  followStoredChoice,
+  identifyWallet,
 } from './analyticsConsent'
 import type {
   AnalyticsConsentState,
@@ -13,9 +17,53 @@ import { LEGACY_POSTHOG_PROJECT_KEYS } from './analyticsLegacyStorage'
 import { startAnalyticsSdk } from './analyticsStart'
 import posthog from './postHogClient'
 import { createSupportChat } from './supportChat'
-import { useFollowedChoice } from './useFollowedChoice'
 import { useWalletAnalytics, type WagmiHooks } from './useWalletAnalytics'
-import { useWalletIdentity } from './useWalletIdentity'
+
+/**
+ * Once the SDK has started, follow a choice made in another tab or another
+ * ENS app (`followStoredChoice`), and hand each one to the page.
+ */
+const useFollowedChoice = (
+  client: AnalyticsClient,
+  isStarted: boolean,
+  isDev: boolean,
+  onChange: (consent: AnalyticsConsent) => void,
+): void => {
+  // The page's latest handler, read when a change arrives, so the follower
+  // does not restart each time the page renders a new one.
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    onChangeRef.current = onChange
+  })
+  useEffect(() => {
+    if (!isStarted) return
+    return followStoredChoice(client, {
+      isDev,
+      onChange: (consent) => onChangeRef.current(consent),
+    })
+  }, [client, isStarted, isDev])
+}
+
+/**
+ * After Accept, the visitor is identified by their wallet, whether it was
+ * connected before the press, connected later, or restored on a later visit.
+ * `onIdentified` runs after each identify, for what follows the visitor's id.
+ */
+const useWalletIdentity = (
+  client: AnalyticsClient,
+  consent: AnalyticsConsentState,
+  wallet: ConnectedWallet | null,
+  onIdentified?: () => void,
+): void => {
+  const address = wallet?.address
+  const chainId = wallet?.chainId
+  const connectorName = wallet?.connectorName
+  useEffect(() => {
+    if (consent !== 'granted' || !address) return
+    identifyWallet(client, { address, chainId, connectorName })
+    onIdentified?.()
+  }, [client, consent, address, chainId, connectorName, onIdentified])
+}
 
 type ConsentChoiceOptions = {
   /** The app's own wagmi hooks, which this package takes rather than holds. */
