@@ -1,3 +1,4 @@
+import { describeAnalyticsNotice } from '@ens-apps/utils/testing/describeAnalyticsNotice'
 import { describePrivacySettingsPage } from '@ens-apps/utils/testing/describePrivacySettingsPage'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -18,7 +19,11 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ),
 }))
 
-describePrivacySettingsPage({
-  Page: PrivacySettingsPage,
-  kit: { render, screen, press: (element) => userEvent.setup().click(element) },
-})
+const kit = {
+  render,
+  screen,
+  press: (element: HTMLElement) => userEvent.setup().click(element),
+}
+
+describeAnalyticsNotice({ Notice: PrivacySettingsPage, kit })
+describePrivacySettingsPage({ Page: PrivacySettingsPage, kit })
