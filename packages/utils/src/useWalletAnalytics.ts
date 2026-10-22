@@ -12,6 +12,8 @@ type ConnectionEvent = {
   readonly address: Address
   readonly chainId: number
   readonly connector: { readonly name: string }
+  /** Whether wagmi restored a stored connection, rather than the visitor connecting. */
+  readonly isReconnected: boolean
 }
 
 /**
@@ -74,6 +76,7 @@ export const useWalletAnalytics = ({
         wallet_address: event.address,
         chain_id: event.chainId,
         wallet_connector: event.connector.name,
+        is_reconnected: event.isReconnected,
       })
     } catch (error) {
       console.warn('[posthog] wallet:connect failed', error)

@@ -83,11 +83,13 @@ const connectionCallbacks = () => {
   return callbacks
 }
 
-const connectWallet = () =>
+/** A wallet connecting, as wagmi reports it: `isReconnected` when it restored a stored connection. */
+const connectWallet = ({ isReconnected = false } = {}) =>
   connectionCallbacks().onConnect?.({
     address: WALLET,
     chainId: 1,
     connector: { name: 'test-wallet' },
+    isReconnected,
   })
 
 const renderChoice = (
@@ -301,12 +303,28 @@ describe('useConsentChoice', () => {
         wallet_address: WALLET,
         chain_id: 1,
         wallet_connector: 'test-wallet',
+        is_reconnected: false,
       })
       expect(
         vi.mocked(posthog.identify).mock.invocationCallOrder[0],
       ).toBeLessThan(
         vi.mocked(posthog.capture).mock.invocationCallOrder[0] ?? 0,
       )
+    })
+
+    it('records a connect that restored a stored connection as one', () => {
+      vi.mocked(startAnalyticsChoice).mockReturnValue('granted')
+      vi.mocked(posthog.get_explicit_consent_status).mockReturnValue('granted')
+      renderChoice()
+
+      connectWallet({ isReconnected: true })
+
+      expect(posthog.capture).toHaveBeenCalledWith('wallet:connect', {
+        wallet_address: WALLET,
+        chain_id: 1,
+        wallet_connector: 'test-wallet',
+        is_reconnected: true,
+      })
     })
 
     it('is identified when it was already connected as the visitor accepts', () => {

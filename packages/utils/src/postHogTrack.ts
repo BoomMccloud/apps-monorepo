@@ -15,6 +15,8 @@ export type SharedPostHogEvents = {
     readonly wallet_address: string
     readonly chain_id: number
     readonly wallet_connector: string
+    /** True when wagmi restored a stored connection, false for a connect the visitor made. */
+    readonly is_reconnected: boolean
   }
 
   readonly 'wallet:disconnect': undefined
