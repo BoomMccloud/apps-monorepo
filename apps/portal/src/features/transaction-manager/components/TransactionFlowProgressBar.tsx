@@ -11,7 +11,8 @@ type TransactionFlowProgressBarProps = {
   readonly activeTransactionsMap: Map<string, TransactionMachineActor>
 }
 
-const ARROW_OFFSET_PERCENT = 9
+// Bar padding + icon-wrapper padding + half the size-3.5 icon.
+const ICON_CENTER_INSET_REM = 0.25 + 0.25 + 0.875 / 2
 
 export const TransactionFlowProgressBar = ({
   transactions,
@@ -49,9 +50,11 @@ export const TransactionFlowProgressBar = ({
   const baseProgressPercent =
     totalSegments > 0 ? (filledSegments / totalSegments) * 100 : 0
 
-  const progressPercent = allSuccess
-    ? baseProgressPercent
-    : Math.min(baseProgressPercent + ARROW_OFFSET_PERCENT, 100)
+  // Interpolate between the first and last icon centers, rather than the bar
+  // edges, so each half-step ends midway between consecutive icons.
+  const progressWidth = allSuccess
+    ? '100%'
+    : `calc(${baseProgressPercent}% + ${ICON_CENTER_INSET_REM * (1 - baseProgressPercent / 50)}rem)`
 
   const fillColor = match({ hasError, allSuccess })
     .with({ hasError: true }, () => 'bg-garnet-100')
@@ -71,7 +74,7 @@ export const TransactionFlowProgressBar = ({
           'absolute inset-y-0 left-0 rounded-full transition-all duration-300 h-full',
           fillColor,
         )}
-        style={{ width: `${progressPercent}%` }}
+        style={{ width: progressWidth }}
       />
       {transactions.map((transaction) => (
         <div
