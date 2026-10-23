@@ -63,6 +63,7 @@ export const TransactionFlowProgressBar = ({
       className={cn(
         'relative flex justify-between gap-1 rounded-full w-full h-8 p-1 items-center overflow-hidden',
         'bg-accent',
+        allSuccess && 'text-peridot-900',
       )}
     >
       <div
@@ -72,18 +73,15 @@ export const TransactionFlowProgressBar = ({
         )}
         style={{ width: `${progressPercent}%` }}
       />
-      {transactions.map((transaction, index) => (
+      {transactions.map((transaction) => (
         <div
           key={transaction.id}
-          className={cn(
-            'relative z-10 flex flex-1 min-w-0 items-center rounded-full p-1',
-            index === 0 ? 'justify-start' : 'justify-center',
-          )}
+          className="relative z-10 flex shrink-0 items-center rounded-full p-1"
         >
           <ArrowRight className="size-3.5 shrink-0" />
         </div>
       ))}
-      <div className="relative z-10 flex flex-1 min-w-0 items-center justify-end rounded-full p-1">
+      <div className="relative z-10 flex shrink-0 items-center rounded-full p-1">
         {hasError ? (
           <XCircle className="size-3.5 shrink-0" />
         ) : (
