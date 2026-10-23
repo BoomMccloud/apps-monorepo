@@ -69,6 +69,14 @@ msgstr "{count, plural, one {# subname} other {# subnames}}"
 msgid "{count, plural, one {Approve # name} other {Approve # names}}"
 msgstr "{count, plural, one {Approve # name} other {Approve # names}}"
 
+#: src/features/migration/components/WalletConfirmationStepsDialog.tsx
+msgid "{count, plural, one {Copy records for # name} other {Copy records for # names}}"
+msgstr "{count, plural, one {Copy records for # name} other {Copy records for # names}}"
+
+#: src/features/migration/components/GameStep.tsx
+msgid "{count, plural, one {Copying records for # name in your wallet...} other {Copying records for # names in your wallet...}}"
+msgstr "{count, plural, one {Copying records for # name in your wallet...} other {Copying records for # names in your wallet...}}"
+
 #: src/features/bulk-renew/components/BulkRenewDialog.tsx
 msgid "{count, plural, one {Renew # name for} other {Renew # names for}}"
 msgstr "{count, plural, one {Renew # name for} other {Renew # names for}}"
@@ -975,10 +983,6 @@ msgstr "Download WebP"
 #: src/features/migration/components/success/CommemorativeNftCard.tsx
 msgid "Downloading artwork…"
 msgstr "Downloading artwork…"
-
-#: src/features/migration/components/WalletConfirmationStepsDialog.tsx
-msgid "Each batch of your names is upgraded in a single transaction. If any part of a batch fails, no changes from that batch are applied. Earlier completed batches and permissions stay in place. Nothing is signed automatically, so review every request in your wallet."
-msgstr "Each batch of your names is upgraded in a single transaction. If any part of a batch fails, no changes from that batch are applied. Earlier completed batches and permissions stay in place. Nothing is signed automatically, so review every request in your wallet."
 
 #: src/features/profile/components/dialogs/edit-profile/EditProfileDialog.tsx
 #: src/features/profile/components/dialogs/edit-profile/EditProfilePreviewActions.tsx
@@ -3570,6 +3574,10 @@ msgstr "Your name was registered, but we couldn't set it as your primary name. Y
 msgid "Your names are ready to upgrade"
 msgstr "Your names are ready to upgrade"
 
+#: src/features/migration/components/WalletConfirmationStepsDialog.tsx
+msgid "Your names are upgraded one batch at a time. If an upgrade transaction fails, none of the names in that batch change. Earlier batches and permissions stay in place. Nothing is signed automatically, so review every request in your wallet."
+msgstr "Your names are upgraded one batch at a time. If an upgrade transaction fails, none of the names in that batch change. Earlier batches and permissions stay in place. Nothing is signed automatically, so review every request in your wallet."
+
 #: src/features/migration/components/SelectNamesStep.tsx
 msgid "Your names can't be upgraded"
 msgstr "Your names can't be upgraded"
@@ -3651,6 +3659,14 @@ msgstr "Your wallet address can only have one primary ENS name, which will displ
 msgid "Your wallet address can only have one primary name, which will display instead of your wallet address across apps. You'll be prompted to confirm this additional transaction after registration."
 msgstr "Your wallet address can only have one primary name, which will display instead of your wallet address across apps. You'll be prompted to confirm this additional transaction after registration."
 
+#: src/features/migration/service/migrationPreparationError.ts
+msgid "Your wallet and your smart account both lost permission to update your names' records. Restore the permission in your profile, then try again."
+msgstr "Your wallet and your smart account both lost permission to update your names' records. Restore the permission in your profile, then try again."
+
+#: src/features/migration/pages/MigrationPage.tsx
+msgid "Your wallet and your smart account both lost permission to update your names' records. Restore the permission in your profile, then try again. No names were changed."
+msgstr "Your wallet and your smart account both lost permission to update your names' records. Restore the permission in your profile, then try again. No names were changed."
+
 #: src/features/dashboard/components/ChoosePrimaryNameDialog.tsx
 #: src/features/profile/components/dialogs/edit-profile/useEditProfileDialogSave.ts
 msgid "Your wallet does not have permission to change the resolver for this name. For a subname, the parent name’s owner controls this."
@@ -3659,6 +3675,10 @@ msgstr "Your wallet does not have permission to change the resolver for this nam
 #: src/components/HcaFundingConfirmDialog.tsx
 msgid "Your wallet has already given your smart account an allowance that covers this, so you won't be asked to approve it: the amount moves when you sign."
 msgstr "Your wallet has already given your smart account an allowance that covers this, so you won't be asked to approve it: the amount moves when you sign."
+
+#: src/features/migration/components/WalletConfirmationStepsDialog.tsx
+msgid "Your wallet sends this one, because your temporary account no longer has permission to update these records."
+msgstr "Your wallet sends this one, because your temporary account no longer has permission to update these records."
 
 #: src/features/migration/components/SelectNamesStepFooter.tsx
 msgid "Your wallet shows the final fee before you approve."
