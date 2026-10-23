@@ -7,14 +7,14 @@ import type { RenewalProtocol } from '../utils/renewalProtocol'
 import { renewalUiMachine } from './renewalUi.machine'
 
 const RenewalUiContext = createContext<{
-  uiActor: Actor<typeof renewalUiMachine>
-  label: string
-  currentExpiry: bigint
-  protocol: RenewalProtocol
-  fundingPrompt: HcaFundingPrompt | null
-  isFundingDecisionPending: boolean
-  approveFunding: () => void
-  declineFunding: () => void
+  readonly uiActor: Actor<typeof renewalUiMachine>
+  readonly label: string
+  readonly currentExpiry: bigint
+  readonly protocol: RenewalProtocol
+  readonly fundingPrompt: HcaFundingPrompt | null
+  readonly isFundingDecisionPending: boolean
+  readonly approveFunding: () => void
+  readonly declineFunding: () => void
 } | null>(null)
 
 export type RenewalUiActor = ActorRefFrom<typeof renewalUiMachine>

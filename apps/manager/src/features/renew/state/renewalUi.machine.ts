@@ -42,7 +42,7 @@ type SubmissionData = {
 
   /** Formatted base price */
   priceNumber: number
-  displayedWalletDebitUsdc?: bigint
+  readonly displayedWalletDebitUsdc?: bigint
 
   /**
    * The account context's signer. `rhinestone` selects the intent route (the
@@ -124,7 +124,7 @@ export const renewalUiMachine = setup({
 
           /** Formatted base price */
           priceNumber: number
-          displayedWalletDebitUsdc?: bigint
+          readonly displayedWalletDebitUsdc?: bigint
         }
       | { type: 'renewal.submitted'; txId: string }
       | { type: 'renewal.signing' }

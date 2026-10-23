@@ -15,11 +15,11 @@ export const PaymentDialogBase = ({
   registrationLayout = false,
   isDismissible = true,
 }: {
-  open: boolean
-  title?: string
-  onOpenChange: (open: boolean) => void
-  children: React.ReactNode
-  registrationLayout?: boolean
+  readonly open: boolean
+  readonly title?: string
+  readonly onOpenChange: (open: boolean) => void
+  readonly children: React.ReactNode
+  readonly registrationLayout?: boolean
   readonly isDismissible?: boolean
 }) => {
   const panelRef = useRef<HTMLDivElement>(null)

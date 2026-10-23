@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { match, P } from 'ts-pattern'
 import { cn } from '@/lib/utils'
 import type { PaymentFundingSummary } from '../payment.types'
 import { PaymentBreakdown } from './PaymentBreakdown'
@@ -27,11 +28,10 @@ export const PaymentReceipt = ({
       <span
         className={cn(
           'wrap-anywhere w-full min-w-0 whitespace-normal text-center font-medium font-semi-mono text-ens-gray leading-ens-none tracking-[-0.8px]',
-          length > 43
-            ? 'text-[22px]'
-            : length >= 10
-              ? 'text-[32px]'
-              : 'text-[40px]',
+          match(length)
+            .with(P.number.gt(43), () => 'text-[22px]')
+            .with(P.number.gte(10), () => 'text-[32px]')
+            .otherwise(() => 'text-[40px]'),
         )}
         title={domainName}
       >
