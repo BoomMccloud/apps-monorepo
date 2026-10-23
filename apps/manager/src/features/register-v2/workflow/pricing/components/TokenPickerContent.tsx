@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import { profileReverseNameQuery } from '@/features/profile/service/profileReverseName'
 import { PaymentActionButton } from '@/features/shared/payment/components/PaymentActionButton'
 import { PaymentReceipt } from '@/features/shared/payment/components/PaymentReceipt'
-import type { PaymentFundingSummary } from '@/features/shared/payment/types'
+import type { PaymentFundingSummary } from '@/features/shared/payment/payment.types'
 import { getPaymentBreakdownFigures } from '@/features/shared/payment/utils/paymentBreakdownFigures'
 import { STABLECOINS } from '@/features/shared/registration/nameUtils'
 import { ownedNamesCountQueryOptions } from '@/features/shared/service/ownedNamesCount'
@@ -623,11 +623,11 @@ const isPaymentFullyCovered = ({
   hasBudgetQuoteFailed,
   pricingLoading,
 }: {
-  funding: PaymentFundingSummary | undefined
-  isQuotingFunding: boolean
-  isQuoteStale: boolean
-  hasBudgetQuoteFailed: boolean
-  pricingLoading: boolean
+  readonly funding: PaymentFundingSummary | undefined
+  readonly isQuotingFunding: boolean
+  readonly isQuoteStale: boolean
+  readonly hasBudgetQuoteFailed: boolean
+  readonly pricingLoading: boolean
 }) =>
   !!funding &&
   funding.hcaCredit > 0 &&
@@ -639,16 +639,16 @@ const isPaymentFullyCovered = ({
   !pricingLoading
 
 const canSubmitPayment = (state: {
-  isConnected: boolean
-  canProceed: boolean
-  selectedToken: TOKEN_SYMBOL | undefined
-  pricingLoading: boolean
-  isQuotingFunding: boolean
-  isQuoteStale: boolean
-  isFullyCovered: boolean
-  hasBalances: boolean
-  hasSufficientBalanceForSelectedCoin: boolean
-  hasBudgetQuoteFailed: boolean
+  readonly isConnected: boolean
+  readonly canProceed: boolean
+  readonly selectedToken: TOKEN_SYMBOL | undefined
+  readonly pricingLoading: boolean
+  readonly isQuotingFunding: boolean
+  readonly isQuoteStale: boolean
+  readonly isFullyCovered: boolean
+  readonly hasBalances: boolean
+  readonly hasSufficientBalanceForSelectedCoin: boolean
+  readonly hasBudgetQuoteFailed: boolean
 }) =>
   state.isConnected &&
   state.canProceed &&

@@ -1,4 +1,4 @@
-import type { PaymentFundingSummary } from '@/features/shared/payment/types'
+import type { PaymentFundingSummary } from '@/features/shared/payment/payment.types'
 import { type RENEWAL_TOKEN, type TOKEN_SYMBOL, TOKENS } from '@/lib/tokens'
 import { decimalBigintToNumber } from '@/utils/formatting/decimalBigintToNumber'
 import { getDisplayedRenewalWalletDebit } from './renewalPaymentConsent'

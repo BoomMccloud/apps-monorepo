@@ -119,6 +119,8 @@ export interface SubmitHcaRenewalParams {
   readonly confirmFunding?: (
     prompt: HcaFundingPrompt,
   ) => Promise<boolean> | boolean
+  /** An abandoned attempt declines every prompt, confirmed maximum or not. */
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -314,6 +316,7 @@ export async function submitHcaRenewal(
     onSigningRequested,
     confirmFunding,
     displayedWalletDebitUsdc,
+    signal,
   } = params
 
   const single = items.length === 1 ? items[0] : undefined
@@ -371,6 +374,7 @@ export async function submitHcaRenewal(
     ...(confirmFunding || displayedWalletDebitUsdc !== undefined
       ? {
           confirmFunding: async (prompt: HcaFundingPrompt) => {
+            if (signal?.aborted) return false
             if (
               isRenewalFundingWithinConsent(
                 prompt,

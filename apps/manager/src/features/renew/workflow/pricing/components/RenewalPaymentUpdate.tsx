@@ -1,5 +1,6 @@
 import type { HcaFundingPrompt } from '@ens-apps/transaction-manager'
 import { Trans } from '@lingui/react/macro'
+import { match } from 'ts-pattern'
 import { Button } from '@/components/ui/button'
 import { computeRenewalFunding } from '@/features/renew/utils/renewalFunding'
 import { PaymentActionButton } from '@/features/shared/payment/components/PaymentActionButton'
@@ -63,13 +64,14 @@ export const RenewalPaymentUpdate = ({
           isLoading={isSigning}
           onClick={onApprove}
         >
-          {isSigning ? (
-            <Trans>Sign in wallet</Trans>
-          ) : prompt.requiresPermit ? (
-            <Trans>Sign payment approval</Trans>
-          ) : (
-            <Trans>Sign renewal</Trans>
-          )}
+          {match({ isSigning, requiresPermit: prompt.requiresPermit })
+            .with({ isSigning: true }, () => <Trans>Sign in wallet</Trans>)
+            .with({ requiresPermit: true }, () => (
+              <Trans>Sign payment approval</Trans>
+            ))
+            .otherwise(() => (
+              <Trans>Sign renewal</Trans>
+            ))}
         </PaymentActionButton>
         {!isSigning && (
           <Button onClick={onDecline} variant="ghost">

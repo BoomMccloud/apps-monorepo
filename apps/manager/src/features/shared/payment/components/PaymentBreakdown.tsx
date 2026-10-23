@@ -1,6 +1,6 @@
 import { Trans } from '@lingui/react/macro'
 import { formatUsd } from '@/utils/formatting/formatUsdCeil'
-import type { PaymentFundingSummary } from '../types'
+import type { PaymentFundingSummary } from '../payment.types'
 import { getPaymentBreakdownFigures } from '../utils/paymentBreakdownFigures'
 import { AccountCreditRow } from './AccountCreditRow'
 

@@ -56,7 +56,7 @@ const RenewalDialogPreview = ({
       {isUpdated ? (
         <RenewalPaymentUpdate
           isSigning={phase === 'updated-signing'}
-          label="🔥🔥🔥abc"
+          label="example"
           onApprove={() => setPhase('updated-signing')}
           onDecline={() => setPhase('ready')}
           prompt={updatedPrompt}
@@ -90,7 +90,7 @@ const RenewalDialogPreview = ({
           isConnected
           isLoadingBalances={false}
           isQuotingFunding={phase === 'quoting'}
-          label="🔥🔥🔥abc"
+          label="example"
           networkFeeTooltip={
             <Trans>
               An estimate of what the transaction that renews your name will

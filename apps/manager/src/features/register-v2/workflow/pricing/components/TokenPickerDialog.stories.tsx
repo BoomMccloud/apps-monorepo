@@ -5,7 +5,7 @@ import { DAI, USDCIcon, USDTIcon } from '@/components/atoms/StableCoinsIcons'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { PaymentDialogBase } from '@/features/shared/payment/components/PaymentDialog'
-import type { PaymentFundingSummary } from '@/features/shared/payment/types'
+import type { PaymentFundingSummary } from '@/features/shared/payment/payment.types'
 import type { StablecoinBalance } from '@/lib/smart-account'
 import type { SUPPORTED_TOKEN } from '@/lib/tokens'
 import { cn } from '@/lib/utils'
@@ -500,7 +500,7 @@ export const FixtureEmptyMethods: Story = {
 /** Real registration modal with deterministic funding data, no wallet connection needed. */
 export const FullyCovered: Story = {
   args: {
-    label: '🔥🔥🔥abc',
+    label: 'example',
     pricingData: 8.8,
     stablecoinBalances: [],
     funding: {
@@ -516,7 +516,7 @@ export const FullyCovered: Story = {
 
 export const PartiallyCovered: Story = {
   args: {
-    label: '🔥🔥🔥abc',
+    label: 'example',
     initialSelectedToken: 'USDC',
     pricingData: 8.8,
     stablecoinBalances: [

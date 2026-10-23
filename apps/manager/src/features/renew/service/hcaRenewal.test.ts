@@ -47,6 +47,10 @@ vi.mock('../data/queries/renewPricing.query', () => ({
   getRenewPrice: mocks.getRenewPrice,
 }))
 
+import type {
+  planHcaIntentFunding,
+  RhinestoneSigner,
+} from '@ens-apps/transaction-manager'
 import { TOKENS } from '@/lib/tokens'
 import {
   HCA_RENEWAL_INTENT_GAS_LIMIT_BASE,
@@ -67,10 +71,12 @@ const walletClient = {
 } as unknown as WalletClient
 
 /** The signer the account context holds: an HCA with a scoped session on it. */
+type FundingParams = Parameters<typeof planHcaIntentFunding>[0]
+
 const signer = {
   type: 'rhinestone',
   session: { permissions: { calls: [] } },
-} as any
+} as unknown as RhinestoneSigner
 
 const params = {
   items: [{ label: 'alice', duration: 31_536_000n }],
@@ -98,10 +104,12 @@ beforeEach(() => {
   mocks.getSmartAccountAddress.mockReturnValue(HCA)
   mocks.startTransaction.mockReturnValue('tx-1')
   mocks.waitForTransaction.mockResolvedValue(undefined)
-  mocks.planHcaIntentFunding.mockImplementation(async ({ calls }: any) => ({
-    calls,
-    quotedFeeUsdc: 900_000n,
-  }))
+  mocks.planHcaIntentFunding.mockImplementation(
+    async ({ calls }: FundingParams) => ({
+      calls,
+      quotedFeeUsdc: 900_000n,
+    }),
+  )
 })
 
 describe('submitHcaRenewal', () => {
@@ -367,8 +375,8 @@ describe('single renewal confirmed payment', () => {
   const railWith = (update = {}) => {
     signed.mockClear()
     mocks.planHcaIntentFunding.mockImplementation(
-      async ({ calls, confirmFunding }: any) => {
-        const approved = await confirmFunding({ ...prompt, ...update })
+      async ({ calls, confirmFunding }: FundingParams) => {
+        const approved = await confirmFunding?.({ ...prompt, ...update })
         if (!approved) throw new Error('Funding declined')
         signed()
         return { calls, quotedFeeUsdc: 10000n }
@@ -455,10 +463,25 @@ describe('single renewal confirmed payment', () => {
     expect(confirmFunding).not.toHaveBeenCalled()
     expect(mocks.startTransaction).toHaveBeenCalledOnce()
   })
+  it('declines an attempt abandoned before the quote even within the maximum', async () => {
+    railWith()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      submitHcaRenewal({
+        ...params,
+        displayedWalletDebitUsdc: 6690000n,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('Funding declined')
+    expect(signed).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+  })
+
   it('does not submit the renewal when the payment signature is rejected', async () => {
     mocks.planHcaIntentFunding.mockImplementation(
-      async ({ confirmFunding }: any) => {
-        await confirmFunding(prompt)
+      async ({ confirmFunding }: FundingParams) => {
+        await confirmFunding?.(prompt)
         throw new Error('User rejected signature')
       },
     )

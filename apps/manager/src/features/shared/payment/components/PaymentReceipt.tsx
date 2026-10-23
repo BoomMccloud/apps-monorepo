@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import type { PaymentFundingSummary } from '../types'
+import type { PaymentFundingSummary } from '../payment.types'
 import { PaymentBreakdown } from './PaymentBreakdown'
 
 /** The same name and receipt layout for initial and updated payment quotes. */

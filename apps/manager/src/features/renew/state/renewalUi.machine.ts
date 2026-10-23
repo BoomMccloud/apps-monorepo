@@ -169,6 +169,7 @@ export const renewalUiMachine = setup({
         (
           await submitHcaRenewal({
             ...input,
+            signal,
             confirmFunding: (prompt) =>
               signal.aborted
                 ? false
