@@ -28,6 +28,7 @@ export const PaymentReceipt = ({
       <span
         className={cn(
           'wrap-anywhere w-full min-w-0 whitespace-normal text-center font-medium font-semi-mono text-ens-gray leading-ens-none tracking-[-0.8px]',
+          // Figma name sizes by length; no type-scale token matches them.
           match(length)
             .with(P.number.gt(43), () => 'text-[22px]')
             .with(P.number.gte(10), () => 'text-[32px]')
