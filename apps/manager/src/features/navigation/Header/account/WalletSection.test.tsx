@@ -89,8 +89,8 @@ describe('WalletSection smart session safety controls', () => {
       screen.getByRole('button', { name: 'Enable smart sessions' }),
     ).toBeEnabled()
     expect(
-      screen.queryByRole('button', { name: 'Reset smart session access' }),
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Reset smart session access' }),
+    ).toBeEnabled()
   })
 
   it('cancels the safety dialog without changing sessions', () => {
@@ -154,14 +154,14 @@ describe('WalletSection smart session safety controls', () => {
     expect(session.revokeSession).not.toHaveBeenCalled()
   })
 
-  it('offers only enable when off and closes the menu after authorization', async () => {
+  it('offers enable and reset when off and closes the menu after authorization', async () => {
     const onAction = vi.fn()
     render(<WalletSection onAction={onAction} />)
 
     expect(screen.getByText('Smart sessions off')).toBeInTheDocument()
     expect(
-      screen.queryByText('Reset smart session access'),
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Reset smart session access' }),
+    ).toBeEnabled()
     expect(screen.queryByText('Revoke smart sessions')).not.toBeInTheDocument()
     fireEvent.click(
       screen.getByRole('button', { name: 'Enable smart sessions' }),

@@ -119,7 +119,8 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
         </AccountMenuItemButton>
       )}
 
-      {/* Reset is an on-chain safety action that invalidates all existing sessions. */}
+      {/* Reset is offered without a local session too: a leaked session lives on
+          another device, so a fresh browser is where its owner revokes it. */}
       {accountAddress && !isFeatureEnabled('USE_EOA') && (
         <>
           <AccountMenuItemStatus
@@ -137,15 +138,7 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
               <Trans>Smart sessions off</Trans>
             )}
           </AccountMenuItemStatus>
-          {hasActiveSession ? (
-            <AccountMenuItemButton
-              disabled={isRevokingSession}
-              onClick={() => setIsRevokeOpen(true)}
-              prefix={<ShieldAlert className="size-5" />}
-            >
-              <Trans>Reset smart session access</Trans>
-            </AccountMenuItemButton>
-          ) : (
+          {!hasActiveSession && (
             <AccountMenuItemButton
               disabled={isEnablingSession}
               onClick={() => void handleEnableSessions()}
@@ -157,6 +150,13 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
               )}
             </AccountMenuItemButton>
           )}
+          <AccountMenuItemButton
+            disabled={isRevokingSession}
+            onClick={() => setIsRevokeOpen(true)}
+            prefix={<ShieldAlert className="size-5" />}
+          >
+            <Trans>Reset smart session access</Trans>
+          </AccountMenuItemButton>
         </>
       )}
 
