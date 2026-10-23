@@ -1336,6 +1336,10 @@ msgstr "I understand that the affected subnames will be deleted."
 msgid "Idle"
 msgstr "Idle"
 
+#: src/features/wallet/components/RevokeSessionsModal.tsx
+msgid "If you think a smart session has been compromised, reset access to revoke all existing smart sessions for this account on this network, across every browser and device."
+msgstr "If you think a smart session has been compromised, reset access to revoke all existing smart sessions for this account on this network, across every browser and device."
+
 #: src/components/atoms/ImageFallback/ImageFallback.tsx
 msgid "Image not available"
 msgstr "Image not available"
@@ -1361,8 +1365,8 @@ msgid "it has no ENSv2 reservation."
 msgstr "it has no ENSv2 reservation."
 
 #: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "It takes two transactions from your wallet, one to set up the account and one to revoke, and both cost gas. Your next registration will ask you to sign a new session."
-msgstr "It takes two transactions from your wallet, one to set up the account and one to revoke, and both cost gas. Your next registration will ask you to sign a new session."
+msgid "It takes two transactions from your wallet, one to set up the account and one to reset access. Both require ETH for gas. You will need to enable a new smart session afterwards."
+msgstr "It takes two transactions from your wallet, one to set up the account and one to reset access. Both require ETH for gas. You will need to enable a new smart session afterwards."
 
 #: src/features/navigation/Header/navigation/NavigationContent.tsx
 msgid "Join the community"
@@ -1803,10 +1807,6 @@ msgstr "Open Notification Settings"
 msgid "OpenSea"
 msgstr "OpenSea"
 
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Or remove the saved session from this browser only. That costs nothing, but doesn't stop a copy made elsewhere."
-msgstr "Or remove the saved session from this browser only. That costs nothing, but doesn't stop a copy made elsewhere."
-
 #: src/features/dashboard/components/NamesTable.tsx
 #: src/features/profile/components/view/AddressProfileNamesList.tsx
 msgid "Owned"
@@ -2125,10 +2125,6 @@ msgstr "Remove from favorites"
 msgid "Remove notification"
 msgstr "Remove notification"
 
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Remove saved session"
-msgstr "Remove saved session"
-
 #: src/features/notifications/settings/contact-methods/telegram.tsx
 msgid "Remove Telegram Contact Method?"
 msgstr "Remove Telegram Contact Method?"
@@ -2293,6 +2289,23 @@ msgstr "Resending email verification for {0}"
 msgid "Reserving your name"
 msgstr "Reserving your name"
 
+#: src/features/wallet/components/RevokeSessionsModal.tsx
+msgid "Reset access"
+msgstr "Reset access"
+
+#: src/features/navigation/Header/account/WalletSection.tsx
+#: src/features/wallet/components/RevokeSessionsModal.tsx
+msgid "Reset smart session access"
+msgstr "Reset smart session access"
+
+#: src/features/wallet/components/RevokeSessionsModal.tsx
+msgid "Resetting access requires a wallet transaction and ETH for gas. You will need to enable a new smart session afterwards."
+msgstr "Resetting access requires a wallet transaction and ETH for gas. You will need to enable a new smart session afterwards."
+
+#: src/features/wallet/components/RevokeSessionsModal.tsx
+msgid "Resetting access…"
+msgstr "Resetting access…"
+
 #: src/features/profile/components/dialogs/edit-profile/EditProfileDialogFooter.tsx
 msgid "Resolve errors before previewing changes."
 msgstr "Resolve errors before previewing changes."
@@ -2337,18 +2350,6 @@ msgstr "Review access granted during ENS name upgrades."
 #: src/features/dashboard/components/TemporaryMigrationAccessNotice.tsx
 msgid "Review permissions"
 msgstr "Review permissions"
-
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Revoke sessions"
-msgstr "Revoke sessions"
-
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Revoke smart sessions"
-msgstr "Revoke smart sessions"
-
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Revoking…"
-msgstr "Revoking…"
 
 #. placeholder {0}: formatUsdAmount(summary?.discountAmount ?? 0)
 #: src/features/bulk-renew/components/DurationPresets.tsx
@@ -2468,8 +2469,8 @@ msgid "Set this as your primary name?"
 msgstr "Set this as your primary name?"
 
 #: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Set up and revoke"
-msgstr "Set up and revoke"
+msgid "Set up and reset access"
+msgstr "Set up and reset access"
 
 #: src/features/register-v2/workflow/registering/components/NotificationSettings.tsx
 msgid "Set up later"
@@ -2872,10 +2873,6 @@ msgstr "This browser cannot safely coordinate your mint. Try an up-to-date brows
 msgid "This commemorative NFT has already been minted."
 msgstr "This commemorative NFT has already been minted."
 
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "This ends every session you have signed for this account, in every browser and on every device."
-msgstr "This ends every session you have signed for this account, in every browser and on every device."
-
 #: src/features/migration/pages/MigrationPage.tsx
 msgid "This is taking longer than expected."
 msgstr "This is taking longer than expected."
@@ -2990,10 +2987,6 @@ msgstr "Try Again"
 msgid "Try it out"
 msgstr "Try it out"
 
-#: src/features/navigation/Header/account/WalletSection.tsx
-msgid "Turn off on this device"
-msgstr "Turn off on this device"
-
 #: src/features/profile/components/view/AddressProfileNamesList.tsx
 msgid "Unable to load names for this address. Please try again."
 msgstr "Unable to load names for this address. Please try again."
@@ -3005,10 +2998,6 @@ msgstr "Unfinished registration"
 #: src/features/register-v2/workflow/pricing/components/PriceCooldownBanner/PriceCooldownExpandedContent.tsx
 msgid "unique searches in the last 30 days"
 msgstr "unique searches in the last 30 days"
-
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Unlike starting a session, this is a transaction from your wallet, so it costs gas. Your next registration will ask you to sign a new session."
-msgstr "Unlike starting a session, this is a transaction from your wallet, so it costs gas. Your next registration will ask you to sign a new session."
 
 #: src/routes/notifications/_authenticated/index.tsx
 msgid "Unread only"

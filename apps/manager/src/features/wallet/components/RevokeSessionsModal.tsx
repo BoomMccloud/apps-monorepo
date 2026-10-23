@@ -26,10 +26,6 @@ type RevokeSessionsModalProps = {
   errorMessage?: string | null
   /** True when the last attempt failed because the account is undeployed. */
   isUndeployed?: boolean
-  /** Whether this browser holds a saved session to forget. */
-  hasLocalSession?: boolean
-  /** Clear this browser's saved session. Not revocation — see the copy. */
-  onForgetLocalSession?: () => void
 }
 
 /**
@@ -49,18 +45,11 @@ export const RevokeSessionsModal = ({
   isRevoking = false,
   errorMessage = null,
   isUndeployed = false,
-  hasLocalSession = false,
-  onForgetLocalSession,
 }: RevokeSessionsModalProps) => {
   const formatAddress = (address?: string) => {
     if (!address) return ''
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
-
-  // An undeployed account's signed sessions go live as soon as anyone deploys
-  // it, so the retry has to deploy first — never a quiet local-only "success".
-  const forgetLocally =
-    isUndeployed && hasLocalSession ? onForgetLocalSession : undefined
 
   const handleRevoke = async () => {
     if (isRevoking) return
@@ -77,7 +66,7 @@ export const RevokeSessionsModal = ({
         <DialogHeader>
           <DialogTitle asChild>
             <h2 className="font-medium text-ens-blue-midnight text-xl tracking-tight">
-              <Trans>Revoke smart sessions</Trans>
+              <Trans>Reset smart session access</Trans>
             </h2>
           </DialogTitle>
         </DialogHeader>
@@ -105,22 +94,22 @@ export const RevokeSessionsModal = ({
           <div className="text-center">
             <p className="text-ens-blue-midnight">
               <Trans>
-                This ends every session you have signed for this account, in
-                every browser and on every device.
+                If you think a smart session has been compromised, reset access
+                to revoke all existing smart sessions for this account on this
+                network, across every browser and device.
               </Trans>
             </p>
             <p className="mt-2 text-ens-gray text-sm">
               {isUndeployed ? (
                 <Trans>
                   It takes two transactions from your wallet, one to set up the
-                  account and one to revoke, and both cost gas. Your next
-                  registration will ask you to sign a new session.
+                  account and one to reset access. Both require ETH for gas. You
+                  will need to enable a new smart session afterwards.
                 </Trans>
               ) : (
                 <Trans>
-                  Unlike starting a session, this is a transaction from your
-                  wallet, so it costs gas. Your next registration will ask you
-                  to sign a new session.
+                  Resetting access requires a wallet transaction and ETH for
+                  gas. You will need to enable a new smart session afterwards.
                 </Trans>
               )}
             </p>
@@ -128,18 +117,6 @@ export const RevokeSessionsModal = ({
 
           {errorMessage && (
             <p className="text-center text-red-600 text-sm">{errorMessage}</p>
-          )}
-
-          {/* Clearing this browser is the gas-free alternative to set-up-and-
-              revoke, but never call it a revocation: a copy taken off this
-              device still works once the account is deployed. */}
-          {forgetLocally && (
-            <p className="text-center text-ens-gray text-sm">
-              <Trans>
-                Or remove the saved session from this browser only. That costs
-                nothing, but doesn't stop a copy made elsewhere.
-              </Trans>
-            </p>
           )}
         </div>
 
@@ -155,29 +132,15 @@ export const RevokeSessionsModal = ({
             type="button"
           >
             {isRevoking ? (
-              <Trans>Revoking…</Trans>
+              <Trans>Resetting access…</Trans>
             ) : isUndeployed ? (
-              <Trans>Set up and revoke</Trans>
+              <Trans>Set up and reset access</Trans>
             ) : errorMessage ? (
               <Trans>Try Again</Trans>
             ) : (
-              <Trans>Revoke sessions</Trans>
+              <Trans>Reset access</Trans>
             )}
           </Button>
-          {forgetLocally && (
-            <Button
-              className="h-11 w-full rounded font-medium font-mono text-sm uppercase tracking-wider"
-              disabled={isRevoking}
-              onClick={() => {
-                forgetLocally()
-                onOpenChange(false)
-              }}
-              type="button"
-              variant="secondary"
-            >
-              <Trans>Remove saved session</Trans>
-            </Button>
-          )}
           <Button
             className="h-11 w-full rounded font-medium font-mono text-sm uppercase tracking-wider"
             disabled={isRevoking}

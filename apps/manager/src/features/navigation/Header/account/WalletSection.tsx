@@ -1,10 +1,12 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { useSelector } from '@xstate/store-react'
-import { WalletIcon } from 'lucide-react'
+import { ShieldAlert, WalletIcon } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { match, P } from 'ts-pattern'
 import { useAccount } from 'wagmi'
 import { MSymbol } from '@/components/ui/material-symbol'
+import { RevokeSessionsModal } from '@/features/wallet/components/RevokeSessionsModal'
 import { useCopyFeedback } from '@/hooks/useCopyFeedback'
 import { useSmartAccountContext } from '@/lib/smart-account'
 import { truncateAddress } from '@/lib/utils'
@@ -26,8 +28,12 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
     hasActiveSession,
     isEnablingSession,
     enableSession,
-    forgetLocalSession,
+    isRevokingSession,
+    revokeError,
+    revokeErrorReason,
+    revokeSession,
   } = useSmartAccountContext()
+  const [isRevokeOpen, setIsRevokeOpen] = useState(false)
   const { address: connectedAddress } = useAccount()
   const { copied, copy } = useCopyFeedback()
   const shouldShowSiweButton = useSelector(
@@ -113,7 +119,7 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
         </AccountMenuItemButton>
       )}
 
-      {/* These controls only manage this account's session on this device. */}
+      {/* Reset is an on-chain safety action that invalidates all existing sessions. */}
       {accountAddress && !isFeatureEnabled('USE_EOA') && (
         <>
           <AccountMenuItemStatus
@@ -133,12 +139,11 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
           </AccountMenuItemStatus>
           {hasActiveSession ? (
             <AccountMenuItemButton
-              onClick={() => {
-                forgetLocalSession()
-                onAction()
-              }}
+              disabled={isRevokingSession}
+              onClick={() => setIsRevokeOpen(true)}
+              prefix={<ShieldAlert className="size-5" />}
             >
-              <Trans>Turn off on this device</Trans>
+              <Trans>Reset smart session access</Trans>
             </AccountMenuItemButton>
           ) : (
             <AccountMenuItemButton
@@ -154,6 +159,20 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
           )}
         </>
       )}
+
+      <RevokeSessionsModal
+        errorMessage={revokeError}
+        isRevoking={isRevokingSession}
+        isUndeployed={revokeErrorReason === 'not-deployed'}
+        onOpenChange={setIsRevokeOpen}
+        onRevokeSessions={async (options) => {
+          const revoked = await revokeSession(options)
+          if (revoked) onAction()
+          return revoked
+        }}
+        open={isRevokeOpen}
+        smartAccountAddress={accountAddress ?? undefined}
+      />
 
       <AccountMenuItemButton
         onClick={() => void handleDisconnect()}
