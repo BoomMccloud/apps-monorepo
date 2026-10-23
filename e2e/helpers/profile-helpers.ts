@@ -103,7 +103,11 @@ export async function renewFor28Days(page: Page): Promise<string> {
   // Idempotent no-op in EOA mode or when sessions are already active.
   await clickThroughEnableSessions(page)
   await page.getByRole('button', { name: 'Select USDC' }).click()
-  await page.getByRole('button', { name: /renew name/i }).click()
+  await page
+    .getByRole('button', {
+      name: /^(sign renewal|continue in wallet|renew name)$/i,
+    })
+    .click()
 
   await expectFlowSuccess(page, {
     success: page.getByText('Renewal Complete!'),

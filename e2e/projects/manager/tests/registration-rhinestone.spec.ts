@@ -66,8 +66,10 @@ test.describe('ENS name registration (Rhinestone HCA)', () => {
     })
 
     await page
-      .getByRole('dialog', { name: 'Approve and register name' })
-      .getByRole('button', { name: /^(approve and register|register name)$/i })
+      .getByRole('dialog', { name: 'Review registration' })
+      .getByRole('button', {
+        name: /^(sign payment approval|approve and register|start registration|register name)$/i,
+      })
       .click()
 
     // RegistrationDetails (including the completion banner) stays hidden while
