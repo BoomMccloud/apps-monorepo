@@ -30,6 +30,7 @@ import {
 import { createConsoleMonitor } from '../../../helpers/console-monitor.js'
 import { expectFlowSuccess } from '../../../helpers/flow-completion.js'
 import { clickThroughEnableSessions } from '../../../helpers/manager-auth.js'
+import { selectUsdcIfOffered } from '../../../helpers/payment-picker.js'
 import { findSearchInput } from '../../../helpers/search-input.js'
 
 const DOMAIN_TO_REGISTER = `rh-e2e-${Date.now().toString(36)}.eth`
@@ -57,7 +58,7 @@ test.describe('ENS name registration (Rhinestone HCA)', () => {
     // picker. Click through it (the single ENABLE intent is auto-authorized via
     // PERMITTED_SIGN_KINDS); idempotent no-op in EOA mode.
     await clickThroughEnableSessions(page)
-    await page.getByRole('button', { name: 'Select USDC' }).click()
+    await selectUsdcIfOffered(page)
 
     createConsoleMonitor(page, {
       onStateChange: (state, allStates) => {
