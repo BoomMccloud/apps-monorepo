@@ -1094,15 +1094,14 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
             hasAccountCredit={hasAccountCredit}
             isEstimate={!!funding || hasBudgetQuoteFailed}
             isLoading={isRequoting}
-            label={
-              showNetworkFeeDetails ? (
-                flow === 'renewal' ? (
-                  <Trans>Renewal total</Trans>
-                ) : (
-                  <Trans>Registration total</Trans>
-                )
-              ) : undefined
-            }
+            label={match({ showNetworkFeeDetails, flow })
+              .with({ showNetworkFeeDetails: true, flow: 'renewal' }, () => (
+                <Trans>Renewal total</Trans>
+              ))
+              .with({ showNetworkFeeDetails: true }, () => (
+                <Trans>Registration total</Trans>
+              ))
+              .otherwise(() => undefined)}
             total={headlineAmount}
           />
         )}
