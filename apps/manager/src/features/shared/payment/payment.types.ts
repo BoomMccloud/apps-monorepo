@@ -1,4 +1,5 @@
-/** Presentation values only. Funding and consent calculations stay in token units. */
+export type PaymentFlow = 'registration' | 'renewal'
+
 export type PaymentFundingSummary = {
   readonly registration: number
   readonly networkFee: number

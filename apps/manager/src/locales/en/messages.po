@@ -502,7 +502,8 @@ msgstr "Bug bounty"
 
 #: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
 #: src/features/register-v2/workflow/pricing/components/TokenPickerDialog.stories.tsx
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Calculating cost..."
 msgstr "Calculating cost..."
 
@@ -771,7 +772,8 @@ msgid "Continue"
 msgstr "Continue"
 
 #: src/features/renew/components/RenewalFundingDialog.tsx
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Continue in wallet"
 msgstr "Continue in wallet"
 
@@ -993,7 +995,6 @@ msgstr "Download WebP"
 msgid "Downloading artwork…"
 msgstr "Downloading artwork…"
 
-#: src/features/renew/components/RenewalFundingDialog.tsx
 #: src/features/shared/payment/components/PaymentBreakdown.tsx
 msgid "Due from your wallet"
 msgstr "Due from your wallet"
@@ -1389,8 +1390,10 @@ msgstr "in your wallet"
 msgid "In-app notifications are always enabled"
 msgstr "In-app notifications are always enabled"
 
-#: src/features/renew/workflow/pricing/components/RenewalPaymentUpdate.tsx
-#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/components/RenewalPaymentNote.tsx
+msgid "Includes network fees and a {RENEWAL_HEADROOM_PERCENT}% price buffer. Any unused funds remain available for future payments."
+msgstr "Includes network fees and a {RENEWAL_HEADROOM_PERCENT}% price buffer. Any unused funds remain available for future payments."
+
 #: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Includes network fees and a 10% price buffer. Any unused funds remain available for future payments."
 msgstr "Includes network fees and a 10% price buffer. Any unused funds remain available for future payments."
@@ -1940,7 +1943,8 @@ msgstr "Preparing commitment"
 msgid "Preparing registration..."
 msgstr "Preparing registration..."
 
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Preparing renewal..."
 msgstr "Preparing renewal..."
 
@@ -2246,7 +2250,7 @@ msgid "Renew before upgrade"
 msgstr "Renew before upgrade"
 
 #: src/features/dashboard/components/NameRow.tsx
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
 msgid "Renew name"
 msgstr "Renew name"
 
@@ -2647,8 +2651,9 @@ msgstr "Sign in to access notifications about your ENS domains, including transf
 
 #: src/features/register-v2/workflow/pricing/components/TokenPickerContent.tsx
 #: src/features/register-v2/workflow/pricing/components/TokenPickerDialog.stories.tsx
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
 #: src/features/renew/workflow/pricing/components/RenewalPaymentUpdate.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Sign in wallet"
 msgstr "Sign in wallet"
 
@@ -2675,8 +2680,9 @@ msgstr "Sign once to enable seamless transactions."
 msgid "Sign payment approval"
 msgstr "Sign payment approval"
 
-#: src/features/renew/workflow/pricing/components/RenewalPaymentAction.tsx
 #: src/features/renew/workflow/pricing/components/RenewalPaymentUpdate.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerContent.tsx
+#: src/features/renew/workflow/pricing/components/TokenPickerDialog.stories.tsx
 msgid "Sign renewal"
 msgstr "Sign renewal"
 
@@ -2956,8 +2962,8 @@ msgid "The renewal for {label}.eth could not be completed. You can retry or go b
 msgstr "The renewal for {label}.eth could not be completed. You can retry or go back to adjust your settings."
 
 #: src/features/renew/components/RenewalFundingDialog.tsx
-msgid "The renewal price includes a 10% buffer: the rent is priced when the renewal executes, slightly after this quote."
-msgstr "The renewal price includes a 10% buffer: the rent is priced when the renewal executes, slightly after this quote."
+msgid "The renewal price includes a {RENEWAL_HEADROOM_PERCENT}% buffer: the rent is priced when the renewal executes, slightly after this quote."
+msgstr "The renewal price includes a {RENEWAL_HEADROOM_PERCENT}% buffer: the rent is priced when the renewal executes, slightly after this quote."
 
 #: src/features/renew/components/RenewalFundingDialog.tsx
 msgid "The renewal price is paid in {symbol} and network fees in USDC. Your available balance is applied first."

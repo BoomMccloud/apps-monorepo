@@ -1,15 +1,15 @@
+import { divCeil } from '@ens-apps/transaction-manager/helpers/math'
 import type { PaymentFundingSummary } from '@/features/shared/payment/payment.types'
 import { type RENEWAL_TOKEN, type TOKEN_SYMBOL, TOKENS } from '@/lib/tokens'
 import { decimalBigintToNumber } from '@/utils/formatting/decimalBigintToNumber'
 import { getDisplayedRenewalWalletDebit } from './renewalPaymentConsent'
 
 export type RenewalFunding = {
-  readonly summary: Omit<PaymentFundingSummary, 'isLoading'>
+  readonly summary: PaymentFundingSummary
   readonly displayedWalletDebitUsdc: bigint | undefined
   readonly walletDebitFor: (symbol: TOKEN_SYMBOL) => number
 }
 
-/** Compute in token units once; convert only the presentation returned to the picker. */
 export const computeRenewalFunding = ({
   funded,
   networkFee,
@@ -23,8 +23,7 @@ export const computeRenewalFunding = ({
 }): RenewalFunding => {
   const rentUnits = 10n ** BigInt(TOKENS[selectedToken].decimals)
   const fundedFor = (symbol: TOKEN_SYMBOL) =>
-    (funded * 10n ** BigInt(TOKENS[symbol].decimals) + rentUnits - 1n) /
-    rentUnits
+    divCeil(funded * 10n ** BigInt(TOKENS[symbol].decimals), rentUnits)
   const amountFor = (symbol: TOKEN_SYMBOL) =>
     fundedFor(symbol) + (symbol === 'USDC' ? networkFee : 0n)
   const creditFor = (symbol: TOKEN_SYMBOL, amount: bigint) => {
@@ -71,6 +70,7 @@ export const computeRenewalFunding = ({
         displayedWalletDebitUsdc === undefined
           ? display(selectedToken, debitFor(selectedToken)) + feeDebit
           : display('USDC', displayedWalletDebitUsdc),
+      isLoading: false,
     },
     walletDebitFor: (symbol) => display(symbol, debitFor(symbol)),
   }

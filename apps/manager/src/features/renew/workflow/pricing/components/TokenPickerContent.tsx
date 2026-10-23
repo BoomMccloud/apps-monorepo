@@ -1,9 +1,11 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { useSelector } from '@xstate/react'
+import { match } from 'ts-pattern'
 import type { WalletClient } from 'viem'
 import { useConnection } from 'wagmi'
 import { TokenPickerContentBase } from '@/features/register-v2/workflow/pricing/components/TokenPickerContent'
+import { RenewalPaymentNote } from '@/features/renew/components/RenewalPaymentNote'
 import { useRenewalBalances } from '@/features/renew/data/queries/renewalBalances.query'
 import { getRenewPriceQueryOptions } from '@/features/renew/data/queries/renewPricing.query'
 import { useRenewalUiContext } from '@/features/renew/state/renewalUi.context'
@@ -12,7 +14,6 @@ import { useSmartAccountContext } from '@/lib/smart-account/SmartAccountContext'
 import { type RENEWAL_TOKEN, RENEWAL_TOKEN_SYMBOLS, TOKENS } from '@/lib/tokens'
 import { decimalBigintToNumber } from '@/utils/formatting/decimalBigintToNumber'
 import { useRenewalIntentFunding } from '../useRenewalIntentFunding'
-import { RenewalPaymentAction } from './RenewalPaymentAction'
 
 export const TokenPickerContent = () => {
   const { t } = useLingui()
@@ -107,16 +108,7 @@ export const TokenPickerContent = () => {
       acceptedTokens={RENEWAL_TOKEN_SYMBOLS}
       canProceed={canStart}
       flow="renewal"
-      footer={
-        isIntentRoute && funding ? (
-          <p className="text-ens-quartz-500 text-xs">
-            <Trans>
-              Includes network fees and a 10% price buffer. Any unused funds
-              remain available for future payments.
-            </Trans>
-          </p>
-        ) : undefined
-      }
+      footer={isIntentRoute && funding ? <RenewalPaymentNote /> : undefined}
       funding={funding}
       globalErrorMessage={
         hasQuoteFailed
@@ -140,15 +132,23 @@ export const TokenPickerContent = () => {
           It is collected together with the renewal price, in the same approval.
         </Trans>
       }
-      nextMessage={
-        <RenewalPaymentAction
-          hasWalletDebit={funding?.walletDebit !== 0}
-          isAwaitingApproval={isAwaitingApproval}
-          isIntentRoute={isIntentRoute}
-          isQuoting={isQuoting}
-          isSigning={isSigning}
-        />
-      }
+      nextMessage={match({
+        isAwaitingApproval,
+        isSigning,
+        isQuoting,
+        isIntentRoute,
+        hasWalletDebit: (funding?.walletDebit ?? 0) > 0,
+      })
+        .with({ isAwaitingApproval: true, isSigning: true }, () => (
+          <Trans>Sign in wallet</Trans>
+        ))
+        .with({ isAwaitingApproval: true }, () => (
+          <Trans>Preparing renewal...</Trans>
+        ))
+        .with({ isQuoting: true }, () => <Trans>Calculating cost...</Trans>)
+        .with({ isIntentRoute: false }, () => <Trans>Renew name</Trans>)
+        .with({ hasWalletDebit: true }, () => <Trans>Continue in wallet</Trans>)
+        .otherwise(() => <Trans>Sign renewal</Trans>)}
       onNext={startRenewal}
       onSelectCoin={onSelectCoin}
       pricingData={pricingQuery.data?.price}

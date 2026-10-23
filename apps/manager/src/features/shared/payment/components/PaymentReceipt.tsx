@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react'
 import { match, P } from 'ts-pattern'
 import { cn } from '@/lib/utils'
-import type { PaymentFundingSummary } from '../payment.types'
+import type { PaymentFlow, PaymentFundingSummary } from '../payment.types'
 import { PaymentBreakdown } from './PaymentBreakdown'
 
-/** The same name and receipt layout for initial and updated payment quotes. */
 export const PaymentReceipt = ({
   label,
   flow,
@@ -14,7 +13,7 @@ export const PaymentReceipt = ({
   description,
 }: {
   readonly label: string
-  readonly flow: 'registration' | 'renewal'
+  readonly flow: PaymentFlow
   readonly funding: PaymentFundingSummary | undefined
   readonly isQuoting?: boolean
   readonly header?: ReactNode

@@ -1,11 +1,11 @@
 import { Trans } from '@lingui/react/macro'
 import type { Meta, StoryObj } from '@storybook/tanstack-react'
 import { useState } from 'react'
+import { match } from 'ts-pattern'
 import { TokenPickerContentBase } from '@/features/register-v2/workflow/pricing/components/TokenPickerContent'
 import { PaymentDialogBase } from '@/features/shared/payment/components/PaymentDialog'
 import type { StablecoinBalance } from '@/lib/smart-account'
 import { type RENEWAL_TOKEN, RENEWAL_TOKEN_SYMBOLS } from '@/lib/tokens'
-import { RenewalPaymentAction } from './RenewalPaymentAction'
 import { RenewalPaymentUpdate } from './RenewalPaymentUpdate'
 
 const WALLET: StablecoinBalance = {
@@ -98,15 +98,21 @@ const RenewalDialogPreview = ({
               approval.
             </Trans>
           }
-          nextMessage={
-            <RenewalPaymentAction
-              hasWalletDebit={applied < 9.69}
-              isAwaitingApproval={phase === 'preparing' || isSigning}
-              isIntentRoute
-              isQuoting={phase === 'quoting'}
-              isSigning={isSigning}
-            />
-          }
+          nextMessage={match({ phase, isSigning })
+            .with({ isSigning: true }, () => <Trans>Sign in wallet</Trans>)
+            .with({ phase: 'preparing' }, () => (
+              <Trans>Preparing renewal...</Trans>
+            ))
+            .with({ phase: 'quoting' }, () => (
+              <Trans>Calculating cost...</Trans>
+            ))
+            .otherwise(() =>
+              applied < 9.69 ? (
+                <Trans>Continue in wallet</Trans>
+              ) : (
+                <Trans>Sign renewal</Trans>
+              ),
+            )}
           onNext={() => setPhase(increaseOnClick ? 'updated' : 'signing')}
           onSelectCoin={setSelectedToken}
           pricingData={8.8}

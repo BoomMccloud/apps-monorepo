@@ -1,19 +1,17 @@
 import { Trans } from '@lingui/react/macro'
 import { formatUsd } from '@/utils/formatting/formatUsdCeil'
-import type { PaymentFundingSummary } from '../payment.types'
+import type { PaymentFlow, PaymentFundingSummary } from '../payment.types'
 import { getPaymentBreakdownFigures } from '../utils/paymentBreakdownFigures'
 import { AccountCreditRow } from './AccountCreditRow'
 
-/** The total includes network fees, so subtracting the applied balance reconciles with the wallet debit. */
 export const PaymentBreakdown = ({
   funding,
   isQuoting = false,
   flow = 'registration',
 }: {
   readonly funding: PaymentFundingSummary | undefined
-  /** No quote yet: hold the rows' space so they fill in rather than push the options down. */
   readonly isQuoting?: boolean
-  readonly flow?: 'registration' | 'renewal'
+  readonly flow?: PaymentFlow
 }) => {
   if (!funding) {
     if (!isQuoting) return null

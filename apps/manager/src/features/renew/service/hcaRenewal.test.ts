@@ -439,14 +439,6 @@ describe('single renewal confirmed payment', () => {
     expect(signed).not.toHaveBeenCalled()
     expect(mocks.startTransaction).not.toHaveBeenCalled()
   })
-  it('refuses an increase without a confirmation handler', async () => {
-    railWith({ permitValue: 6690001n })
-    await expect(
-      submitHcaRenewal({ ...params, displayedWalletDebitUsdc: 6690000n }),
-    ).rejects.toThrow('payment increased')
-    expect(signed).not.toHaveBeenCalled()
-    expect(mocks.startTransaction).not.toHaveBeenCalled()
-  })
   it('keeps explicit confirmation for callers without an earlier displayed maximum', async () => {
     railWith()
     const confirmFunding = vi.fn(() => true)
@@ -473,6 +465,7 @@ describe('single renewal confirmed payment', () => {
         ...params,
         displayedWalletDebitUsdc: 6690000n,
         signal: controller.signal,
+        confirmFunding: vi.fn(async () => true),
       }),
     ).rejects.toThrow('Funding declined')
     expect(signed).not.toHaveBeenCalled()

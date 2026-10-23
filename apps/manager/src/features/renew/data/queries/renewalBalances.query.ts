@@ -10,7 +10,6 @@ import {
   TOKENS,
 } from '@/lib/tokens'
 import { publicClient } from '@/lib/wagmi'
-import { decimalBigintToNumber } from '@/utils/formatting/decimalBigintToNumber'
 
 export type RenewalBalances = {
   /** The owner wallet's balance of each renewal token. */
@@ -93,15 +92,5 @@ export const useRenewalBalances = () => {
   })
 
   const balances = query.data ?? NO_BALANCES
-  return {
-    ...balances,
-    // Bulk renewal still consumes decimal display values; keep only raw balances in the cache.
-    accountCredit: Object.fromEntries(
-      Object.entries(balances.accountCreditRaw).map(([symbol, amount]) => [
-        symbol,
-        decimalBigintToNumber(amount, TOKENS[symbol as RENEWAL_TOKEN].decimals),
-      ]),
-    ),
-    isLoading: query.isLoading,
-  }
+  return { ...balances, isLoading: query.isLoading }
 }

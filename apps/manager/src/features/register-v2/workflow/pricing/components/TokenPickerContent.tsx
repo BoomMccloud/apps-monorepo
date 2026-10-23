@@ -13,7 +13,10 @@ import { Switch } from '@/components/ui/switch'
 import { profileReverseNameQuery } from '@/features/profile/service/profileReverseName'
 import { PaymentActionButton } from '@/features/shared/payment/components/PaymentActionButton'
 import { PaymentReceipt } from '@/features/shared/payment/components/PaymentReceipt'
-import type { PaymentFundingSummary } from '@/features/shared/payment/payment.types'
+import type {
+  PaymentFlow,
+  PaymentFundingSummary,
+} from '@/features/shared/payment/payment.types'
 import { getPaymentBreakdownFigures } from '@/features/shared/payment/utils/paymentBreakdownFigures'
 import { STABLECOINS } from '@/features/shared/registration/nameUtils'
 import { ownedNamesCountQueryOptions } from '@/features/shared/service/ownedNamesCount'
@@ -616,54 +619,6 @@ const isBudgetQuoting = (
 ) =>
   isBudgetRequired && (budgetQuery.isFetching || budgetQuery.isPlaceholderData)
 
-const isPaymentFullyCovered = ({
-  funding,
-  isBusy,
-  isQuotingFunding,
-  isQuoteStale,
-  hasBudgetQuoteFailed,
-  pricingLoading,
-}: {
-  readonly funding: PaymentFundingSummary | undefined
-  /** Submitting re-quotes the fee; the covered panel holds rather than flipping to the picker. */
-  readonly isBusy: boolean
-  readonly isQuotingFunding: boolean
-  readonly isQuoteStale: boolean
-  readonly hasBudgetQuoteFailed: boolean
-  readonly pricingLoading: boolean
-}) =>
-  !!funding &&
-  funding.hcaCredit > 0 &&
-  funding.walletDebit === 0 &&
-  (isBusy ||
-    (!funding.isLoading &&
-      !isQuotingFunding &&
-      !isQuoteStale &&
-      !hasBudgetQuoteFailed &&
-      !pricingLoading))
-
-const canSubmitPayment = (state: {
-  readonly isConnected: boolean
-  readonly canProceed: boolean
-  readonly selectedToken: TOKEN_SYMBOL | undefined
-  readonly pricingLoading: boolean
-  readonly isQuotingFunding: boolean
-  readonly isQuoteStale: boolean
-  readonly isFullyCovered: boolean
-  readonly hasBalances: boolean
-  readonly hasSufficientBalanceForSelectedCoin: boolean
-  readonly hasBudgetQuoteFailed: boolean
-}) =>
-  state.isConnected &&
-  state.canProceed &&
-  !!state.selectedToken &&
-  !state.pricingLoading &&
-  !state.isQuotingFunding &&
-  !state.isQuoteStale &&
-  (state.isFullyCovered ||
-    (state.hasBalances && state.hasSufficientBalanceForSelectedCoin)) &&
-  !state.hasBudgetQuoteFailed
-
 const PickerPaymentOptions = ({
   isFullyCovered,
   flow,
@@ -675,7 +630,7 @@ const PickerPaymentOptions = ({
   children,
 }: {
   readonly isFullyCovered: boolean
-  readonly flow: 'registration' | 'renewal'
+  readonly flow: PaymentFlow
   readonly errorMessage?: string | null
   readonly isLoadingBalances: boolean
   readonly isConnected: boolean
@@ -845,7 +800,7 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
   readonly isConnected: boolean
   readonly nextMessage?: ReactNode
   /** Optional content below the payment options (e.g. the primary-name toggle). */
-  readonly flow?: 'registration' | 'renewal'
+  readonly flow?: PaymentFlow
   readonly footer?: ReactNode
   /**
    * Carries the funding budget used by the method-level fee disclosure and the
@@ -873,16 +828,19 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
 }) => {
   const hasBalances = (stablecoinBalances?.length || 0) > 0
 
-  // Use the exact quoted debit, not a rounded display amount. A sub-cent
-  // shortfall still requires payment, and a stale quote cannot promise coverage.
-  const isFullyCovered = isPaymentFullyCovered({
-    funding,
-    isBusy,
-    isQuotingFunding,
-    isQuoteStale,
-    hasBudgetQuoteFailed,
-    pricingLoading,
-  })
+  // Submitting re-quotes the fee, so a busy attempt keeps the covered panel.
+  const hasSettledQuote =
+    isBusy ||
+    (!funding?.isLoading &&
+      !isQuotingFunding &&
+      !isQuoteStale &&
+      !hasBudgetQuoteFailed &&
+      !pricingLoading)
+  const isFullyCovered =
+    !!funding &&
+    funding.hcaCredit > 0 &&
+    funding.walletDebit === 0 &&
+    hasSettledQuote
 
   useAutoSelectOnlyToken({
     automaticToken: isFullyCovered ? (TOKENS.USDC.symbol as T) : undefined,
@@ -940,18 +898,15 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
       selectedCoinBalance.decimals,
     ) >= selectedShare
 
-  const canNext = canSubmitPayment({
-    isConnected,
-    canProceed,
-    selectedToken,
-    pricingLoading,
-    isQuotingFunding,
-    isQuoteStale,
-    isFullyCovered,
-    hasBalances,
-    hasSufficientBalanceForSelectedCoin,
-    hasBudgetQuoteFailed,
-  })
+  const canNext =
+    isConnected &&
+    canProceed &&
+    !!selectedToken &&
+    !pricingLoading &&
+    !isQuotingFunding &&
+    !isQuoteStale &&
+    (isFullyCovered || (hasBalances && hasSufficientBalanceForSelectedCoin)) &&
+    !hasBudgetQuoteFailed
 
   const isRequoting = isRequotingFunding(isQuotingFunding, isQuoteStale)
   const isSettling = isCheckoutSettling(isBusy, isRequoting)
@@ -1092,7 +1047,7 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
         {!funding && (
           <PaymentTotalRow
             hasAccountCredit={hasAccountCredit}
-            isEstimate={!!funding || hasBudgetQuoteFailed}
+            isEstimate={hasBudgetQuoteFailed}
             isLoading={isRequoting}
             label={match({ showNetworkFeeDetails, flow })
               .with({ showNetworkFeeDetails: true, flow: 'renewal' }, () => (

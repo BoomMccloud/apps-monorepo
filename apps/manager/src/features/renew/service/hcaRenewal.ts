@@ -109,7 +109,6 @@ export interface SubmitHcaRenewalParams {
    * over to progress.
    */
   readonly onSubmitted?: (txId: string) => void
-  /** A wallet signature is about to be requested. */
   readonly onSigningRequested?: () => void
   /** Maximum USDC debit the user confirmed in the payment modal, in raw units. */
   readonly displayedWalletDebitUsdc?: bigint
@@ -352,6 +351,14 @@ export async function submitHcaRenewal(
   // legal in the same batch.
   const ownerSigner: RhinestoneSigner = { ...signer, session: undefined }
 
+  // The first signature can be the permit or the intent; report it once.
+  let hasRequestedSigning = false
+  const requestSigning = () => {
+    if (hasRequestedSigning) return
+    hasRequestedSigning = true
+    onSigningRequested?.()
+  }
+
   const funding = await planHcaIntentFunding({
     signer: ownerSigner,
     ownerAddress,
@@ -372,7 +379,7 @@ export async function submitHcaRenewal(
     maxFeeUsdc: hcaMaxIntentFeeUsdcFor(gasLimit),
     // The rail invokes this before signing or pulling funds, even with a
     // standing allowance. Only amounts already confirmed may skip the UI.
-    ...(confirmFunding || displayedWalletDebitUsdc !== undefined
+    ...(confirmFunding
       ? {
           confirmFunding: async (prompt: HcaFundingPrompt) => {
             if (signal?.aborted) return false
@@ -383,15 +390,11 @@ export async function submitHcaRenewal(
                 token,
               )
             ) {
-              onSigningRequested?.()
+              requestSigning()
               return true
             }
-            if (!confirmFunding)
-              throw new Error(
-                'The renewal payment increased. Review the updated amount before signing.',
-              )
             const approved = await confirmFunding(prompt)
-            if (approved) onSigningRequested?.()
+            if (approved) requestSigning()
             return approved
           },
         }
@@ -427,7 +430,7 @@ export async function submitHcaRenewal(
 
   // A fully covered renewal never prompts, so the abort has to be read here too.
   if (signal?.aborted) throw new HcaFundingDeclinedError()
-  onSigningRequested?.()
+  requestSigning()
   txId = transactionManager.startTransaction(
     { type: 'custom', request },
     ownerSigner,

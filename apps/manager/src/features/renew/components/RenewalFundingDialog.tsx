@@ -1,6 +1,7 @@
 import type { HcaFundingPrompt } from '@ens-apps/transaction-manager'
 import { Trans } from '@lingui/react/macro'
 import { HcaFundingConfirmDialog } from '@/components/HcaFundingConfirmDialog'
+import { RENEWAL_HEADROOM_PERCENT } from './RenewalPaymentNote'
 
 /** The funding prompt for a renewal intent: rent in its own token, fee in USDC. */
 export const RenewalFundingDialog = ({
@@ -52,15 +53,14 @@ export const RenewalFundingDialog = ({
       ]}
       note={
         <Trans>
-          The renewal price includes a 10% buffer: the rent is priced when the
-          renewal executes, slightly after this quote.
+          The renewal price includes a {RENEWAL_HEADROOM_PERCENT}% buffer: the
+          rent is priced when the renewal executes, slightly after this quote.
         </Trans>
       }
       onApprove={onApprove}
       onDecline={onDecline}
       prompt={prompt}
       title={<Trans>Review renewal payment</Trans>}
-      walletDebitLabel={<Trans>Due from your wallet</Trans>}
     />
   )
 }

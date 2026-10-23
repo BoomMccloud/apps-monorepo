@@ -46,6 +46,7 @@ describe('RenewalPaymentUpdate', () => {
     render(
       <I18nProvider i18n={i18n}>
         <RenewalPaymentUpdate
+          isSigning={false}
           label="abc"
           onApprove={onApprove}
           onDecline={onDecline}
@@ -70,6 +71,7 @@ describe('RenewalPaymentUpdate', () => {
     render(
       <I18nProvider i18n={i18n}>
         <RenewalPaymentUpdate
+          isSigning={false}
           label="abc"
           onApprove={() => {}}
           onDecline={() => {}}

@@ -77,7 +77,6 @@ interface HcaFundingConfirmDialogProps {
   /** Anything else the user needs to know to judge the figure. */
   readonly note?: ReactNode
   readonly balanceLabel?: ReactNode
-  readonly walletDebitLabel?: ReactNode
   readonly actionLabel?: ReactNode
   readonly onApprove: () => void
   readonly onDecline: () => void
@@ -101,7 +100,6 @@ export const HcaFundingConfirmDialog = ({
   onApprove,
   onDecline,
   balanceLabel,
-  walletDebitLabel,
   actionLabel,
 }: HcaFundingConfirmDialogProps) => {
   const legs = prompt ? legsOf(prompt) : []
@@ -194,12 +192,11 @@ export const HcaFundingConfirmDialog = ({
                 key={leg.symbol}
               >
                 <dt className="font-medium text-foreground">
-                  {walletDebitLabel ??
-                    (leg.requiresPermit && !leg.hasUnlimitedAllowance ? (
-                      <Trans>You approve</Trans>
-                    ) : (
-                      <Trans>From your wallet</Trans>
-                    ))}
+                  {leg.requiresPermit && !leg.hasUnlimitedAllowance ? (
+                    <Trans>You approve</Trans>
+                  ) : (
+                    <Trans>From your wallet</Trans>
+                  )}
                 </dt>
                 <dd className="font-medium font-mono text-foreground">
                   {formatAmount({ ...leg, amount: leg.debit })}

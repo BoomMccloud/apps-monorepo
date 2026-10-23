@@ -80,12 +80,14 @@ const requireRhinestoneSigner = (signer: Signer): RhinestoneSigner => {
 
 type RenewalPayment =
   | { readonly stage: 'preparing' }
-  | {
-      readonly stage: 'reviewing'
-      readonly prompt: HcaFundingPrompt
-      readonly decide: (approved: boolean) => void
-    }
+  | { readonly stage: 'reviewing'; readonly prompt: HcaFundingPrompt }
   | { readonly stage: 'signing'; readonly prompt?: HcaFundingPrompt }
+
+const promptOf = (payment: RenewalPayment): HcaFundingPrompt | undefined =>
+  'prompt' in payment ? payment.prompt : undefined
+
+// The pending funding decision, held beside the actor rather than in its context.
+const pendingDecisions = new WeakMap<object, (approved: boolean) => void>()
 
 export const renewalUiMachine = setup({
   types: {
@@ -170,16 +172,11 @@ export const renewalUiMachine = setup({
           await submitHcaRenewal({
             ...input,
             signal,
+            // A stopped attempt's late prompt resolves here, whatever rail raised it.
             confirmFunding: (prompt) =>
               signal.aborted
                 ? false
                 : (input.confirmFunding?.(prompt) ?? false),
-            onSigningRequested: () => {
-              if (!signal.aborted) input.onSigningRequested?.()
-            },
-            onSubmitted: (txId) => {
-              if (!signal.aborted) input.onSubmitted?.(txId)
-            },
           })
         ).txId,
     ),
@@ -206,11 +203,13 @@ export const renewalUiMachine = setup({
   },
   actions: {
     resetPayment: assign({ payment: () => ({ stage: 'preparing' as const }) }),
-    approveFunding: ({ context }) => {
-      if (context.payment.stage === 'reviewing') context.payment.decide(true)
+    approveFunding: ({ self }) => {
+      pendingDecisions.get(self)?.(true)
+      pendingDecisions.delete(self)
     },
-    declineFunding: ({ context }) => {
-      if (context.payment.stage === 'reviewing') context.payment.decide(false)
+    declineFunding: ({ self }) => {
+      pendingDecisions.get(self)?.(false)
+      pendingDecisions.delete(self)
     },
     setDuration: assign({
       duration: ({ event, context }) =>
@@ -348,25 +347,23 @@ export const renewalUiMachine = setup({
       // as it does for registration; `renewalTxId` marks the hand-over.
       on: {
         'renewal.funding.requested': {
-          actions: assign({
-            payment: ({ event }) => ({
-              stage: 'reviewing' as const,
-              prompt: event.prompt,
-              decide: event.decide,
+          actions: [
+            ({ self, event }) => pendingDecisions.set(self, event.decide),
+            assign({
+              payment: ({ event }) => ({
+                stage: 'reviewing' as const,
+                prompt: event.prompt,
+              }),
             }),
-          }),
+          ],
         },
         'renewal.funding.approve': {
-          guard: ({ context }) => context.payment.stage === 'reviewing',
           actions: [
             'approveFunding',
             assign({
               payment: ({ context }) => ({
                 stage: 'signing' as const,
-                prompt:
-                  context.payment.stage === 'reviewing'
-                    ? context.payment.prompt
-                    : undefined,
+                prompt: promptOf(context.payment),
               }),
             }),
           ],
@@ -378,10 +375,7 @@ export const renewalUiMachine = setup({
           actions: assign({
             payment: ({ context }) => ({
               stage: 'signing' as const,
-              prompt:
-                context.payment.stage === 'signing'
-                  ? context.payment.prompt
-                  : undefined,
+              prompt: promptOf(context.payment),
             }),
           }),
         },
@@ -408,16 +402,14 @@ export const renewalUiMachine = setup({
             walletClient: submission.walletClient,
             publicClient,
             chainId: envConfig.chain.id,
-            // The actor owns both the pending decision and its accepted receipt.
-            // A late quote from an abandoned attempt cannot request a signature.
             confirmFunding: (prompt: HcaFundingPrompt) =>
-              new Promise<boolean>((decide) => {
-                if (!self.getSnapshot().matches('submittingHcaRenewal')) {
-                  decide(false)
-                  return
-                }
-                self.send({ type: 'renewal.funding.requested', prompt, decide })
-              }),
+              new Promise<boolean>((decide) =>
+                self.send({
+                  type: 'renewal.funding.requested',
+                  prompt,
+                  decide,
+                }),
+              ),
           }
         },
         onDone: {
