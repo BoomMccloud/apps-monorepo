@@ -618,12 +618,15 @@ const isBudgetQuoting = (
 
 const isPaymentFullyCovered = ({
   funding,
+  isBusy,
   isQuotingFunding,
   isQuoteStale,
   hasBudgetQuoteFailed,
   pricingLoading,
 }: {
   readonly funding: PaymentFundingSummary | undefined
+  /** Submitting re-quotes the fee; the covered panel holds rather than flipping to the picker. */
+  readonly isBusy: boolean
   readonly isQuotingFunding: boolean
   readonly isQuoteStale: boolean
   readonly hasBudgetQuoteFailed: boolean
@@ -632,11 +635,12 @@ const isPaymentFullyCovered = ({
   !!funding &&
   funding.hcaCredit > 0 &&
   funding.walletDebit === 0 &&
-  !funding.isLoading &&
-  !isQuotingFunding &&
-  !isQuoteStale &&
-  !hasBudgetQuoteFailed &&
-  !pricingLoading
+  (isBusy ||
+    (!funding.isLoading &&
+      !isQuotingFunding &&
+      !isQuoteStale &&
+      !hasBudgetQuoteFailed &&
+      !pricingLoading))
 
 const canSubmitPayment = (state: {
   readonly isConnected: boolean
@@ -873,6 +877,7 @@ export const TokenPickerContentBase = <T extends TOKEN_SYMBOL>({
   // shortfall still requires payment, and a stale quote cannot promise coverage.
   const isFullyCovered = isPaymentFullyCovered({
     funding,
+    isBusy,
     isQuotingFunding,
     isQuoteStale,
     hasBudgetQuoteFailed,
