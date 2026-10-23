@@ -65,6 +65,8 @@ describe('WalletSection smart session safety controls', () => {
     )
 
     const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByText('Smart account')).not.toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent('0x1234')
     expect(dialog).toHaveTextContent('compromised')
     expect(dialog).toHaveTextContent('on this network')
     expect(dialog).toHaveTextContent('across every browser and device')

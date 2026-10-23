@@ -19,7 +19,6 @@ type RevokeSessionsModalProps = {
    * account to be deployed in a transaction of its own before the revoke.
    */
   onRevokeSessions: (options?: { deployFirst?: boolean }) => Promise<boolean>
-  smartAccountAddress?: string
   /** True while the owner's revoke (or deployment) transaction is in flight. */
   isRevoking?: boolean
   /** Localized revocation error, if the last attempt failed. */
@@ -41,16 +40,10 @@ export const RevokeSessionsModal = ({
   open,
   onOpenChange,
   onRevokeSessions,
-  smartAccountAddress,
   isRevoking = false,
   errorMessage = null,
   isUndeployed = false,
 }: RevokeSessionsModalProps) => {
-  const formatAddress = (address?: string) => {
-    if (!address) return ''
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
-
   const handleRevoke = async () => {
     if (isRevoking) return
     const revoked = await onRevokeSessions(
@@ -79,17 +72,6 @@ export const RevokeSessionsModal = ({
               <ShieldOff className="size-8 text-ens-blue" />
             )}
           </div>
-
-          {smartAccountAddress && (
-            <div className="text-center">
-              <p className="text-ens-gray text-xs">
-                <Trans>Smart account</Trans>
-              </p>
-              <p className="font-mono text-ens-blue-midnight text-sm">
-                {formatAddress(smartAccountAddress)}
-              </p>
-            </div>
-          )}
 
           <div className="text-center">
             <p className="text-ens-blue-midnight">

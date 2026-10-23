@@ -171,7 +171,6 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
           return revoked
         }}
         open={isRevokeOpen}
-        smartAccountAddress={accountAddress ?? undefined}
       />
 
       <AccountMenuItemButton

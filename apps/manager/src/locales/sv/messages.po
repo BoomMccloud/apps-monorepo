@@ -2587,10 +2587,6 @@ msgstr ""
 msgid "Signing in..."
 msgstr ""
 
-#: src/features/wallet/components/RevokeSessionsModal.tsx
-msgid "Smart account"
-msgstr ""
-
 #: src/features/migration/components/MigrationApprovalSettings.tsx
 msgid "Smart account access"
 msgstr ""
