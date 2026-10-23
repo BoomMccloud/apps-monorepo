@@ -1,12 +1,10 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { useSelector } from '@xstate/store-react'
 import { WalletIcon } from 'lucide-react'
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { match, P } from 'ts-pattern'
 import { useAccount } from 'wagmi'
 import { MSymbol } from '@/components/ui/material-symbol'
-import { RevokeSessionsModal } from '@/features/wallet/components/RevokeSessionsModal'
 import { useCopyFeedback } from '@/hooks/useCopyFeedback'
 import { useSmartAccountContext } from '@/lib/smart-account'
 import { truncateAddress } from '@/lib/utils'
@@ -28,13 +26,8 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
     hasActiveSession,
     isEnablingSession,
     enableSession,
-    isRevokingSession,
-    revokeError,
-    revokeErrorReason,
-    revokeSession,
     forgetLocalSession,
   } = useSmartAccountContext()
-  const [isRevokeOpen, setIsRevokeOpen] = useState(false)
   const { address: connectedAddress } = useAccount()
   const { copied, copy } = useCopyFeedback()
   const shouldShowSiweButton = useSelector(
@@ -120,13 +113,7 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
         </AccountMenuItemButton>
       )}
 
-      {/* Shown for any HCA, not just one with a session saved HERE: sessions
-          live in the signed authorization, not in this browser, so a fresh
-          browser is exactly where an owner goes to kill a session they think
-          leaked elsewhere. Disconnect deliberately keeps sessions alive for a
-          prompt-free reconnect, so this is the only way to end one early —
-          and unlike the rest of the HCA flow it is a gas-paying owner
-          transaction, hence the confirm step. EOA mode has no HCA. */}
+      {/* These controls only manage this account's session on this device. */}
       {accountAddress && !isFeatureEnabled('USE_EOA') && (
         <>
           <AccountMenuItemStatus
@@ -144,7 +131,16 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
               <Trans>Smart sessions off</Trans>
             )}
           </AccountMenuItemStatus>
-          {!hasActiveSession && (
+          {hasActiveSession ? (
+            <AccountMenuItemButton
+              onClick={() => {
+                forgetLocalSession()
+                onAction()
+              }}
+            >
+              <Trans>Turn off on this device</Trans>
+            </AccountMenuItemButton>
+          ) : (
             <AccountMenuItemButton
               disabled={isEnablingSession}
               onClick={() => void handleEnableSessions()}
@@ -156,30 +152,8 @@ export const WalletSection = ({ onAction }: WalletSectionProps) => {
               )}
             </AccountMenuItemButton>
           )}
-          <AccountMenuItemButton onClick={() => setIsRevokeOpen(true)}>
-            <Trans>Revoke smart sessions</Trans>
-          </AccountMenuItemButton>
         </>
       )}
-
-      <RevokeSessionsModal
-        errorMessage={revokeError}
-        hasLocalSession={hasActiveSession}
-        isRevoking={isRevokingSession}
-        isUndeployed={revokeErrorReason === 'not-deployed'}
-        onForgetLocalSession={() => {
-          forgetLocalSession()
-          onAction()
-        }}
-        onOpenChange={setIsRevokeOpen}
-        onRevokeSessions={async (options) => {
-          const revoked = await revokeSession(options)
-          if (revoked) onAction()
-          return revoked
-        }}
-        open={isRevokeOpen}
-        smartAccountAddress={accountAddress ?? undefined}
-      />
 
       <AccountMenuItemButton
         onClick={() => void handleDisconnect()}

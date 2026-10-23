@@ -2347,7 +2347,6 @@ msgstr ""
 msgid "Revoke sessions"
 msgstr ""
 
-#: src/features/navigation/Header/account/WalletSection.tsx
 #: src/features/wallet/components/RevokeSessionsModal.tsx
 msgid "Revoke smart sessions"
 msgstr ""
@@ -2994,6 +2993,10 @@ msgstr ""
 
 #: src/features/register-v2/workflow/pricing/components/durationPresets.ts
 msgid "Try it out"
+msgstr ""
+
+#: src/features/navigation/Header/account/WalletSection.tsx
+msgid "Turn off on this device"
 msgstr ""
 
 #: src/features/profile/components/view/AddressProfileNamesList.tsx

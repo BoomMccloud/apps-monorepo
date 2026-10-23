@@ -2342,7 +2342,6 @@ msgstr "Review permissions"
 msgid "Revoke sessions"
 msgstr "Revoke sessions"
 
-#: src/features/navigation/Header/account/WalletSection.tsx
 #: src/features/wallet/components/RevokeSessionsModal.tsx
 msgid "Revoke smart sessions"
 msgstr "Revoke smart sessions"
@@ -2990,6 +2989,10 @@ msgstr "Try Again"
 #: src/features/register-v2/workflow/pricing/components/durationPresets.ts
 msgid "Try it out"
 msgstr "Try it out"
+
+#: src/features/navigation/Header/account/WalletSection.tsx
+msgid "Turn off on this device"
+msgstr "Turn off on this device"
 
 #: src/features/profile/components/view/AddressProfileNamesList.tsx
 msgid "Unable to load names for this address. Please try again."
