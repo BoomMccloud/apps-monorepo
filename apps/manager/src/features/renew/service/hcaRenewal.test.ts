@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@ens-apps/transaction-manager', () => ({
+  HcaFundingDeclinedError: class HcaFundingDeclinedError extends Error {},
   getSmartAccountAddress: mocks.getSmartAccountAddress,
   // A stand-in ceiling that scales with the limit; the real curve is covered in
   // the transaction-manager suite.
@@ -475,6 +476,25 @@ describe('single renewal confirmed payment', () => {
       }),
     ).rejects.toThrow('Funding declined')
     expect(signed).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+  })
+
+  it('never starts a transaction for an abandoned, fully covered renewal', async () => {
+    mocks.planHcaIntentFunding.mockImplementation(
+      async ({ calls }: FundingParams) => ({ calls, quotedFeeUsdc: 10000n }),
+    )
+    const controller = new AbortController()
+    controller.abort()
+    const onSigningRequested = vi.fn()
+    await expect(
+      submitHcaRenewal({
+        ...params,
+        displayedWalletDebitUsdc: 0n,
+        signal: controller.signal,
+        onSigningRequested,
+      }),
+    ).rejects.toThrow()
+    expect(onSigningRequested).not.toHaveBeenCalled()
     expect(mocks.startTransaction).not.toHaveBeenCalled()
   })
 

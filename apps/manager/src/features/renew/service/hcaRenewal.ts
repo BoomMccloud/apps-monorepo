@@ -1,6 +1,7 @@
 import {
   type Call,
   getSmartAccountAddress,
+  HcaFundingDeclinedError,
   type HcaFundingPrompt,
   hcaMaxIntentFeeUsdcFor,
   type PermitPurpose,
@@ -424,6 +425,8 @@ export async function submitHcaRenewal(
     ? `Renew ${single.label}.eth`
     : `Renew ${items.length} names`
 
+  // A fully covered renewal never prompts, so the abort has to be read here too.
+  if (signal?.aborted) throw new HcaFundingDeclinedError()
   onSigningRequested?.()
   txId = transactionManager.startTransaction(
     { type: 'custom', request },
