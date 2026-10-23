@@ -354,3 +354,117 @@ describe('submitHcaRenewal', () => {
     )
   })
 })
+
+describe('single renewal confirmed payment', () => {
+  const prompt = {
+    permitValue: 6690000n,
+    requiresPermit: true,
+    requiredUsdc: 9680000n,
+    quotedFeeUsdc: 10000n,
+    hcaBalanceUsdc: 3000000n,
+  }
+  const signed = vi.fn()
+  const railWith = (update = {}) => {
+    signed.mockClear()
+    mocks.planHcaIntentFunding.mockImplementation(
+      async ({ calls, confirmFunding }: any) => {
+        const approved = await confirmFunding({ ...prompt, ...update })
+        if (!approved) throw new Error('Funding declined')
+        signed()
+        return { calls, quotedFeeUsdc: 10000n }
+      },
+    )
+  }
+  it.each([6690000n, 6689999n])(
+    'goes straight to signatures when final debit %s is within the confirmed maximum',
+    async (permitValue) => {
+      railWith({ permitValue })
+      const confirmFunding = vi.fn()
+      const onSigningRequested = vi.fn()
+      await submitHcaRenewal({
+        ...params,
+        displayedWalletDebitUsdc: 6690000n,
+        confirmFunding,
+        onSigningRequested,
+      })
+      expect(confirmFunding).not.toHaveBeenCalled()
+      expect(signed).toHaveBeenCalledOnce()
+      expect(onSigningRequested).toHaveBeenCalled()
+      expect(mocks.startTransaction).toHaveBeenCalledOnce()
+    },
+  )
+  it('waits for increased-amount confirmation before requesting a signature', async () => {
+    railWith({ permitValue: 6690001n })
+    let approve: (answer: boolean) => void = () => {}
+    const confirmFunding = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          approve = resolve
+        }),
+    )
+    const onSigningRequested = vi.fn()
+    const pending = submitHcaRenewal({
+      ...params,
+      displayedWalletDebitUsdc: 6690000n,
+      confirmFunding,
+      onSigningRequested,
+    })
+    await vi.waitFor(() => expect(confirmFunding).toHaveBeenCalledOnce())
+    expect(signed).not.toHaveBeenCalled()
+    expect(onSigningRequested).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+    approve(true)
+    await pending
+    expect(signed).toHaveBeenCalledOnce()
+    expect(onSigningRequested).toHaveBeenCalled()
+  })
+  it('does not sign or submit after the updated amount is declined', async () => {
+    railWith({ permitValue: 6690001n })
+    await expect(
+      submitHcaRenewal({
+        ...params,
+        displayedWalletDebitUsdc: 6690000n,
+        confirmFunding: () => false,
+      }),
+    ).rejects.toThrow('Funding declined')
+    expect(signed).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+  })
+  it('refuses an increase without a confirmation handler', async () => {
+    railWith({ permitValue: 6690001n })
+    await expect(
+      submitHcaRenewal({ ...params, displayedWalletDebitUsdc: 6690000n }),
+    ).rejects.toThrow('payment increased')
+    expect(signed).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+  })
+  it('keeps explicit confirmation for callers without an earlier displayed maximum', async () => {
+    railWith()
+    const confirmFunding = vi.fn(() => true)
+    await submitHcaRenewal({ ...params, confirmFunding })
+    expect(confirmFunding).toHaveBeenCalledOnce()
+  })
+  it('does not turn an already-authorized transfer into another review', async () => {
+    railWith({ requiresPermit: false })
+    const confirmFunding = vi.fn()
+    await submitHcaRenewal({
+      ...params,
+      displayedWalletDebitUsdc: 6690000n,
+      confirmFunding,
+    })
+    expect(confirmFunding).not.toHaveBeenCalled()
+    expect(mocks.startTransaction).toHaveBeenCalledOnce()
+  })
+  it('does not submit the renewal when the payment signature is rejected', async () => {
+    mocks.planHcaIntentFunding.mockImplementation(
+      async ({ confirmFunding }: any) => {
+        await confirmFunding(prompt)
+        throw new Error('User rejected signature')
+      },
+    )
+    await expect(
+      submitHcaRenewal({ ...params, displayedWalletDebitUsdc: 6690000n }),
+    ).rejects.toThrow('User rejected signature')
+    expect(mocks.startTransaction).not.toHaveBeenCalled()
+  })
+})

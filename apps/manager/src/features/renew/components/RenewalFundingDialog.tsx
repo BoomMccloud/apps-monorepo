@@ -17,14 +17,19 @@ export const RenewalFundingDialog = ({
 
   return (
     <HcaFundingConfirmDialog
+      actionLabel={<Trans>Continue in wallet</Trans>}
+      balanceLabel={<Trans>Available balance applied</Trans>}
       description={
         token ? (
           <Trans>
-            Renewals are paid out of your smart account: the price in {symbol},
-            the network fee in USDC.
+            The renewal price is paid in {symbol} and network fees in USDC. Your
+            available balance is applied first.
           </Trans>
         ) : (
-          <Trans>Renewals are paid in USDC out of your smart account.</Trans>
+          <Trans>
+            Your available USDC is applied first. Your wallet pays the remaining
+            renewal cost and network fees.
+          </Trans>
         )
       }
       lines={[
@@ -54,7 +59,8 @@ export const RenewalFundingDialog = ({
       onApprove={onApprove}
       onDecline={onDecline}
       prompt={prompt}
-      title={<Trans>Approve the renewal payment?</Trans>}
+      title={<Trans>Review renewal payment</Trans>}
+      walletDebitLabel={<Trans>Due from your wallet</Trans>}
     />
   )
 }

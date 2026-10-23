@@ -23,6 +23,7 @@ import type { Address, PublicClient, WalletClient } from 'viem'
 import { encodeFunctionData, erc20Abi, isAddressEqual } from 'viem'
 import { type RENEWAL_TOKEN, TOKENS } from '@/lib/tokens'
 import { getRenewPrice } from '../data/queries/renewPricing.query'
+import { isRenewalFundingWithinConsent } from '../utils/renewalPaymentConsent'
 import type { RenewalProtocol } from '../utils/renewalProtocol'
 
 /**
@@ -107,10 +108,13 @@ export interface SubmitHcaRenewalParams {
    * over to progress.
    */
   readonly onSubmitted?: (txId: string) => void
+  /** A wallet signature is about to be requested. */
+  readonly onSigningRequested?: () => void
+  /** Maximum USDC debit the user confirmed in the payment modal, in raw units. */
+  readonly displayedWalletDebitUsdc?: bigint
   /**
-   * Show the USDC the funding permit will authorize and wait for the user to
-   * accept it. Called only when the HCA cannot cover the renewal out of its own
-   * balance, and always before the wallet is asked to sign anything.
+   * Request consent before signing when the wallet debit increased or no prior
+   * maximum was provided. Existing bulk/legacy callers retain explicit review.
    */
   readonly confirmFunding?: (
     prompt: HcaFundingPrompt,
@@ -234,7 +238,7 @@ export type QuoteHcaRenewalFeeParams = Pick<
 /**
  * The USDC (6dp) fee the rail quotes for this renewal intent, over the same
  * batch `submitHcaRenewal` sends. Nothing is signed. `null` when it cannot be
- * priced; the submit re-quotes and shows the final figure before any signature.
+ * priced; submission re-quotes and asks again only above the confirmed maximum.
  */
 export async function quoteHcaRenewalFee(
   params: QuoteHcaRenewalFeeParams,
@@ -307,7 +311,9 @@ export async function submitHcaRenewal(
     chainId,
     onTxId,
     onSubmitted,
+    onSigningRequested,
     confirmFunding,
+    displayedWalletDebitUsdc,
   } = params
 
   const single = items.length === 1 ? items[0] : undefined
@@ -360,9 +366,31 @@ export async function submitHcaRenewal(
     },
     gasLimit,
     maxFeeUsdc: hcaMaxIntentFeeUsdcFor(gasLimit),
-    // The amounts are quoted here, not on any earlier screen, so this is the
-    // only place they can be shown before a signature is requested.
-    ...(confirmFunding ? { confirmFunding } : {}),
+    // The rail invokes this before signing or pulling funds, even with a
+    // standing allowance. Only amounts already confirmed may skip the UI.
+    ...(confirmFunding || displayedWalletDebitUsdc !== undefined
+      ? {
+          confirmFunding: async (prompt: HcaFundingPrompt) => {
+            if (
+              isRenewalFundingWithinConsent(
+                prompt,
+                displayedWalletDebitUsdc,
+                token,
+              )
+            ) {
+              onSigningRequested?.()
+              return true
+            }
+            if (!confirmFunding)
+              throw new Error(
+                'The renewal payment increased. Review the updated amount before signing.',
+              )
+            const approved = await confirmFunding(prompt)
+            if (approved) onSigningRequested?.()
+            return approved
+          },
+        }
+      : {}),
     purpose: RENEWAL_PERMIT_PURPOSE,
   })
 
@@ -392,6 +420,7 @@ export async function submitHcaRenewal(
     ? `Renew ${single.label}.eth`
     : `Renew ${items.length} names`
 
+  onSigningRequested?.()
   txId = transactionManager.startTransaction(
     { type: 'custom', request },
     ownerSigner,
