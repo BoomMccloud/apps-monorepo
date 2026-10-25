@@ -1,12 +1,14 @@
 import { authorizedPaymentAmount } from '@ens-apps/transaction-manager/machines/registration/registration.actors'
 import { normalizeReferrer } from '@ens-apps/utils/referrer'
-import { Trans } from '@lingui/react/macro'
+import { Trans, useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { useSearch } from '@tanstack/react-router'
 import { useSelector } from '@xstate/react'
+import { match } from 'ts-pattern'
 import type { WalletClient } from 'viem'
 import { useConnection } from 'wagmi'
 import { TokenPickerContentBase } from '@/features/register-v2/workflow/pricing/components/TokenPickerContent'
+import { RenewalPaymentNote } from '@/features/renew/components/RenewalPaymentNote'
 import { useRenewalBalances } from '@/features/renew/data/queries/renewalBalances.query'
 import { getRenewPriceQueryOptions } from '@/features/renew/data/queries/renewPricing.query'
 import { useRenewalUiContext } from '@/features/renew/state/renewalUi.context'
@@ -17,6 +19,7 @@ import { decimalBigintToNumber } from '@/utils/formatting/decimalBigintToNumber'
 import { useRenewalIntentFunding } from '../useRenewalIntentFunding'
 
 export const TokenPickerContent = () => {
+  const { t } = useLingui()
   const { label, uiActor, protocol } = useRenewalUiContext()
   const account = useSmartAccountContext()
   const balances = useRenewalBalances()
@@ -30,6 +33,10 @@ export const TokenPickerContent = () => {
         state.context.selectedToken,
         state.context.renewerAddress,
       ] as const,
+  )
+  const isSigning = useSelector(
+    uiActor,
+    (state) => state.context.payment.stage === 'signing',
   )
   const token = selectedToken ?? TOKENS.USDC.symbol
   const isAwaitingApproval = useIsAwaitingRenewalApproval(uiActor)
@@ -50,17 +57,23 @@ export const TokenPickerContent = () => {
       }
     },
   })
-  const { isIntentRoute, isQuoting, funding, walletDebitFor } =
-    useRenewalIntentFunding({
-      label,
-      duration,
-      token,
-      protocol,
-      renewerAddress,
-      account,
-      pricing: pricingQuery.data,
-      accountCredit: balances.accountCredit,
-    })
+  const {
+    isIntentRoute,
+    isQuoting,
+    funding,
+    walletDebitFor,
+    displayedWalletDebitUsdc,
+    hasQuoteFailed,
+  } = useRenewalIntentFunding({
+    label,
+    duration,
+    token,
+    protocol,
+    renewerAddress,
+    account,
+    pricing: pricingQuery.data,
+    accountCreditRaw: balances.accountCreditRaw,
+  })
 
   // The owner wallet signs the intent and any funding permit, so the renewal
   // cannot start until the account context has both.
@@ -80,7 +93,9 @@ export const TokenPickerContent = () => {
       !selectedToken ||
       !signer ||
       !ownerAddress ||
-      !walletClient
+      !walletClient ||
+      (isIntentRoute &&
+        (displayedWalletDebitUsdc === undefined || isQuoting || hasQuoteFailed))
     ) {
       return
     }
@@ -93,6 +108,7 @@ export const TokenPickerContent = () => {
       walletClient,
       duration,
       token: selectedToken,
+      displayedWalletDebitUsdc,
       priceRaw: pricingQuery.data.rawPrice,
       priceNumber: pricingQuery.data.price,
     })
@@ -101,13 +117,24 @@ export const TokenPickerContent = () => {
   return (
     <TokenPickerContentBase
       acceptedTokens={RENEWAL_TOKEN_SYMBOLS}
-      // With a funding summary the credit is already inside it.
-      accountCredit={funding ? undefined : balances.accountCredit}
       canProceed={canStart}
       {...(isIntentRoute && pricingQuery.data
         ? { fundedAmount: pricingQuery.data.funded }
         : {})}
+      flow="renewal"
+      footer={isIntentRoute && funding ? <RenewalPaymentNote /> : undefined}
       funding={funding}
+      globalErrorMessage={
+        hasQuoteFailed
+          ? t`We couldn’t calculate the renewal total. Please try again.`
+          : undefined
+      }
+      hasBudgetQuoteFailed={hasQuoteFailed}
+      infoMessage={
+        isIntentRoute && funding && funding.walletDebit > 0
+          ? t`Your wallet may ask you to sign a payment approval, then sign the renewal.`
+          : undefined
+      }
       isBusy={isAwaitingApproval}
       isConnected={isConnected}
       isLoadingBalances={balances.isLoading}
@@ -119,13 +146,23 @@ export const TokenPickerContent = () => {
           It is collected together with the renewal price, in the same approval.
         </Trans>
       }
-      nextMessage={
-        isAwaitingApproval ? (
-          <Trans>Approve in wallet</Trans>
-        ) : (
-          <Trans>Renew name</Trans>
-        )
-      }
+      nextMessage={match({
+        isAwaitingApproval,
+        isSigning,
+        isQuoting,
+        isIntentRoute,
+        hasWalletDebit: (funding?.walletDebit ?? 0) > 0,
+      })
+        .with({ isAwaitingApproval: true, isSigning: true }, () => (
+          <Trans>Sign in wallet</Trans>
+        ))
+        .with({ isAwaitingApproval: true }, () => (
+          <Trans>Preparing renewal...</Trans>
+        ))
+        .with({ isQuoting: true }, () => <Trans>Calculating cost...</Trans>)
+        .with({ isIntentRoute: false }, () => <Trans>Renew name</Trans>)
+        .with({ hasWalletDebit: true }, () => <Trans>Continue in wallet</Trans>)
+        .otherwise(() => <Trans>Sign renewal</Trans>)}
       onNext={startRenewal}
       onSelectCoin={onSelectCoin}
       pricingData={pricingQuery.data?.price}
